@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33205.214
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BassThatHz_ASIO_DSP_Processor", "BassThatHz_ASIO_DSP_Processor\BassThatHz_ASIO_DSP_Processor.csproj", "{BEB73885-FF1E-40BA-B212-CAE16710CD17}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|ARM = Debug|ARM
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|ARM = Release|ARM
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|ARM.ActiveCfg = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|ARM.Build.0 = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|x64.Build.0 = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Debug|x86.Build.0 = Debug|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|ARM.ActiveCfg = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|ARM.Build.0 = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x64.ActiveCfg = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x64.Build.0 = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x86.ActiveCfg = Release|Any CPU
+		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F7CAB18A-FDAF-4BC8-AFD0-19CC898E85CE}
+	EndGlobalSection
+EndGlobal

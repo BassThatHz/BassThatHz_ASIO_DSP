@@ -1,0 +1,171 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+	  <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+	  <OutputType>WinExe</OutputType>
+	  <PublishSingleFile>true</PublishSingleFile>
+	  <SelfContained>true</SelfContained>
+	  <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+	  <PublishReadyToRun>true</PublishReadyToRun>
+	  <IsWebBootstrapper>false</IsWebBootstrapper>
+	  <PublishUrl>publish\</PublishUrl>
+	  <Install>true</Install>
+	  <InstallFrom>Disk</InstallFrom>
+	  <UpdateEnabled>false</UpdateEnabled>
+	  <UpdateMode>Foreground</UpdateMode>
+	  <UpdateInterval>7</UpdateInterval>
+	  <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+	  <UpdatePeriodically>false</UpdatePeriodically>
+	  <UpdateRequired>false</UpdateRequired>
+	  <MapFileExtensions>true</MapFileExtensions>
+	  <ApplicationRevision>0</ApplicationRevision>
+	  <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+	  <UseApplicationTrust>false</UseApplicationTrust>
+	  <BootstrapperEnabled>true</BootstrapperEnabled>
+	  <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+	  <UseWindowsForms>true</UseWindowsForms>
+	  <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugType>embedded</DebugType>
+    <NoWarn>1701;1702;CA1416</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>embedded</DebugType>
+    <DefineConstants>
+    </DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>1701;1702;CA1416</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <StartupObject>BassThatHz_ASIO_DSP_Processor.Program</StartupObject>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ProduceReferenceAssembly>False</ProduceReferenceAssembly>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="GUI\Controls\BTH_VolumeLevel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\BTH_VolumeLevel_Simple.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\AuxGetControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\DelayControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\FilterControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\ULF_FIRControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\FloorControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\AntiDCControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\ClassicLimiterControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\LimiterControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\FIRControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\Basic_HPF_LPFControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\MixerControl .cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\DynamicRangeCompressorControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\AuxSetControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\SmartGainControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\PolarityControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\StreamControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\Filters\BiQuadFilterControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Tabs\ctl_DSPConfigPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Tabs\ctl_GeneralConfigPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Tabs\ctl_InputsConfigPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Tabs\ctl_MonitorPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Tabs\ctl_OutputsConfigPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="GUI\Tabs\ctl_StatsPage.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="NAudio\WinForms\VolumeMeter.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="GUI\Controls\BTH_VolumeSlider.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="WinForms.DataVisualization" Version="1.9.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="NAudio\WinForms2\Gui\Fader.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\Fader.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\PanSlider.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\PanSlider.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\Pot.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\Pot.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\ProgressLog.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\ProgressLog.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\VolumeMeter.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\VolumeMeter.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\VolumeSlider.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\VolumeSlider.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\WaveformPainter.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\WaveformPainter.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\WaveViewer.cs" />
+    <Compile Remove="NAudio\WinForms2\Gui\WaveViewer.Designer.cs" />
+    <Compile Remove="NAudio\WinForms2\WaveCallbackInfo.cs" />
+    <Compile Remove="NAudio\WinForms2\WaveIn.cs" />
+    <Compile Remove="NAudio\WinForms2\WaveOut.cs" />
+    <Compile Remove="NAudio\WinForms2\WaveWindow.cs" />
+    <EmbeddedResource Remove="NAudio\WinForms2\Gui\Fader.resx" />
+    <EmbeddedResource Remove="NAudio\WinForms2\Gui\PanSlider.resx" />
+    <EmbeddedResource Remove="NAudio\WinForms2\Gui\Pot.resx" />
+    <EmbeddedResource Remove="NAudio\WinForms2\Gui\ProgressLog.resx" />
+    <EmbeddedResource Remove="NAudio\WinForms2\Gui\VolumeSlider.resx" />
+    <EmbeddedResource Remove="NAudio\WinForms2\Gui\WaveViewer.resx" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="App.config" />
+  </ItemGroup>
+</Project>
