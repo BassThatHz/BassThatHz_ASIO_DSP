@@ -18,3 +18,7 @@ OS Minimum
 Recommended Specs are:
 As many CPU cores as you can get / need
 (It is CPU bottlenecked when pushed to the extremes, one Core\HT\LPU per DSP channel is ideal, it uses the .Net threadpool system for threading.)
+
+Important detailed Release Notes and a compiled Windows EXE version can be found here:
+https://github.com/BassThatHz/BassThatHz_ASIO_DSP/releases/tag/v1.0.40
+https://github.com/BassThatHz/BassThatHz_ASIO_DSP/releases/
