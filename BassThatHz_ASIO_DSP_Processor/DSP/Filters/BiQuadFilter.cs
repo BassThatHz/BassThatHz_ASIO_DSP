@@ -2,8 +2,12 @@
 
 namespace NAudio.Dsp
 {
+    #region Usings
     using BassThatHz_ASIO_DSP_Processor;
-    using NAudio.Utils;
+    using System;
+    using System.Runtime.CompilerServices;
+    #endregion
+
     // based on Cookbook formulae for audio EQ biquad filter coefficients
     // http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
     // by Robert Bristow-Johnson  <rbj@audioimagination.com>
@@ -25,11 +29,6 @@ namespace NAudio.Dsp
     // increasing or decreasing gain with frequency.  The shelf slope, in
     // dB/octave, remains proportional to S for all other values for a
     // fixed f0/Fs and dBgain.
-
-    using System;
-    using System.DirectoryServices.ActiveDirectory;
-    using System.Linq;
-    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// BiQuad filter

@@ -1,52 +1,53 @@
 ﻿#nullable enable
 
-namespace BassThatHz_ASIO_DSP_Processor
+namespace BassThatHz_ASIO_DSP_Processor;
+
+#region Usings
+using System;
+using System.Xml.Linq;
+#endregion
+
+public static class CommonFunctions
 {
-    using System;
-    using System.Xml.Linq;
-
-    public static class CommonFunctions
+    public static string RemoveDeprecatedXMLTags(string input)
     {
-        public static string RemoveDeprecatedXMLTags(string input)
+        XDocument doc = XDocument.Parse(input);
+
+        // Iterate through each Limiter element
+        foreach (XElement limiter in doc.Descendants("Limiter"))
         {
-            XDocument doc = XDocument.Parse(input);
-
-            // Iterate through each Limiter element
-            foreach (XElement limiter in doc.Descendants("Limiter"))
-            {
-                // Remove PeakHoldDecayEnabled and PeakHoldDecay elements if they exist
-                limiter.Element("PeakHoldDecayEnabled")?.Remove();
-                limiter.Element("PeakHoldDecay")?.Remove();
-            }
-
-            return doc.ToString();
+            // Remove PeakHoldDecayEnabled and PeakHoldDecay elements if they exist
+            limiter.Element("PeakHoldDecayEnabled")?.Remove();
+            limiter.Element("PeakHoldDecay")?.Remove();
         }
 
-        public static bool TryParseXml(string xmlString, out XDocument? xDocument)
-        {
-            try
-            {
-                xDocument = XDocument.Parse(xmlString);
-                return true;
-            }
-            catch (Exception)
-            {
-                xDocument = null;
-                return false;
-            }
-        }
+        return doc.ToString();
+    }
 
-        public static string TryParseXml(string xmlString)
+    public static bool TryParseXml(string xmlString, out XDocument? xDocument)
+    {
+        try
         {
-            try
-            {
-                _ = XDocument.Parse(xmlString);
-                return "Success";
-            }
-            catch (Exception ex)
-            {
-                return ex.Message;
-            }
+            xDocument = XDocument.Parse(xmlString);
+            return true;
+        }
+        catch (Exception)
+        {
+            xDocument = null;
+            return false;
+        }
+    }
+
+    public static string TryParseXml(string xmlString)
+    {
+        try
+        {
+            _ = XDocument.Parse(xmlString);
+            return "Success";
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
         }
     }
 }

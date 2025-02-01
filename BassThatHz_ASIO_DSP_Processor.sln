@@ -5,6 +5,8 @@ VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BassThatHz_ASIO_DSP_Processor", "BassThatHz_ASIO_DSP_Processor\BassThatHz_ASIO_DSP_Processor.csproj", "{BEB73885-FF1E-40BA-B212-CAE16710CD17}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test_Project_1", "Test_Project_1\Test_Project_1.csproj", "{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,22 @@ Global
 		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x64.Build.0 = Release|Any CPU
 		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x86.ActiveCfg = Release|Any CPU
 		{BEB73885-FF1E-40BA-B212-CAE16710CD17}.Release|x86.Build.0 = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|ARM.ActiveCfg = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|ARM.Build.0 = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|x64.Build.0 = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Debug|x86.Build.0 = Debug|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|ARM.ActiveCfg = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|ARM.Build.0 = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|x64.ActiveCfg = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|x64.Build.0 = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|x86.ActiveCfg = Release|Any CPU
+		{3ACD0832-2B01-48B9-B561-5AA02EB36A1C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
