@@ -1,6 +1,7 @@
 namespace Test_Project_1;
 
 using BassThatHz_ASIO_DSP_Processor;
+using System.Diagnostics;
 
 [TestClass]
 public class Test_DynamicRangeCompressor
@@ -27,15 +28,16 @@ public class Test_DynamicRangeCompressor
         //Init Test Data
         this.InitData(InputAudioData);
 
-        //Run Test
-        var StartTime = DateTime.Now;
+        //Run Timed Test
+        Stopwatch StopWatch1 = new();
+        StopWatch1.Start();
 
         OutputAudioData = Filter.Transform(InputAudioData, DSPStream);
 
-        var TimeSpan = DateTime.Now - StartTime;
+        StopWatch1.Stop();
 
         //Assert Under 5ms performance
-        Assert.IsTrue(TimeSpan.TotalNanoseconds < 5000000);
+        Assert.IsTrue(StopWatch1.Elapsed.TotalNanoseconds < 5000000, "Over 5ms");
     }
 
     [TestMethod]

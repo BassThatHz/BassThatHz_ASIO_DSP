@@ -15,7 +15,7 @@ namespace NAudio.Wave
     /// New Contributor to C# binding : Alexandre Mutel - email: alexandre_mutel at yahoo.fr
     /// Unified and Refactored by BassThatHz - 2023
     /// </summary>
-    public class ASIO_Unified : IDisposable
+    public class ASIO_Unified : IASIO_Unified
     {
         #region Variables
         protected AsioAudioAvailableEventArgs On_Has_ASIO_Data_Args = null;
@@ -32,12 +32,6 @@ namespace NAudio.Wave
         protected int bufferSize;
         protected int outputChannelOffset;
         protected int inputChannelOffset;
-        public Action Driver_ResetRequestCallback;
-        public Action Driver_BufferSizeChangedCallback;
-        public Action Driver_ResyncRequestCallback;
-        public Action Driver_LatenciesChangedCallback;
-        public Action Driver_OverloadCallback;
-        public Action Driver_SampleRateChangedCallback;
 
         //ASIO Driver
         protected IntPtr pAsioComObject;
@@ -59,7 +53,7 @@ namespace NAudio.Wave
             //this.SyncContext = System.Threading.SynchronizationContext.Current;
 
             this.DriverName = driverName;
-            this.GetAsioDriverByName(this.DriverName);
+            this.InstantiateAsioDriverByName(this.DriverName);
             this.AsioDriverExt();
             this.Driver_ResetRequestCallback = this.OnDriverResetRequest;
         }
@@ -68,8 +62,8 @@ namespace NAudio.Wave
         public ASIO_Unified(int driverIndex)
         {
             // this.SyncContext = System.Threading.SynchronizationContext.Current;
-
-            String[] names = GetDriverNames();
+            IASIO_GetDriverNames ASIO_GetDriverNames = new ASIO_GetDriverNames();
+            String[] names = ASIO_GetDriverNames.GetDriverNames();
             if (names.Length == 0)
                 throw new ArgumentException("There is no ASIO Driver installed on your system");
 
@@ -77,7 +71,7 @@ namespace NAudio.Wave
                 throw new ArgumentException(String.Format("Invalid device number. Must be in the range [0,{0}]", names.Length));
 
             this.DriverName = names[driverIndex];
-            this.GetAsioDriverByName(this.DriverName);
+            this.InstantiateAsioDriverByName(this.DriverName);
 
             this.Driver_ResetRequestCallback = this.OnDriverResetRequest;
         }
@@ -106,6 +100,15 @@ namespace NAudio.Wave
         #endregion
 
         #region Public Properties
+
+        #region Callbacks
+        public Action Driver_ResetRequestCallback { get; set; }
+        public Action Driver_BufferSizeChangedCallback { get; set; }
+        public Action Driver_ResyncRequestCallback { get; set; }
+        public Action Driver_LatenciesChangedCallback { get; set; }
+        public Action Driver_OverloadCallback { get; set; }
+        public Action Driver_SampleRateChangedCallback { get; set; }
+        #endregion
 
         #region Read Only
         public string DriverName { get; protected set; }
@@ -546,29 +549,11 @@ namespace NAudio.Wave
         #region AsioDriver
 
         /// <summary>
-        /// Gets the ASIO driver names installed.
-        /// </summary>
-        /// <returns>a list of driver names. Use this name to GetAsioDriverByName</returns>
-        public static string[] GetDriverNames()
-        {
-            var names = Array.Empty<string>();
-            var regKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\ASIO");
-
-            if (regKey != null)
-            {
-                names = regKey.GetSubKeyNames();
-                regKey.Close();
-            }
-
-            return names;
-        }
-
-        /// <summary>
         /// Instantiate a AsioDriver given its name.
         /// </summary>
         /// <param name="name">The name of the driver</param>
         /// <returns>an AsioDriver instance</returns>
-        protected void GetAsioDriverByName(String name)
+        protected void InstantiateAsioDriverByName(String name)
         {
             string guid = string.Empty;
             var regKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\ASIO\\" + name);
@@ -964,6 +949,5 @@ namespace NAudio.Wave
            out IntPtr rReturnedComObject);
 
         #endregion
-
     }
 }

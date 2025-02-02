@@ -4,6 +4,7 @@ namespace Test_Project_1;
 
 #region Usings
 using BassThatHz_ASIO_DSP_Processor;
+using System.Diagnostics;
 #endregion
 
 [TestClass]
@@ -24,16 +25,17 @@ public class Test_Polarity
         this.InitData(InputAudioData);
 
 
-        //Run Test
-        var StartTime = DateTime.Now;       
+        //Run Timed Test
+        Stopwatch StopWatch1 = new();
+        StopWatch1.Start();
 
         PolarityFilter.Positive = false;
         OutputAudioData = Filter.Transform(InputAudioData, DSPStream);
 
-        var TimeSpan = DateTime.Now - StartTime;
+        StopWatch1.Stop();
 
         //Assert Under 5ms performance
-        Assert.IsTrue(TimeSpan.TotalNanoseconds < 5000000);
+        Assert.IsTrue(StopWatch1.Elapsed.TotalNanoseconds < 5000000, "Over 5ms");
     }
 
     [TestMethod]

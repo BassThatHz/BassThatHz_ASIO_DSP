@@ -42,8 +42,7 @@ public class ASIO_Engine : IDisposable
     #region Object References
     //Partially Unmanaged\Unsafe NAudio ASIO ole32 Com Object wrapper
     //protected ASIO? ASIO;
-    protected ASIO_Unified? ASIO;
-
+    protected IASIO_Unified? ASIO;
 
     //The current ASIO Data in the running DSP cycle
     protected AsioAudioAvailableEventArgs? DSP_ASIO_Data;
@@ -290,7 +289,11 @@ public class ASIO_Engine : IDisposable
     /// Gets a list of ASIO Driver names
     /// </summary>
     /// <returns>A string of ASIO Driver names</returns>
-    public string[] GetDriverNames() => ASIO_Unified.GetDriverNames();
+    public string[] GetDriverNames()
+    {
+        IASIO_GetDriverNames ASIO_GetDriverNames = new ASIO_GetDriverNames();
+        return ASIO_GetDriverNames.GetDriverNames();
+    }
 
     /// <summary>
     /// returns Tuple: int InputLatency, int OutputLatency
@@ -442,7 +445,7 @@ public class ASIO_Engine : IDisposable
         // Create or Re-create ASIO device as necessary
         if (this.ASIO == null)
         {
-            this.ASIO = new ASIO_Unified(asio_Device_Name);
+            this.ASIO = this.Get_New_ASIO_Instance(asio_Device_Name);
 
             //Wire up the ASIO events
             this.WireUpASIO_Events();
@@ -466,6 +469,16 @@ public class ASIO_Engine : IDisposable
                 this.OutputBuffer[i] = new double[this.SamplesPerChannel];
         }
         this.ASIO?.Start();
+    }
+
+    /// <summary>
+    /// Function that gets a new instance of an intiated ASIO driver connector that is overridable
+    /// </summary>
+    /// <param name="asio_Device_Name">the registered ASIO Device name</param>
+    /// <returns>a new instance of an intiated ASIO driver connector</returns>
+    protected virtual IASIO_Unified Get_New_ASIO_Instance(string asio_Device_Name)
+    {
+        return new ASIO_Unified(asio_Device_Name);
     }
 
     protected void WireUpASIO_Events()
