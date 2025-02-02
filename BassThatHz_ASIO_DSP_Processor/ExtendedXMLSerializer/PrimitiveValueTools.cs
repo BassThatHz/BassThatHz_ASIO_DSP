@@ -27,7 +27,7 @@ namespace ExtendedXmlSerialization
     using System.Reflection;
     using System.Xml;
 
-    internal static class PrimitiveValueTools
+    public static class PrimitiveValueTools
     {
         public static string SetPrimitiveValue(object value, Type type)
         {
@@ -136,7 +136,7 @@ namespace ExtendedXmlSerialization
                 throw new InvalidOperationException($"Unsuccessful conversion node {nodeName} for type {type.Name} - value {value}", ex);
             }
         }
-        private static string DecimalSeparator(string value)
+        public static string DecimalSeparator(string value)
         {
             if (string.IsNullOrEmpty(value))
             {

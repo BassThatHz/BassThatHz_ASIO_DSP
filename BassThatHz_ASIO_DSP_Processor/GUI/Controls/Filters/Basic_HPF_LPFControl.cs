@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 
 #region Usings
 using System;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
@@ -34,6 +35,17 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
 {
     #region Variables
     protected Basic_HPF_LPF Filter = new();
+    #endregion
+
+    #region Public Properties
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtLPFFreq => this.txtLPFFreq;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtHPFFreq => this.txtHPFFreq;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public ComboBox Get_cboLPF => this.cboLPF;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public ComboBox Get_cboHPF => this.cboHPF;
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -76,19 +88,19 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
     }
 
     #region InputValidation
-    private void TxtHPFFreq_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtHPFFreq_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtHPFFreq.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtHPFFreq.Text);
     }
 
-    private void TxtLPFFreq_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtLPFFreq_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtLPFFreq.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtLPFFreq.Text);
     }
 
-    private void TxtLPFFreq_TextChanged(object? sender, EventArgs e)
+    protected void TxtLPFFreq_TextChanged(object? sender, EventArgs e)
     {
         if (string.IsNullOrEmpty(this.txtLPFFreq.Text))
             this.txtLPFFreq.Text = "1";
@@ -102,7 +114,7 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
         }
     }
 
-    private void TxtHPFFreq_TextChanged(object? sender, EventArgs e)
+    protected void TxtHPFFreq_TextChanged(object? sender, EventArgs e)
     {
         if (string.IsNullOrEmpty(this.txtHPFFreq.Text))
             this.txtHPFFreq.Text = "1";

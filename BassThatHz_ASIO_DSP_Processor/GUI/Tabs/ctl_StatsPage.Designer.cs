@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
             lbl_TotalChannels = new System.Windows.Forms.Label();
@@ -984,79 +984,79 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
 
         #endregion
 
-        public System.Windows.Forms.Label lbl_TotalChannels;
-        public System.Windows.Forms.Label label5;
-        public System.Windows.Forms.Label lbl_Total_DSP_Filters;
-        public System.Windows.Forms.Label label4;
-        public System.Windows.Forms.Label lbl_ASIO_Output_Latency;
-        public System.Windows.Forms.Label lbl_ASIO_Input_Latency;
-        public System.Windows.Forms.Label label2;
-        public System.Windows.Forms.Label label1;
-        public System.Windows.Forms.Label lbl_TotalCPU;
-        public System.Windows.Forms.Label label7;
-        public System.Windows.Forms.Label lbl_InputChannels;
-        public System.Windows.Forms.Label label9;
-        public System.Windows.Forms.Label lbl_OutputChannels;
-        public System.Windows.Forms.Label label11;
-        public System.Windows.Forms.Label lbl_InputBufferSizeLatency;
-        public System.Windows.Forms.Label label17;
-        public System.Windows.Forms.Label lbl_OutputBufferSizeLatency;
-        public System.Windows.Forms.Label label19;
-        public System.Windows.Forms.Label lbl_ProcessPriorityLevel;
-        public System.Windows.Forms.Label label21;
-        public System.Windows.Forms.Button btnStop_ASIO_DSP;
-        public System.Windows.Forms.Button btnStart_ASIO_DSP;
-        public System.Windows.Forms.Timer Update_Stats_Timer;
-        private System.Windows.Forms.CheckBox chkEnableStats;
-        public System.Windows.Forms.Label label6;
-        public System.Windows.Forms.Label lbl_App_CPU_Usage;
-        private System.Windows.Forms.Label label8;
-        private System.Windows.Forms.Label lblASIOBitType;
-        private System.Windows.Forms.Label label10;
-        private System.Windows.Forms.Label lblSampleRate;
-        private System.Windows.Forms.Timer UpdateBiQuadsTotal_Timer;
-        public System.Windows.Forms.Label lbl_Total_Enabled_DSP_Filters;
-        public System.Windows.Forms.Label label16;
-        public System.Windows.Forms.Label label15;
-        public System.Windows.Forms.Label lbl_Current_DSP_Load;
-        public System.Windows.Forms.Label label22;
-        private System.Windows.Forms.GroupBox groupBox1;
-        public System.Windows.Forms.Label lbl_TotalBufferLatency;
-        private System.Windows.Forms.GroupBox groupBox2;
-        public System.Windows.Forms.Label lbl_Average_DSP_Latency;
-        public System.Windows.Forms.Label label18;
-        public System.Windows.Forms.Label lbl_Max_Detected_DSP_Latency;
-        public System.Windows.Forms.Label label20;
-        public System.Windows.Forms.Label lbl_DSP_Processing_Latency;
-        public System.Windows.Forms.Label label14;
-        public System.Windows.Forms.Label label12;
-        public System.Windows.Forms.Label lbl_OutputBufferConversionLatency;
-        public System.Windows.Forms.Label lbl_InputBufferConversionLatency;
-        public System.Windows.Forms.Label label13;
-        public System.Windows.Forms.Label lbl_TotalDSP_Processing_Latency;
-        public System.Windows.Forms.Label label3;
-        public System.Windows.Forms.Label lbl_Max_DSP_Load;
-        public System.Windows.Forms.Label label25;
-        public System.Windows.Forms.Label lbl_Average_DSP_Load;
-        public System.Windows.Forms.Label label27;
-        private System.Windows.Forms.GroupBox groupBox3;
-        public System.Windows.Forms.Label label28;
-        public System.Windows.Forms.Label lbl_Underruns;
-        private System.Windows.Forms.Button btn_ResetStats;
-        public System.Windows.Forms.Label lbl_TotalStreams;
-        public System.Windows.Forms.Label label24;
-        private System.Windows.Forms.Label label23;
-        private System.Windows.Forms.Label label26;
-        private System.Windows.Forms.Label lbl_AppUpTime;
-        private System.Windows.Forms.Label lbl_DSPRunTime;
-        public System.Windows.Forms.Label label29;
-        public System.Windows.Forms.Label lbl_ASIO_Thread_ID;
-        public System.Windows.Forms.Label lbl_UI_Thread_ID;
-        public System.Windows.Forms.Label label31;
-        private System.Windows.Forms.Timer NoGC_Timer;
-        private System.Windows.Forms.Label label30;
-        private System.Windows.Forms.Label lblRAM;
-        private System.Windows.Forms.CheckBox chkNoGCMode;
-        private System.Windows.Forms.Label lblRAM_Limit;
+        protected System.Windows.Forms.Label lbl_TotalChannels;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Label lbl_Total_DSP_Filters;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Label lbl_ASIO_Output_Latency;
+        protected System.Windows.Forms.Label lbl_ASIO_Input_Latency;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Label lbl_TotalCPU;
+        protected System.Windows.Forms.Label label7;
+        protected System.Windows.Forms.Label lbl_InputChannels;
+        protected System.Windows.Forms.Label label9;
+        protected System.Windows.Forms.Label lbl_OutputChannels;
+        protected System.Windows.Forms.Label label11;
+        protected System.Windows.Forms.Label lbl_InputBufferSizeLatency;
+        protected System.Windows.Forms.Label label17;
+        protected System.Windows.Forms.Label lbl_OutputBufferSizeLatency;
+        protected System.Windows.Forms.Label label19;
+        protected System.Windows.Forms.Label lbl_ProcessPriorityLevel;
+        protected System.Windows.Forms.Label label21;
+        protected System.Windows.Forms.Button btnStop_ASIO_DSP;
+        protected System.Windows.Forms.Button btnStart_ASIO_DSP;
+        protected System.Windows.Forms.Timer Update_Stats_Timer;
+        protected System.Windows.Forms.CheckBox chkEnableStats;
+        protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.Label lbl_App_CPU_Usage;
+        protected System.Windows.Forms.Label label8;
+        protected System.Windows.Forms.Label lblASIOBitType;
+        protected System.Windows.Forms.Label label10;
+        protected System.Windows.Forms.Label lblSampleRate;
+        protected System.Windows.Forms.Timer UpdateBiQuadsTotal_Timer;
+        protected System.Windows.Forms.Label lbl_Total_Enabled_DSP_Filters;
+        protected System.Windows.Forms.Label label16;
+        protected System.Windows.Forms.Label label15;
+        protected System.Windows.Forms.Label lbl_Current_DSP_Load;
+        protected System.Windows.Forms.Label label22;
+        protected System.Windows.Forms.GroupBox groupBox1;
+        protected System.Windows.Forms.Label lbl_TotalBufferLatency;
+        protected System.Windows.Forms.GroupBox groupBox2;
+        protected System.Windows.Forms.Label lbl_Average_DSP_Latency;
+        protected System.Windows.Forms.Label label18;
+        protected System.Windows.Forms.Label lbl_Max_Detected_DSP_Latency;
+        protected System.Windows.Forms.Label label20;
+        protected System.Windows.Forms.Label lbl_DSP_Processing_Latency;
+        protected System.Windows.Forms.Label label14;
+        protected System.Windows.Forms.Label label12;
+        protected System.Windows.Forms.Label lbl_OutputBufferConversionLatency;
+        protected System.Windows.Forms.Label lbl_InputBufferConversionLatency;
+        protected System.Windows.Forms.Label label13;
+        protected System.Windows.Forms.Label lbl_TotalDSP_Processing_Latency;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Label lbl_Max_DSP_Load;
+        protected System.Windows.Forms.Label label25;
+        protected System.Windows.Forms.Label lbl_Average_DSP_Load;
+        protected System.Windows.Forms.Label label27;
+        protected System.Windows.Forms.GroupBox groupBox3;
+        protected System.Windows.Forms.Label label28;
+        protected System.Windows.Forms.Label lbl_Underruns;
+        protected System.Windows.Forms.Button btn_ResetStats;
+        protected System.Windows.Forms.Label lbl_TotalStreams;
+        protected System.Windows.Forms.Label label24;
+        protected System.Windows.Forms.Label label23;
+        protected System.Windows.Forms.Label label26;
+        protected System.Windows.Forms.Label lbl_AppUpTime;
+        protected System.Windows.Forms.Label lbl_DSPRunTime;
+        protected System.Windows.Forms.Label label29;
+        protected System.Windows.Forms.Label lbl_ASIO_Thread_ID;
+        protected System.Windows.Forms.Label lbl_UI_Thread_ID;
+        protected System.Windows.Forms.Label label31;
+        protected System.Windows.Forms.Timer NoGC_Timer;
+        protected System.Windows.Forms.Label label30;
+        protected System.Windows.Forms.Label lblRAM;
+        protected System.Windows.Forms.CheckBox chkNoGCMode;
+        protected System.Windows.Forms.Label lblRAM_Limit;
     }
 }

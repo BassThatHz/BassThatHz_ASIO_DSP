@@ -27,7 +27,7 @@ using System.Windows.Forms;
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
-public class InputValidator
+public static class InputValidator
 {
     public static void Validate_IsNumeric_NonNegative(KeyPressEventArgs e)
     {

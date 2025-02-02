@@ -5,7 +5,7 @@
         /// <summary>
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             splitContainer1 = new System.Windows.Forms.SplitContainer();
             btnApply = new System.Windows.Forms.Button();
@@ -154,12 +154,12 @@
 
         #endregion
 
-        private System.Windows.Forms.SplitContainer splitContainer1;
-        private System.Windows.Forms.Button btnRefreshList;
-        private System.Windows.Forms.Button btnInvertSelection;
-        private System.Windows.Forms.Button btnClearSelection;
-        private System.Windows.Forms.Button btn_SelectAll;
-        private System.Windows.Forms.Button btnApply;
-        private System.Windows.Forms.Panel panel1;
+        protected System.Windows.Forms.SplitContainer splitContainer1;
+        protected System.Windows.Forms.Button btnRefreshList;
+        protected System.Windows.Forms.Button btnInvertSelection;
+        protected System.Windows.Forms.Button btnClearSelection;
+        protected System.Windows.Forms.Button btn_SelectAll;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.Panel panel1;
     }
 }

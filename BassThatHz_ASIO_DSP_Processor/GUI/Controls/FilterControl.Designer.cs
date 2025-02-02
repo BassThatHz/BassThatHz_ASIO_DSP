@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.btnDown = new System.Windows.Forms.Button();
             this.btnUp = new System.Windows.Forms.Button();
@@ -144,13 +144,13 @@
         }
 
         #endregion
-        public System.Windows.Forms.Button btnDown;
-        public System.Windows.Forms.Button btnUp;
-        public System.Windows.Forms.CheckBox chkEnabled;
-        public System.Windows.Forms.Button btnDelete;
-        public System.Windows.Forms.Label label5;
-        public System.Windows.Forms.ComboBox cboFilterType;
-        public System.Windows.Forms.Panel panel1;
-        public System.Windows.Forms.Button btnClone;
+        protected System.Windows.Forms.Button btnDown;
+        protected System.Windows.Forms.Button btnUp;
+        protected System.Windows.Forms.CheckBox chkEnabled;
+        protected System.Windows.Forms.Button btnDelete;
+        protected System.Windows.Forms.ComboBox cboFilterType;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Panel panel1;
+        protected System.Windows.Forms.Button btnClone;
     }
 }

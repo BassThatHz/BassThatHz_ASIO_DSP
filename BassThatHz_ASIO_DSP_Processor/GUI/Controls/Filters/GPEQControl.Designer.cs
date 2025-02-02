@@ -5,7 +5,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             ConfigGPEQ_BTN = new System.Windows.Forms.Button();
             Filters_LSB = new System.Windows.Forms.ListBox();
@@ -65,7 +65,7 @@
 
         #endregion
 
-        private System.Windows.Forms.Button ConfigGPEQ_BTN;
-        private System.Windows.Forms.ListBox Filters_LSB;
+        protected System.Windows.Forms.Button ConfigGPEQ_BTN;
+        protected System.Windows.Forms.ListBox Filters_LSB;
     }
 }

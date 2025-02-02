@@ -113,7 +113,7 @@ public partial class FormMixer : Form
         {
             this.HasChangesBeenSaved = false;
             foreach (var item in this.MixerElements)
-                item.chkChannel.Checked = true;
+                item.Get_chkChannel.Checked = true;
         }
         catch (Exception ex)
         {
@@ -127,7 +127,7 @@ public partial class FormMixer : Form
         {
             this.HasChangesBeenSaved = false;
             foreach (var item in this.MixerElements)
-                item.chkChannel.Checked = false;
+                item.Get_chkChannel.Checked = false;
         }
         catch (Exception ex)
         {
@@ -141,7 +141,7 @@ public partial class FormMixer : Form
         {
             this.HasChangesBeenSaved = false;
             foreach (var item in this.MixerElements)
-                item.chkChannel.Checked = !item.chkChannel.Checked;
+                item.Get_chkChannel.Checked = !item.Get_chkChannel.Checked;
         }
         catch (Exception ex)
         {
@@ -192,11 +192,13 @@ public partial class FormMixer : Form
 
     protected void PersistentDeepClone()
     {
-        this.OriginalMixerElements = this.MixerElements.Select(item => new MixerElement
+        this.OriginalMixerElements = this.MixerElements.Select(item =>
         {
-            txtChAttenuation = new TextBox { Text = item.txtChAttenuation.Text },
-            txtStreamAttenuation = new TextBox { Text = item.txtStreamAttenuation.Text },
-            chkChannel = new CheckBox { Checked = item.chkChannel.Checked }
+            var newElement = new MixerElement();
+            newElement.Get_txtChAttenuation.Text = item.Get_txtChAttenuation.Text;
+            newElement.Get_txtStreamAttenuation.Text = item.Get_txtStreamAttenuation.Text;
+            newElement.Get_chkChannel.Checked = item.Get_chkChannel.Checked;
+            return newElement;
         }).ToList();
 
         this.OriginalMixerInputs = this.MixerInputs.Select(item => new MixerInput
@@ -224,9 +226,9 @@ public partial class FormMixer : Form
                     var MixerIndex = this.MixerInputs.IndexOf(MixerInput1);
                     var MixerElement = this.MixerElements[MixerIndex]; //1:1 mapping
                     var OriginalMixerElement = this.OriginalMixerElements[MixerIndex]; //1:1 mapping
-                    MixerElement.txtChAttenuation.Text = OriginalMixerElement.txtChAttenuation.Text;
-                    MixerElement.txtStreamAttenuation.Text = OriginalMixerElement.txtStreamAttenuation.Text;
-                    MixerElement.chkChannel.Checked = OriginalMixerElement.chkChannel.Checked;
+                    MixerElement.Get_txtChAttenuation.Text = OriginalMixerElement.Get_txtChAttenuation.Text;
+                    MixerElement.Get_txtStreamAttenuation.Text = OriginalMixerElement.Get_txtStreamAttenuation.Text;
+                    MixerElement.Get_chkChannel.Checked = OriginalMixerElement.Get_chkChannel.Checked;
 
                     break;
                 }
@@ -269,9 +271,9 @@ public partial class FormMixer : Form
 
                     var MixerIndex = this.MixerInputs.IndexOf(MixerInput1);
                     var MixerElement = this.MixerElements[MixerIndex]; //1:1 mapping
-                    MixerElement.txtChAttenuation.Text = MixerInput2.Attenuation.ToString();
-                    MixerElement.txtStreamAttenuation.Text = MixerInput2.StreamAttenuation.ToString();
-                    MixerElement.chkChannel.Checked = MixerInput2.Enabled;
+                    MixerElement.Get_txtChAttenuation.Text = MixerInput2.Attenuation.ToString();
+                    MixerElement.Get_txtStreamAttenuation.Text = MixerInput2.StreamAttenuation.ToString();
+                    MixerElement.Get_chkChannel.Checked = MixerInput2.Enabled;
 
                     break;
                 }
@@ -294,46 +296,46 @@ public partial class FormMixer : Form
 
     protected void CreateMixerElementEventHandlers(MixerInput mixerInput, MixerElement mixerElement)
     {
-        mixerElement.chkChannel.CheckedChanged += (s, e) =>
+        mixerElement.Get_chkChannel.CheckedChanged += (s, e) =>
         {
             this.HasChangesBeenSaved = false;
-            mixerInput.Enabled = mixerElement.chkChannel.Checked;
+            mixerInput.Enabled = mixerElement.Get_chkChannel.Checked;
             try
             {
-                mixerInput.Attenuation = -Math.Abs(double.Parse(mixerElement.txtChAttenuation.Text));
+                mixerInput.Attenuation = -Math.Abs(double.Parse(mixerElement.Get_txtChAttenuation.Text));
             }
             catch { }
 
             try
             {
-                mixerInput.StreamAttenuation = -Math.Abs(double.Parse(mixerElement.txtStreamAttenuation.Text));
+                mixerInput.StreamAttenuation = -Math.Abs(double.Parse(mixerElement.Get_txtStreamAttenuation.Text));
             }
             catch { }
         };
 
-        mixerElement.txtChAttenuation.TextChanged += (s, e) =>
+        mixerElement.Get_txtChAttenuation.TextChanged += (s, e) =>
         {
             this.HasChangesBeenSaved = false;
             try
             {
-                mixerInput.Attenuation = -Math.Abs(double.Parse(mixerElement.txtChAttenuation.Text));
+                mixerInput.Attenuation = -Math.Abs(double.Parse(mixerElement.Get_txtChAttenuation.Text));
             }
             catch { }
         };
 
-        mixerElement.txtStreamAttenuation.TextChanged += (s, e) =>
+        mixerElement.Get_txtStreamAttenuation.TextChanged += (s, e) =>
         {
             this.HasChangesBeenSaved = false;
             try
             {
-                mixerInput.StreamAttenuation = -Math.Abs(double.Parse(mixerElement.txtStreamAttenuation.Text));
+                mixerInput.StreamAttenuation = -Math.Abs(double.Parse(mixerElement.Get_txtStreamAttenuation.Text));
             }
             catch { }
         };
 
-        mixerElement.txtChAttenuation.Text = Math.Round(mixerInput.Attenuation, 4).ToString();
-        mixerElement.txtStreamAttenuation.Text = Math.Round(mixerInput.StreamAttenuation, 4).ToString();
-        mixerElement.chkChannel.Checked = mixerInput.Enabled;
+        mixerElement.Get_txtChAttenuation.Text = Math.Round(mixerInput.Attenuation, 4).ToString();
+        mixerElement.Get_txtStreamAttenuation.Text = Math.Round(mixerInput.StreamAttenuation, 4).ToString();
+        mixerElement.Get_chkChannel.Checked = mixerInput.Enabled;
     }
 
     protected void ClearGUI()
@@ -345,7 +347,7 @@ public partial class FormMixer : Form
     protected MixerElement CreateMixerElement(AsioChannelInfo info, int controlIndex)
     {
         var ReturnValue = new MixerElement();
-        this.SetTextFromASIO(ReturnValue.chkChannel, info);
+        this.SetTextFromASIO(ReturnValue.Get_chkChannel, info);
         this.SetLocation(ReturnValue, controlIndex);
 
         this.panel1.Controls.Add(ReturnValue);

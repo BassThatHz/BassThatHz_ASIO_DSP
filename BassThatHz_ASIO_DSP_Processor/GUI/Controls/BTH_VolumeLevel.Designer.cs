@@ -5,7 +5,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
             this.pnl_InputClip = new System.Windows.Forms.Panel();
@@ -212,19 +212,19 @@
         }
 
         #endregion
-        private System.Windows.Forms.Panel pnl_InputClip;
-        private System.Windows.Forms.Panel pnl_OutputClip;
-        private System.Windows.Forms.Label lbl_Input_DB;
-        private System.Windows.Forms.Label lbl_Output_DB;
-        private System.Windows.Forms.Label lbl_Input_DB_Peak;
-        private System.Windows.Forms.Label lbl_Output_DB_Peak;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.Label lbl_InputSource;
-        private System.Windows.Forms.Label lbl_OutputSource;
-        public System.Windows.Forms.Button btn_View;
-        public System.Windows.Forms.Timer timer_Refresh;
-        private BTH_VolumeLevel_Simple vol_In;
-        private BTH_VolumeLevel_Simple vol_Out;
+        protected System.Windows.Forms.Panel pnl_InputClip;
+        protected System.Windows.Forms.Panel pnl_OutputClip;
+        protected System.Windows.Forms.Label lbl_Input_DB;
+        protected System.Windows.Forms.Label lbl_Output_DB;
+        protected System.Windows.Forms.Label lbl_Input_DB_Peak;
+        protected System.Windows.Forms.Label lbl_Output_DB_Peak;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Label lbl_InputSource;
+        protected System.Windows.Forms.Label lbl_OutputSource;
+        protected System.Windows.Forms.Button btn_View;
+        protected System.Windows.Forms.Timer timer_Refresh;
+        protected BTH_VolumeLevel_Simple vol_In;
+        protected BTH_VolumeLevel_Simple vol_Out;
     }
 }

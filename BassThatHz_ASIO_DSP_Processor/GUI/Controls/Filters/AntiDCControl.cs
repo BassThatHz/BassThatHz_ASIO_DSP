@@ -74,13 +74,13 @@ public partial class AntiDCControl : UserControl, IFilterControl
     #region Event Handlers
 
     #region InputValidation
-    private void TxtConsecutiveDCSamples_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtConsecutiveDCSamples_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtConsecutiveDCSamples.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtConsecutiveDCSamples.Text);
     }
 
-    private void txtDuration_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void txtDuration_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtDuration.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDuration.Text);

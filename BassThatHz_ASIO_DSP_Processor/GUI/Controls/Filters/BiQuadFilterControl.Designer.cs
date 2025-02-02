@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             label1 = new System.Windows.Forms.Label();
             label2 = new System.Windows.Forms.Label();
@@ -295,27 +295,27 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         }
 
         #endregion
-        public System.Windows.Forms.Label label1;
-        public System.Windows.Forms.Label label2;
-        public System.Windows.Forms.Label label3;
-        public System.Windows.Forms.Label label4;
-        public System.Windows.Forms.TextBox txtF;
-        public System.Windows.Forms.TextBox txtG;
-        public System.Windows.Forms.TextBox txtQ;
-        public System.Windows.Forms.TextBox txtS;
-        public System.Windows.Forms.Label label6;
-        public System.Windows.Forms.TextBox txta0;
-        public System.Windows.Forms.Label label7;
-        public System.Windows.Forms.TextBox txta1;
-        public System.Windows.Forms.Label label8;
-        public System.Windows.Forms.TextBox txta2;
-        public System.Windows.Forms.Label label11;
-        public System.Windows.Forms.TextBox txtb0;
-        public System.Windows.Forms.TextBox txtb1;
-        public System.Windows.Forms.Label label9;
-        public System.Windows.Forms.TextBox txtb2;
-        public System.Windows.Forms.Button btnApply;
-        public System.Windows.Forms.Button btnApplyCo;
-        public System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.TextBox txtF;
+        protected System.Windows.Forms.TextBox txtG;
+        protected System.Windows.Forms.TextBox txtQ;
+        protected System.Windows.Forms.TextBox txtS;
+        protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.TextBox txta0;
+        protected System.Windows.Forms.Label label7;
+        protected System.Windows.Forms.TextBox txta1;
+        protected System.Windows.Forms.Label label8;
+        protected System.Windows.Forms.TextBox txta2;
+        protected System.Windows.Forms.Label label11;
+        protected System.Windows.Forms.TextBox txtb0;
+        protected System.Windows.Forms.TextBox txtb1;
+        protected System.Windows.Forms.Label label9;
+        protected System.Windows.Forms.TextBox txtb2;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.Button btnApplyCo;
+        protected System.Windows.Forms.Label label5;
     }
 }

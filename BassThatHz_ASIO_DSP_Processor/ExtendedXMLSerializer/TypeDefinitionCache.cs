@@ -30,10 +30,10 @@ namespace ExtendedXmlSerialization.Cache
     using System.Collections.Concurrent;
     using System.Reflection;
 
-    internal static class TypeDefinitionCache
+    public static class TypeDefinitionCache
     {
-        private static readonly ConcurrentDictionary<Type, TypeDefinition> TypeDefinitions = new ConcurrentDictionary<Type, TypeDefinition>();
-        private static readonly ConcurrentDictionary<string, Type> TypeCache = new ConcurrentDictionary<string, Type>();
+        public static readonly ConcurrentDictionary<Type, TypeDefinition> TypeDefinitions = new ConcurrentDictionary<Type, TypeDefinition>();
+        public static readonly ConcurrentDictionary<string, Type> TypeCache = new ConcurrentDictionary<string, Type>();
 
 		public static TypeDefinition GetDefinition(Type type)
 		{
@@ -59,7 +59,7 @@ namespace ExtendedXmlSerialization.Cache
             return result;
         }
 
-        private static Type GetTypeFromName(string typeName)
+        public static Type GetTypeFromName(string typeName)
         {
             Type type = Type.GetType(typeName);
             if (type != null)

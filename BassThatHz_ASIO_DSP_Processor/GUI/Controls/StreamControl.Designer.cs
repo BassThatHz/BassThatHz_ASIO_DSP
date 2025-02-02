@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             label2 = new System.Windows.Forms.Label();
             label1 = new System.Windows.Forms.Label();
@@ -305,26 +305,26 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
 
         #endregion
 
-        public System.Windows.Forms.Label label2;
-        public BTH_VolumeSlider Out_Volume;
-        public System.Windows.Forms.Label label1;
-        public BTH_VolumeSlider In_Volume;
-        public System.Windows.Forms.ComboBox cboInputStream;
-        public System.Windows.Forms.Label label3;
-        public System.Windows.Forms.Label label4;
-        public System.Windows.Forms.ComboBox cboOutputStream;
-        public System.Windows.Forms.GroupBox groupBox1;
-        public System.Windows.Forms.Panel panel1;
-        public System.Windows.Forms.Button btnAdd;
-        public System.Windows.Forms.Button btnDelete;
-        public System.Windows.Forms.Label lblFilterCount;
-        private FilterControl filterControl1;
-        public System.Windows.Forms.Button btnApplyAll;
-        public System.Windows.Forms.Button btnDisableAll;
-        public System.Windows.Forms.Button btnEnableAll;
-        private System.Windows.Forms.Button btnExportFromREW_API;
-        private System.Windows.Forms.TextBox txt_REW_ID;
-        private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.Button btnImportFromREW_API;
+        protected System.Windows.Forms.Label label2;
+        protected BTH_VolumeSlider Out_Volume;
+        protected System.Windows.Forms.Label label1;
+        protected BTH_VolumeSlider In_Volume;
+        protected System.Windows.Forms.ComboBox cboInputStream;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.ComboBox cboOutputStream;
+        protected System.Windows.Forms.GroupBox groupBox1;
+        protected System.Windows.Forms.Panel panel1;
+        protected System.Windows.Forms.Button btnAdd;
+        protected System.Windows.Forms.Button btnDelete;
+        protected System.Windows.Forms.Label lblFilterCount;
+        protected FilterControl filterControl1;
+        protected System.Windows.Forms.Button btnApplyAll;
+        protected System.Windows.Forms.Button btnDisableAll;
+        protected System.Windows.Forms.Button btnEnableAll;
+        protected System.Windows.Forms.Button btnExportFromREW_API;
+        protected System.Windows.Forms.TextBox txt_REW_ID;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Button btnImportFromREW_API;
     }
 }

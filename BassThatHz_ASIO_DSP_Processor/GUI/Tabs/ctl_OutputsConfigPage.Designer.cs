@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.btnEditDevices = new System.Windows.Forms.Button();
             this.label3 = new System.Windows.Forms.Label();
@@ -274,22 +274,22 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         }
 
         #endregion
-        public System.Windows.Forms.Button btnEditDevices;
-        public System.Windows.Forms.Label label3;
-        public System.Windows.Forms.TextBox txtCustomDeviceName;
-        public System.Windows.Forms.Button btnEditChannels;
-        public System.Windows.Forms.Label label5;
-        public System.Windows.Forms.TextBox txtCustomChannelName;
-        public System.Windows.Forms.ListBox lstChannels;
-        public System.Windows.Forms.ListBox lstDevices;
-        public System.Windows.Forms.ComboBox cboDevices;
-        public System.Windows.Forms.Label label1;
-        public BTH_VolumeSlider volMaster;
-        public System.Windows.Forms.Label label10;
-        public System.Windows.Forms.Label label2;
-        public System.Windows.Forms.ComboBox cboBufferSize;
-        public System.Windows.Forms.Button btnASIOControlPanel;
-        public System.Windows.Forms.Label label4;
-        public System.Windows.Forms.ComboBox cboSampleRate;
+        protected System.Windows.Forms.Button btnEditDevices;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.TextBox txtCustomDeviceName;
+        protected System.Windows.Forms.Button btnEditChannels;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.TextBox txtCustomChannelName;
+        protected System.Windows.Forms.ListBox lstChannels;
+        protected System.Windows.Forms.ListBox lstDevices;
+        protected System.Windows.Forms.ComboBox cboDevices;
+        protected System.Windows.Forms.Label label1;
+        protected BTH_VolumeSlider volMaster;
+        protected System.Windows.Forms.Label label10;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.ComboBox cboBufferSize;
+        protected System.Windows.Forms.Button btnASIOControlPanel;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.ComboBox cboSampleRate;
     }
 }

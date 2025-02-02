@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor
         /// <summary>
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor
         /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormMain));
             tabControl1 = new System.Windows.Forms.TabControl();
@@ -217,18 +217,18 @@ namespace BassThatHz_ASIO_DSP_Processor
 
         #endregion
 
-        public System.Windows.Forms.TabControl tabControl1;
-        public System.Windows.Forms.TabPage GeneralConfigPage;
-        public System.Windows.Forms.TabPage InputsConfigPage;
-        public System.Windows.Forms.TabPage OutputsConfigPage;
-        public System.Windows.Forms.TabPage DSPConfigPage;
-        public System.Windows.Forms.TabPage StatsPage;
-        public System.Windows.Forms.TabPage Monitor;
-        public GUI.Tabs.ctl_GeneralConfigPage ctl_GeneralConfigPage1;
-        public GUI.Tabs.ctl_InputsConfigPage ctl_InputsConfigPage1;
-        public GUI.Tabs.ctl_OutputsConfigPage ctl_OutputsConfigPage1;
-        public GUI.Tabs.ctl_DSPConfigPage ctl_DSPConfigPage1;
-        public GUI.Tabs.ctl_StatsPage ctl_StatsPage1;
-        public GUI.Tabs.ctl_MonitorPage ctl_MonitorPage1;
+        protected System.Windows.Forms.TabControl tabControl1;
+        protected System.Windows.Forms.TabPage GeneralConfigPage;
+        protected System.Windows.Forms.TabPage InputsConfigPage;
+        protected System.Windows.Forms.TabPage OutputsConfigPage;
+        protected System.Windows.Forms.TabPage DSPConfigPage;
+        protected System.Windows.Forms.TabPage StatsPage;
+        protected System.Windows.Forms.TabPage Monitor;
+        protected GUI.Tabs.ctl_GeneralConfigPage ctl_GeneralConfigPage1;
+        protected GUI.Tabs.ctl_InputsConfigPage ctl_InputsConfigPage1;
+        protected GUI.Tabs.ctl_OutputsConfigPage ctl_OutputsConfigPage1;
+        protected GUI.Tabs.ctl_DSPConfigPage ctl_DSPConfigPage1;
+        protected GUI.Tabs.ctl_StatsPage ctl_StatsPage1;
+        protected GUI.Tabs.ctl_MonitorPage ctl_MonitorPage1;
     }
 }

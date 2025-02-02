@@ -18,11 +18,11 @@ namespace NAudio.Wave.Asio
     /// </summary>
     public class AsioDriver
     {
-        private IntPtr pAsioComObject;
-        private IntPtr pinnedcallbacks;
-        private AsioDriverVTable asioDriverVTable;
+        protected IntPtr pAsioComObject;
+        protected IntPtr pinnedcallbacks;
+        protected AsioDriverVTable asioDriverVTable;
 
-        private AsioDriver()
+        protected AsioDriver()
         {
         }
 
@@ -331,7 +331,7 @@ namespace NAudio.Wave.Asio
         /// <param name="error">The error to check.</param>
         /// <param name="methodName">Method name</param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void HandleException(AsioError error, string methodName)
+        protected void HandleException(AsioError error, string methodName)
         {
             if (error != AsioError.ASE_OK && error != AsioError.ASE_SUCCESS)
             {
@@ -349,7 +349,7 @@ namespace NAudio.Wave.Asio
         /// </summary>
         /// <param name="asioGuid">The ASIO GUID.</param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void InitFromGuid(Guid asioGuid)
+        protected void InitFromGuid(Guid asioGuid)
         {
             const uint CLSCTX_INPROC_SERVER = 1;
             // Start to query the virtual table a index 3 (init method of AsioDriver)
@@ -392,7 +392,7 @@ namespace NAudio.Wave.Asio
         /// Internal VTable structure to store all the delegates to the C++ COM method.
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 2)]
-        private class AsioDriverVTable
+        public class AsioDriverVTable
         {
             //3  virtual ASIOBool init(void *sysHandle) = 0;
             [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
@@ -483,7 +483,7 @@ namespace NAudio.Wave.Asio
 
         [DllImport("ole32.Dll")]
 #pragma warning disable SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
-        private static extern int CoCreateInstance(ref Guid clsid,
+        protected static extern int CoCreateInstance(ref Guid clsid,
 #pragma warning restore SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
            IntPtr inner,
            uint context,

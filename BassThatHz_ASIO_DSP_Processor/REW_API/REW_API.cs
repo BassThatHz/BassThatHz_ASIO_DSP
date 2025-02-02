@@ -33,11 +33,11 @@ using System.Threading.Tasks;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 
-public static class REW_API
+public class REW_API
 {
-    public static string REW_baseUrl = "http://localhost:4735";
+    public string REW_baseUrl = "http://localhost:4735";
 
-    public static async Task PostToREW_API(string REW_ID, REW_TargetSettings REW_TargetSettings, List<REW_Filter> REW_Filters)
+    public async Task PostToREW_API(string REW_ID, REW_TargetSettings REW_TargetSettings, List<REW_Filter> REW_Filters)
     {
         using HttpClient client = new();
         var TargetSettings_JSONContent = JsonSerializer.Serialize(REW_TargetSettings);
@@ -52,7 +52,7 @@ public static class REW_API
         _ = FiltersResponse.IsSuccessStatusCode;
     }
 
-    public static async Task<REW_TargetSettings?> GetTargetSettingsFromREW_API(string REW_ID)
+    public async Task<REW_TargetSettings?> GetTargetSettingsFromREW_API(string REW_ID)
     {
         using HttpClient client = new();
         var TargetSettingsResponse = await client.GetAsync($"{REW_baseUrl}/measurements/{REW_ID}/target-settings");
@@ -67,7 +67,7 @@ public static class REW_API
         }
     }
 
-    public static async Task<List<REW_Filter>?> GetFiltersFromREW_API(string REW_ID)
+    public async Task<List<REW_Filter>?> GetFiltersFromREW_API(string REW_ID)
     {
         using HttpClient client = new();
         var FiltersResponse = await client.GetAsync($"{REW_baseUrl}/measurements/{REW_ID}/filters");
@@ -82,7 +82,7 @@ public static class REW_API
         }
     }
 
-    public static FilterTypes REW_To_FilterType(string input)
+    public FilterTypes REW_To_FilterType(string input)
     {
         switch (input)
         {
@@ -118,7 +118,7 @@ public static class REW_API
         }
     }
 
-    public static string FilterTypeToREW(FilterTypes input)
+    public string FilterTypeToREW(FilterTypes input)
     {
         switch (input)
         {
@@ -141,7 +141,7 @@ public static class REW_API
         }
     }
 
-    public static Basic_HPF_LPF.FilterOrder REW_To_FilterOrder(string input)
+    public Basic_HPF_LPF.FilterOrder REW_To_FilterOrder(string input)
     {
         switch (input)
         {
@@ -182,7 +182,7 @@ public static class REW_API
         }
     }
 
-    public static string FilterOrderToREW(Basic_HPF_LPF.FilterOrder? input)
+    public string FilterOrderToREW(Basic_HPF_LPF.FilterOrder? input)
     {
         if (input == null) return "L-R2";
 

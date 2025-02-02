@@ -6,6 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 using GUI.Forms;
 using NAudio.Utils;
 using System;
+using System.ComponentModel;
 using System.Runtime.Versioning;
 using System.Windows.Forms;
 #endregion
@@ -50,6 +51,13 @@ public partial class BTH_VolumeLevel : UserControl
     protected double Output_RMS = 0;
     protected double Output_DB_Peak = 0;
     protected double Output_DB = 0;
+    #endregion
+
+    #region Public Properties
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button Get_btn_View => this.btn_View;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Timer Get_timer_Refresh => this.timer_Refresh;
     #endregion
 
     #region Constructor and MapEventHandlers

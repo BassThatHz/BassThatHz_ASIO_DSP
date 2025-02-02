@@ -16,9 +16,9 @@ namespace NAudio.Wave.Asio
     /// <summary>
     /// ASIO common Exception.
     /// </summary>
-    internal class AsioException : Exception
+    public class AsioException : Exception
     {
-        private AsioError error;
+        protected AsioError error;
 
         public AsioException()
         {
@@ -61,7 +61,7 @@ namespace NAudio.Wave.Asio
 
 
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
-    internal struct AsioBufferInfo
+    public struct AsioBufferInfo
     {
         public bool isInput;       // on input:  ASIOTrue: input, else output
         public int channelNum;     // on input:  channel index
@@ -80,7 +80,7 @@ namespace NAudio.Wave.Asio
     // -------------------------------------------------------------------------------
 
     [StructLayout(LayoutKind.Sequential, Pack = 4, CharSet = CharSet.Ansi)]
-    internal struct AsioTimeCode
+    public struct AsioTimeCode
     {
         public double speed;                  // speed relation (fraction of nominal speed)
         // ASIOSamples     timeCodeSamples;        // time in samples
@@ -91,7 +91,7 @@ namespace NAudio.Wave.Asio
     }
 
     [Flags]
-    internal enum AsioTimeCodeFlags
+    public enum AsioTimeCodeFlags
     {
         kTcValid = 1,
         kTcRunning = 1 << 1,
@@ -102,7 +102,7 @@ namespace NAudio.Wave.Asio
     };
 
     [StructLayout(LayoutKind.Sequential, Pack = 4, CharSet = CharSet.Ansi)]
-    internal struct AsioTimeInfo
+    public struct AsioTimeInfo
     {
         public double speed;                  // absolute speed (1. = nominal)
         public Asio64Bit systemTime;             // system time related to samplePosition, in nanoseconds
@@ -114,7 +114,7 @@ namespace NAudio.Wave.Asio
     }
 
     [Flags]
-    internal enum AsioTimeInfoFlags
+    public enum AsioTimeInfoFlags
     {
         kSystemTimeValid = 1,            // must always be valid
         kSamplePositionValid = 1 << 1,       // must always be valid
@@ -125,7 +125,7 @@ namespace NAudio.Wave.Asio
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 4, CharSet = CharSet.Ansi)]
-    internal struct AsioTime
+    public struct AsioTime
     {                         // both input/output
         public int reserved1;
         public int reserved2;

@@ -13,7 +13,7 @@ namespace NAudio.Wave
     {
         // try with 100 bytes for now, increase if necessary
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 100)]
-        private byte[] extraData = new byte[100];
+        protected byte[] extraData = new byte[100];
 
         /// <summary>
         /// Allows the extra data to be read
@@ -23,7 +23,7 @@ namespace NAudio.Wave
         /// <summary>
         /// parameterless constructor for marshalling
         /// </summary>
-        internal WaveFormatExtraData()
+        public WaveFormatExtraData()
         {
         }
 
@@ -36,7 +36,7 @@ namespace NAudio.Wave
             ReadExtraData(reader);
         }
 
-        internal void ReadExtraData(BinaryReader reader)
+        public void ReadExtraData(BinaryReader reader)
         {
             if (this.extraSize > 0)
             {

@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.txtHoldInMS = new System.Windows.Forms.TextBox();
             this.label4 = new System.Windows.Forms.Label();
@@ -128,12 +128,12 @@
 
         #endregion
 
-        private System.Windows.Forms.TextBox txtHoldInMS;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.TextBox txtRatio;
-        private System.Windows.Forms.Label label3;
-        public BTH_VolumeSlider Threshold;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.TextBox txtHoldInMS;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.TextBox txtRatio;
+        protected System.Windows.Forms.Label label3;
+        protected BTH_VolumeSlider Threshold;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Button btnApply;
     }
 }

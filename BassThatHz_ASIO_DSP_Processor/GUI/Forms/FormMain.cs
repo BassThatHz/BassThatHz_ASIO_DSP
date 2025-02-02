@@ -42,6 +42,10 @@ public partial class FormMain : Form
     }
     #endregion
 
+    #region Public Properties
+    public TabControl Get_tabControl1 => this.tabControl1;
+    #endregion
+
     #region Public Functions
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public void ApplyXMLConfig(string xml)

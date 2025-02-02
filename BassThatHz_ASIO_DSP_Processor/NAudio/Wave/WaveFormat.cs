@@ -208,7 +208,7 @@ namespace NAudio.Wave
             return waveFormat;
         }
 
-        private void ReadWaveFormat(BinaryReader br, int formatChunkLength)
+        protected void ReadWaveFormat(BinaryReader br, int formatChunkLength)
         {
             if (formatChunkLength < 16)
                 throw new InvalidDataException("Invalid WaveFormat Structure");

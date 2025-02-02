@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             txtTaps = new System.Windows.Forms.RichTextBox();
             btnApply = new System.Windows.Forms.Button();
@@ -145,14 +145,14 @@
 
         #endregion
 
-        private System.Windows.Forms.RichTextBox txtTaps;
-        private System.Windows.Forms.Button btnApply;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.TextBox txtFFTSize;
-        private System.Windows.Forms.ComboBox comboTapsSampleRate;
-        private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.TextBox txtTapsSampleRate;
-        private System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.RichTextBox txtTaps;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.TextBox txtFFTSize;
+        protected System.Windows.Forms.ComboBox comboTapsSampleRate;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.TextBox txtTapsSampleRate;
+        protected System.Windows.Forms.Label label4;
     }
 }

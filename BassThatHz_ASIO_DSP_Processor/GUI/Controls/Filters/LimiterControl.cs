@@ -54,7 +54,7 @@ public partial class LimiterControl : UserControl, IFilterControl
     #endregion
 
     #region Event Handlers
-    private void Mask_Release_TextChanged(object? sender, EventArgs e)
+    protected void Mask_Release_TextChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -66,7 +66,7 @@ public partial class LimiterControl : UserControl, IFilterControl
         }
     }
 
-    private void Mask_Decay_TextChanged(object? sender, EventArgs e)
+    protected void Mask_Decay_TextChanged(object? sender, EventArgs e)
     {
         try
         {

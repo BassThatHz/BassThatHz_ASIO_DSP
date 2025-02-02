@@ -130,14 +130,14 @@ public partial class BTH_VolumeSlider : UserControl
     #region Event Handlers
 
     #region InputValidation
-    private void TxtDB_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtDB_KeyPress(object? sender, KeyPressEventArgs e)
     {
         if (this.ReadOnly)
             return;
         InputValidator.Validate_IsNumeric_Negative(e);
     }
 
-    private void TxtDB_TextChanged(object? sender, EventArgs e)
+    protected void TxtDB_TextChanged(object? sender, EventArgs e)
     {
         if (double.TryParse(this.txtDB.Text, out double result))
         {
@@ -198,7 +198,7 @@ public partial class BTH_VolumeSlider : UserControl
         this.lblDB.Visible = false;
     }
 
-    private void TxtDB_LostFocus(object? sender, EventArgs e)
+    protected void TxtDB_LostFocus(object? sender, EventArgs e)
     {
         if (this.ReadOnly)
             return;
@@ -206,7 +206,7 @@ public partial class BTH_VolumeSlider : UserControl
         ProcessUserInput();
     }
 
-    private void TxtDB_KeyDown(object? sender, KeyEventArgs e)
+    protected void TxtDB_KeyDown(object? sender, KeyEventArgs e)
     {
         if (this.ReadOnly)
             return;

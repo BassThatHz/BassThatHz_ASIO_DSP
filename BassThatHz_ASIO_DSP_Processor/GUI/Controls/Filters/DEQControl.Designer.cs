@@ -5,7 +5,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
             Threshold = new BTH_VolumeSlider();
@@ -367,32 +367,32 @@
 
         #endregion
 
-        public BTH_VolumeSlider Threshold;
-        private System.Windows.Forms.Button btnApply;
-        private System.Windows.Forms.Label label1;
-        public System.Windows.Forms.TextBox txtQ;
-        public System.Windows.Forms.TextBox txtG;
-        public System.Windows.Forms.TextBox txtF;
-        public System.Windows.Forms.Label label3;
-        public System.Windows.Forms.Label label4;
-        public System.Windows.Forms.Label label5;
-        private System.Windows.Forms.MaskedTextBox mask_Attack;
-        private System.Windows.Forms.CheckBox chk_PeakHoldAttack;
-        private System.Windows.Forms.MaskedTextBox mask_Release;
-        private System.Windows.Forms.CheckBox chk_PeakHoldRelease;
-        private System.Windows.Forms.Label lblCompressionRatio2;
-        private System.Windows.Forms.MaskedTextBox msb_CompressionRatio;
-        private System.Windows.Forms.Label lblCompressionRatio;
-        private System.Windows.Forms.MaskedTextBox msb_KneeWidth_db;
-        private System.Windows.Forms.Label lbl_KneeWidth_db;
-        private System.Windows.Forms.CheckBox chkSoftKnee;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.Timer RefreshTimer;
-        public BTH_VolumeSlider DynamicsApplied;
-        private System.Windows.Forms.ComboBox cboDEQType;
-        private System.Windows.Forms.ComboBox cboBiquadType;
-        public System.Windows.Forms.TextBox txtS;
-        public System.Windows.Forms.Label label6;
-        private System.Windows.Forms.ComboBox cboThresholdType;
+        protected BTH_VolumeSlider Threshold;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.TextBox txtQ;
+        protected System.Windows.Forms.TextBox txtG;
+        protected System.Windows.Forms.TextBox txtF;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.MaskedTextBox mask_Attack;
+        protected System.Windows.Forms.CheckBox chk_PeakHoldAttack;
+        protected System.Windows.Forms.MaskedTextBox mask_Release;
+        protected System.Windows.Forms.CheckBox chk_PeakHoldRelease;
+        protected System.Windows.Forms.Label lblCompressionRatio2;
+        protected System.Windows.Forms.MaskedTextBox msb_CompressionRatio;
+        protected System.Windows.Forms.Label lblCompressionRatio;
+        protected System.Windows.Forms.MaskedTextBox msb_KneeWidth_db;
+        protected System.Windows.Forms.Label lbl_KneeWidth_db;
+        protected System.Windows.Forms.CheckBox chkSoftKnee;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Timer RefreshTimer;
+        protected BTH_VolumeSlider DynamicsApplied;
+        protected System.Windows.Forms.ComboBox cboDEQType;
+        protected System.Windows.Forms.ComboBox cboBiquadType;
+        protected System.Windows.Forms.TextBox txtS;
+        protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.ComboBox cboThresholdType;
     }
 }

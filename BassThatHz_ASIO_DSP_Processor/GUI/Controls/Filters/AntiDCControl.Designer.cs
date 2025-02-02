@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             btnApply = new System.Windows.Forms.Button();
             label1 = new System.Windows.Forms.Label();
@@ -205,18 +205,18 @@
 
         #endregion
 
-        private System.Windows.Forms.Button btnApply;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.TextBox txtConsecutiveDCSamples;
-        private System.Windows.Forms.TextBox txtEvents;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.TextBox txtDuration;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.CheckBox chkOutputMuted;
-        private System.Windows.Forms.Label label5;
-        private BTH_VolumeSlider ClipThreshold;
-        private BTH_VolumeSlider DCThreshold;
-        private System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.TextBox txtConsecutiveDCSamples;
+        protected System.Windows.Forms.TextBox txtEvents;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.TextBox txtDuration;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.CheckBox chkOutputMuted;
+        protected System.Windows.Forms.Label label5;
+        protected BTH_VolumeSlider ClipThreshold;
+        protected BTH_VolumeSlider DCThreshold;
+        protected System.Windows.Forms.Label label6;
     }
 }

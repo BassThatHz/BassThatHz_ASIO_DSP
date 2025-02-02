@@ -9,7 +9,7 @@ namespace NAudio.Wave.Asio
     /// This class stores convertors for different interleaved WaveFormat to ASIOSampleType separate channel
     /// format.
     /// </summary>
-    internal class AsioSampleConvertor
+    public static class AsioSampleConvertor
     {
         public delegate void SampleConvertor(IntPtr inputInterleavedBuffer, IntPtr[] asioOutputBuffers, int nbChannels, int nbSamples);
 
@@ -465,21 +465,21 @@ namespace NAudio.Wave.Asio
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private static int clampTo24Bit(double sampleValue)
+        public static int clampTo24Bit(double sampleValue)
         {
             sampleValue = (sampleValue < -1.0) ? -1.0 : (sampleValue > 1.0) ? 1.0 : sampleValue;
             return (int)(sampleValue * 8388607.0);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private static int clampToInt(double sampleValue)
+        public static int clampToInt(double sampleValue)
         {
             sampleValue = (sampleValue < -1.0) ? -1.0 : (sampleValue > 1.0) ? 1.0 : sampleValue;
             return (int)(sampleValue * 2147483647.0);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private static short clampToShort(double sampleValue)
+        public static short clampToShort(double sampleValue)
         {
             sampleValue = (sampleValue < -1.0) ? -1.0 : (sampleValue > 1.0) ? 1.0 : sampleValue;
             return (short)(sampleValue * 32767.0);

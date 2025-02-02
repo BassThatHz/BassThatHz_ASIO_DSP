@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             txtLPFFreq = new System.Windows.Forms.TextBox();
             label4 = new System.Windows.Forms.Label();
@@ -173,16 +173,16 @@
         }
 
         #endregion
-        public System.Windows.Forms.TextBox txtLPFFreq;
-        public System.Windows.Forms.Label label4;
-        private System.Windows.Forms.Button btnApply;
-        public System.Windows.Forms.ComboBox cboHPF;
-        public System.Windows.Forms.TextBox txtHPFFreq;
-        public System.Windows.Forms.Label label59;
-        public System.Windows.Forms.ComboBox cboLPF;
-        public System.Windows.Forms.Label label1;
-        public System.Windows.Forms.Label label2;
-        private System.Windows.Forms.TextBox txtBiQuads;
-        private System.Windows.Forms.CheckBox cboShowNormalized;
+        protected System.Windows.Forms.TextBox txtLPFFreq;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.ComboBox cboHPF;
+        protected System.Windows.Forms.TextBox txtHPFFreq;
+        protected System.Windows.Forms.Label label59;
+        protected System.Windows.Forms.ComboBox cboLPF;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.TextBox txtBiQuads;
+        protected System.Windows.Forms.CheckBox cboShowNormalized;
     }
 }

@@ -27,17 +27,17 @@ namespace ExtendedXmlSerialization.Cache
     using System.Linq.Expressions;
     using System.Reflection;
 
-    internal static class ObjectAccessors
+    public static class ObjectAccessors
     {
-        internal delegate object ObjectActivator();
+        public delegate object ObjectActivator();
 
-        internal delegate object PropertyGetter(object item);
+        public delegate object PropertyGetter(object item);
 
-        internal delegate void PropertySetter(object item, object value);
-        
-        internal delegate void AddItemToCollection(object item, object value);
+        public delegate void PropertySetter(object item, object value);
 
-        internal static ObjectActivator CreateObjectActivator(Type type, bool isPrimitive)
+        public delegate void AddItemToCollection(object item, object value);
+
+        public static ObjectActivator CreateObjectActivator(Type type, bool isPrimitive)
         {
             var typeInfo = type.GetTypeInfo();
             //if isClass or struct but not abstract, enum or primitive
@@ -61,7 +61,7 @@ namespace ExtendedXmlSerialization.Cache
             return null;
         }
         
-        internal static PropertyGetter CreatePropertyGetter(Type type, string propertyName)
+        public static PropertyGetter CreatePropertyGetter(Type type, string propertyName)
         {
             // Object (type object) from witch the data are retrieved
             ParameterExpression itemObject = Expression.Parameter(typeof(object), "item");
@@ -81,7 +81,7 @@ namespace ExtendedXmlSerialization.Cache
             return compiled;
         }
 
-        internal static AddItemToCollection CreateMethodAdd(Type type)
+        public static AddItemToCollection CreateMethodAdd(Type type)
         {
             // Object (type object) from witch the data are retrieved
             ParameterExpression itemObject = Expression.Parameter(typeof(object), "item");
@@ -103,7 +103,7 @@ namespace ExtendedXmlSerialization.Cache
             return compiled;
         }
 
-        internal static PropertySetter CreatePropertySetter(Type type, string propertyName)
+        public static PropertySetter CreatePropertySetter(Type type, string propertyName)
         {
             // Object (type object) from witch the data are retrieved
             ParameterExpression itemObject = Expression.Parameter(typeof(object), "item");

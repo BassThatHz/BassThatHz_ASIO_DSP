@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.btn_Monitor = new System.Windows.Forms.Button();
             this.SuspendLayout();
@@ -57,6 +57,6 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         }
 
         #endregion
-        private System.Windows.Forms.Button btn_Monitor;
+        protected System.Windows.Forms.Button btn_Monitor;
     }
 }

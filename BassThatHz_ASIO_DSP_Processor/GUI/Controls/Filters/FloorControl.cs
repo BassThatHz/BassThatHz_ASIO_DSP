@@ -56,13 +56,13 @@ public partial class FloorControl : UserControl, IFilterControl
     #region Event Handlers
 
     #region InputValidation
-    private void TxtHoldInMS_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtHoldInMS_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtHoldInMS.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtHoldInMS.Text);
     }
 
-    private void txtRatio_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void txtRatio_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtRatio.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtRatio.Text);

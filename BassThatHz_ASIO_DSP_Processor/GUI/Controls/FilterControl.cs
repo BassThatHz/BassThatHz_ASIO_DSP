@@ -46,6 +46,17 @@ public partial class FilterControl : UserControl
     #region Properties
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public IFilterControl? CurrentFilterControl { get; protected set; }
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button Get_btnDown => this.btnDown;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button Get_btnUp => this.btnUp;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public CheckBox Get_chkEnabled => this.chkEnabled;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button Get_btnDelete => this.btnDelete;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public ComboBox Get_cboFilterType => this.cboFilterType;
     #endregion
 
     #region Constructor

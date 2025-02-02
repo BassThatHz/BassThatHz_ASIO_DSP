@@ -34,7 +34,7 @@ namespace ExtendedXmlSerialization.Cache
         public int X;
     }
 
-    internal class TypeDefinition
+    public class TypeDefinition
     {
 
         public TypeDefinition(Type type)
@@ -106,7 +106,7 @@ namespace ExtendedXmlSerialization.Cache
         public ObjectAccessors.AddItemToCollection MethodAddToList { get; set; }
 
 
-        private static List<PropertieDefinition> GetPropertieToSerialze(Type type)
+        protected static List<PropertieDefinition> GetPropertieToSerialze(Type type)
         {
             var result = new List<PropertieDefinition>();
             var properties = type.GetProperties();
@@ -149,28 +149,28 @@ namespace ExtendedXmlSerialization.Cache
             return result;
         }
 
-        public bool IsPrimitive { get; private set; }
-        public bool IsArray { get; private set; }
-        public bool IsEnumerable { get; private set; }
+        public bool IsPrimitive { get; protected set; }
+        public bool IsArray { get; protected set; }
+        public bool IsEnumerable { get; protected set; }
         public Type[] GenericArguments { get; set; }
 
-        public List<PropertieDefinition> Properties { get; private set; }
-        public Type Type { get; private set; }
-        public string Name { get; private set; }
-        public string FullName { get; private set; }
-        public bool IsObjectToSerialize { get; private set; }
-        public bool IsClass { get; private set; }
-        public bool IsEnum { get; private set; }
+        public List<PropertieDefinition> Properties { get; protected set; }
+        public Type Type { get; protected set; }
+        public string Name { get; protected set; }
+        public string FullName { get; protected set; }
+        public bool IsObjectToSerialize { get; protected set; }
+        public bool IsClass { get; protected set; }
+        public bool IsEnum { get; protected set; }
 
-        public string PrimitiveName { get; private set; }
-        public ObjectAccessors.ObjectActivator ObjectActivator { get; private set; }
+        public string PrimitiveName { get; protected set; }
+        public ObjectAccessors.ObjectActivator ObjectActivator { get; protected set; }
 
         public PropertieDefinition GetProperty(string name)
         {
             return Properties.FirstOrDefault(p => p.Name == name);
         }
 
-        private static bool IsTypPrimitive(Type type)
+        protected static bool IsTypPrimitive(Type type)
         {
             switch (Type.GetTypeCode(type))
             {
@@ -209,7 +209,7 @@ namespace ExtendedXmlSerialization.Cache
             }
         }
 
-        private static string GetPrimitiveName(Type type)
+        protected static string GetPrimitiveName(Type type)
         {
 
             if (type.GetTypeInfo().IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))

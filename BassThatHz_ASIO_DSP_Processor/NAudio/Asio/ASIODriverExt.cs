@@ -21,19 +21,19 @@ namespace NAudio.Wave.Asio
     /// </summary>
     public class AsioDriverExt
     {
-        private readonly AsioDriver driver;
-        private AsioCallbacks callbacks;
-        private AsioDriverCapability capability;
-        private AsioBufferInfo[] bufferInfos;
-        private bool isOutputReadySupported;
-        private IntPtr[] currentOutputBuffers;
-        private IntPtr[] currentInputBuffers;
-        private int numberOfOutputChannels;
-        private int numberOfInputChannels;
-        private AsioFillBufferCallback fillBufferCallback;
-        private int bufferSize;
-        private int outputChannelOffset;
-        private int inputChannelOffset;
+        protected readonly AsioDriver driver;
+        protected AsioCallbacks callbacks;
+        protected AsioDriverCapability capability;
+        protected AsioBufferInfo[] bufferInfos;
+        protected bool isOutputReadySupported;
+        protected IntPtr[] currentOutputBuffers;
+        protected IntPtr[] currentInputBuffers;
+        protected int numberOfOutputChannels;
+        protected int numberOfInputChannels;
+        protected AsioFillBufferCallback fillBufferCallback;
+        protected int bufferSize;
+        protected int outputChannelOffset;
+        protected int inputChannelOffset;
         public Action ResetRequestCallback;
 
         /// <summary>
@@ -257,7 +257,7 @@ namespace NAudio.Wave.Asio
         /// Builds the capabilities internally.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void BuildCapabilities()
+        protected void BuildCapabilities()
         {
             capability = new AsioDriverCapability();
 
@@ -304,7 +304,7 @@ namespace NAudio.Wave.Asio
         /// <param name="doubleBufferIndex">Index of the double buffer.</param>
         /// <param name="directProcess">if set to <c>true</c> [direct process].</param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void BufferSwitchCallBack(int doubleBufferIndex, bool directProcess)
+        protected void BufferSwitchCallBack(int doubleBufferIndex, bool directProcess)
         {
             for (int i = 0; i < numberOfInputChannels; i++)
                 currentInputBuffers[i] = bufferInfos[i].Buffer(doubleBufferIndex);
@@ -328,7 +328,7 @@ namespace NAudio.Wave.Asio
         /// Callback called by the AsioDriver on event "Samples rate changed".
         /// </summary>
         /// <param name="sRate">The sample rate.</param>
-        private void SampleRateDidChangeCallBack(double sRate)
+        protected void SampleRateDidChangeCallBack(double sRate)
         {
             // Check when this is called?
             capability.SampleRate = sRate;
@@ -343,7 +343,7 @@ namespace NAudio.Wave.Asio
         /// <param name="opt">The opt.</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private int AsioMessageCallBack(AsioMessageSelector selector, int value, IntPtr message, IntPtr opt)
+        protected int AsioMessageCallBack(AsioMessageSelector selector, int value, IntPtr message, IntPtr opt)
         {
             // Check when this is called?
             switch (selector)
@@ -398,7 +398,7 @@ namespace NAudio.Wave.Asio
         /// <param name="directProcess">if set to <c>true</c> [direct process].</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private IntPtr BufferSwitchTimeInfoCallBack(IntPtr asioTimeParam, int doubleBufferIndex, bool directProcess)
+        protected IntPtr BufferSwitchTimeInfoCallBack(IntPtr asioTimeParam, int doubleBufferIndex, bool directProcess)
         {
             // Check when this is called?
             return IntPtr.Zero;

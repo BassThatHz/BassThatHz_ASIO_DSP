@@ -30,7 +30,7 @@ using System.Windows.Forms;
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
-static class Program
+public static class Program
 {
     public static DSP_Info DSP_Info = new();
     public readonly static ASIO_Engine ASIO = new();
@@ -39,7 +39,7 @@ static class Program
     public static DateTime App_StartTime = DateTime.Now;
 
     [STAThread]
-    static void Main()
+    public static void Main()
     {
         //Global error handler
         AppDomain.CurrentDomain.UnhandledException += Debug.GlobalError;

@@ -39,10 +39,10 @@ namespace ExtendedXmlSerialization
     /// </summary>
     public class ExtendedXmlSerializer : IExtendedXmlSerializer
     {
-        private ISerializationToolsFactory _toolsFactory;
+        protected ISerializationToolsFactory _toolsFactory;
 
-        private readonly Dictionary<string, object> _referencesObjects = new Dictionary<string, object>();
-        private readonly Dictionary<string, object> _reservedReferencesObjects = new Dictionary<string, object>();
+        protected readonly Dictionary<string, object> _referencesObjects = new Dictionary<string, object>();
+        protected readonly Dictionary<string, object> _reservedReferencesObjects = new Dictionary<string, object>();
         /// <summary>
         /// Creates an instance of <see cref="ExtendedXmlSerializer"/>
         /// </summary>
@@ -100,7 +100,7 @@ namespace ExtendedXmlSerialization
             return xml;
         }
 
-        private void WriteXmlArray(object o, XmlWriter writer, TypeDefinition def, string name)
+        public void WriteXmlArray(object o, XmlWriter writer, TypeDefinition def, string name)
         {
             writer.WriteStartElement(name ?? def.Name);
             List<string> toWriteReservedObject = new();
@@ -178,7 +178,7 @@ namespace ExtendedXmlSerialization
             return (T)Deserialize(xml, typeof(T));
         }
 
-        private object ReadXml(XElement currentNode, TypeDefinition type, object instance = null)
+        public object ReadXml(XElement currentNode, TypeDefinition type, object instance = null)
         {
             if (type.IsPrimitive)
             {
@@ -202,10 +202,7 @@ namespace ExtendedXmlSerialization
                 currentNodeDef = TypeDefinitionCache.GetDefinition(currentNodeType);
             }
             // If xml does not contain type get property type
-            if (currentNodeDef == null)
-            {
-                currentNodeDef = type;
-            }
+            currentNodeDef ??= type;
 
             // Get configuration for type
             var configuration = GetConfiguration(currentNodeDef.Type);
@@ -308,7 +305,7 @@ namespace ExtendedXmlSerialization
             return currentObject;
         }
 
-        private object ReadXmlArray(XElement currentNode, TypeDefinition type, object instance = null)
+        public object ReadXmlArray(XElement currentNode, TypeDefinition type, object instance = null)
         {
             int arrayCount = currentNode.Elements().Count();
             var elements = currentNode.Elements().ToArray();
@@ -335,18 +332,12 @@ namespace ExtendedXmlSerialization
                 }
                 if (type.IsArray)
                 {
-                    if (cd == null)
-                    {
-                        cd = TypeDefinitionCache.GetDefinition(type.Type.GetElementType());
-                    }
+                    cd ??= TypeDefinitionCache.GetDefinition(type.Type.GetElementType());
                     array?.SetValue(ReadXml(element, cd), i);
                 }
                 else
                 {
-                    if (cd == null)
-                    {
-                        cd = TypeDefinitionCache.GetDefinition(type.GenericArguments[0]);
-                    }
+                    cd ??= TypeDefinitionCache.GetDefinition(type.GenericArguments[0]);
                     type.MethodAddToList(list, ReadXml(element, cd));
                 }
             }
@@ -357,14 +348,14 @@ namespace ExtendedXmlSerialization
             return list;
         }
 
-        private static void WriteXmlPrimitive(object o, XmlWriter xw, TypeDefinition def, string name = null)
+        public static void WriteXmlPrimitive(object o, XmlWriter xw, TypeDefinition def, string name = null)
         {
             xw.WriteStartElement(name ?? def.PrimitiveName);
             xw.WriteString(PrimitiveValueTools.SetPrimitiveValue(o, def.Type));
             xw.WriteEndElement();
         }
 
-        private void WriteXml(XmlWriter writer, object o, TypeDefinition type, string name = null, bool writeReservedObject = false)
+        public void WriteXml(XmlWriter writer, object o, TypeDefinition type, string name = null, bool writeReservedObject = false)
         {
             try
             {
@@ -450,7 +441,7 @@ namespace ExtendedXmlSerialization
             }
         }
 
-        private IExtendedXmlSerializerConfig GetConfiguration(Type type)
+        protected IExtendedXmlSerializerConfig GetConfiguration(Type type)
         {
             return _toolsFactory?.GetConfiguration(type);
         }

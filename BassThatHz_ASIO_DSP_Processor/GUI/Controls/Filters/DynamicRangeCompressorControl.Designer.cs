@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
             btnApply = new System.Windows.Forms.Button();
@@ -237,21 +237,21 @@
         }
 
         #endregion
-        private System.Windows.Forms.Button btnApply;
-        private System.Windows.Forms.Label lblThreshold;
-        private System.Windows.Forms.CheckBox chkSoftKnee;
-        private System.Windows.Forms.MaskedTextBox msb_CompressionRatio;
-        private System.Windows.Forms.Label lblCompressionRatio;
-        private System.Windows.Forms.Label lblCompressionRatio2;
-        private System.Windows.Forms.MaskedTextBox msb_AttackTime_ms;
-        private System.Windows.Forms.Label lbl_AttackTime_ms;
-        private System.Windows.Forms.MaskedTextBox msb_ReleaseTime_ms;
-        private System.Windows.Forms.Label lbl_ReleaseTime_ms;
-        private System.Windows.Forms.MaskedTextBox msb_KneeWidth_db;
-        private System.Windows.Forms.Label lbl_KneeWidth_db;
-        public BTH_VolumeSlider Threshold;
-        private System.Windows.Forms.Label label3;
-        public BTH_VolumeSlider CompressionApplied;
-        private System.Windows.Forms.Timer RefreshTimer;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.Label lblThreshold;
+        protected System.Windows.Forms.CheckBox chkSoftKnee;
+        protected System.Windows.Forms.MaskedTextBox msb_CompressionRatio;
+        protected System.Windows.Forms.Label lblCompressionRatio;
+        protected System.Windows.Forms.Label lblCompressionRatio2;
+        protected System.Windows.Forms.MaskedTextBox msb_AttackTime_ms;
+        protected System.Windows.Forms.Label lbl_AttackTime_ms;
+        protected System.Windows.Forms.MaskedTextBox msb_ReleaseTime_ms;
+        protected System.Windows.Forms.Label lbl_ReleaseTime_ms;
+        protected System.Windows.Forms.MaskedTextBox msb_KneeWidth_db;
+        protected System.Windows.Forms.Label lbl_KneeWidth_db;
+        protected BTH_VolumeSlider Threshold;
+        protected System.Windows.Forms.Label label3;
+        protected BTH_VolumeSlider CompressionApplied;
+        protected System.Windows.Forms.Timer RefreshTimer;
     }
 }

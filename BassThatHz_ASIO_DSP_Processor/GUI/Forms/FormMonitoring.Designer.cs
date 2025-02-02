@@ -5,7 +5,7 @@
         /// <summary>
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
             this.pnl_Main = new System.Windows.Forms.Panel();
@@ -134,11 +134,11 @@
 
         #endregion
 
-        private System.Windows.Forms.Panel pnl_Main;
-        private System.Windows.Forms.Timer timer_Refresh;
-        private System.Windows.Forms.SplitContainer splitContainer1;
-        private System.Windows.Forms.Button btn_ResetClip;
-        private System.Windows.Forms.MaskedTextBox msb_RefreshInterval;
-        private System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Panel pnl_Main;
+        protected System.Windows.Forms.Timer timer_Refresh;
+        protected System.Windows.Forms.SplitContainer splitContainer1;
+        protected System.Windows.Forms.Button btn_ResetClip;
+        protected System.Windows.Forms.MaskedTextBox msb_RefreshInterval;
+        protected System.Windows.Forms.Label label1;
     }
 }

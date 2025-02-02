@@ -5,7 +5,7 @@
         /// <summary>
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
             System.Windows.Forms.DataVisualization.Charting.ChartArea chartArea1 = new System.Windows.Forms.DataVisualization.Charting.ChartArea();
@@ -769,36 +769,36 @@
         }
 
         #endregion
-        private System.Windows.Forms.Timer timer_PlotWaveforms;
-        private System.Windows.Forms.Timer timer_Plot_Top_FFTs;
-        private System.Windows.Forms.Timer timer_ResetWaveform;
-        private System.Windows.Forms.Timer timer_Plot_ULF_FFT;
-        private System.Windows.Forms.SplitContainer splitContainer1;
-        private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
-        private System.Windows.Forms.DataVisualization.Charting.Chart chart_Output_Top_FFT;
-        private System.Windows.Forms.DataVisualization.Charting.Chart chart_Output_ULF_FFT;
-        private System.Windows.Forms.DataVisualization.Charting.Chart chart_OutputWaveform;
-        private System.Windows.Forms.DataVisualization.Charting.Chart chart_Input_Top_FFT;
-        private System.Windows.Forms.DataVisualization.Charting.Chart chart_Input_ULF_FFT;
-        private System.Windows.Forms.DataVisualization.Charting.Chart chart_InputWaveform;
-        private System.Windows.Forms.Panel panel1;
-        private System.Windows.Forms.Label label8;
-        private System.Windows.Forms.Label label9;
-        private System.Windows.Forms.ComboBox cbo_ULF_FFT_Overlap;
-        private System.Windows.Forms.ComboBox cbo_Top_FFT_Overlap;
-        private System.Windows.Forms.Label label7;
-        private System.Windows.Forms.MaskedTextBox msb_ULF_FFT_RefreshInterval;
-        private System.Windows.Forms.Label label6;
-        private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.CheckedListBox checkedListBox1;
-        private System.Windows.Forms.MaskedTextBox msb_Top_FFT_RefreshInterval;
-        private System.Windows.Forms.MaskedTextBox msb_WaveForm_RefreshInterval;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.ComboBox cbo_Top_FFT_Size;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.ComboBox cbo_ULF_FFT_Window_Type;
-        private System.Windows.Forms.ComboBox cbo_Top_FFT_Window_Type;
+        protected System.Windows.Forms.Timer timer_PlotWaveforms;
+        protected System.Windows.Forms.Timer timer_Plot_Top_FFTs;
+        protected System.Windows.Forms.Timer timer_ResetWaveform;
+        protected System.Windows.Forms.Timer timer_Plot_ULF_FFT;
+        protected System.Windows.Forms.SplitContainer splitContainer1;
+        protected System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart chart_Output_Top_FFT;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart chart_Output_ULF_FFT;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart chart_OutputWaveform;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart chart_Input_Top_FFT;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart chart_Input_ULF_FFT;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart chart_InputWaveform;
+        protected System.Windows.Forms.Panel panel1;
+        protected System.Windows.Forms.Label label8;
+        protected System.Windows.Forms.Label label9;
+        protected System.Windows.Forms.ComboBox cbo_ULF_FFT_Overlap;
+        protected System.Windows.Forms.ComboBox cbo_Top_FFT_Overlap;
+        protected System.Windows.Forms.Label label7;
+        protected System.Windows.Forms.MaskedTextBox msb_ULF_FFT_RefreshInterval;
+        protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.CheckedListBox checkedListBox1;
+        protected System.Windows.Forms.MaskedTextBox msb_Top_FFT_RefreshInterval;
+        protected System.Windows.Forms.MaskedTextBox msb_WaveForm_RefreshInterval;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.ComboBox cbo_Top_FFT_Size;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.ComboBox cbo_ULF_FFT_Window_Type;
+        protected System.Windows.Forms.ComboBox cbo_Top_FFT_Window_Type;
     }
 }

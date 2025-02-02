@@ -56,13 +56,13 @@ public partial class SmartGainControl : UserControl, IFilterControl
     #region Event Handlers
 
     #region InputValidation
-    private void TxtGain_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtGain_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
         this.txtGain.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtGain.Text);
     }
 
-    private void TxtDuration_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtDuration_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtDuration.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDuration.Text);

@@ -2,6 +2,8 @@
 
 namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls.Filters;
 
+using System.ComponentModel;
+
 #region Usings
 using System.Windows.Forms;
 #endregion
@@ -29,6 +31,16 @@ using System.Windows.Forms;
 /// </summary>
 public partial class MixerElement : UserControl
 {
+    #region Public Properties
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtChAttenuation => this.txtChAttenuation;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtStreamAttenuation => this.txtStreamAttenuation;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public CheckBox Get_chkChannel => this.chkChannel;
+    #endregion
+
+    #region Constructor and Init
     public MixerElement()
     {
         InitializeComponent();
@@ -45,6 +57,7 @@ public partial class MixerElement : UserControl
         this.txtStreamAttenuation.TextChanged += txtStreamAttenuation_TextChanged;
         this.txtStreamAttenuation.MaxLength = 6;
     }
+    #endregion
 
     #region Event Handlers
 

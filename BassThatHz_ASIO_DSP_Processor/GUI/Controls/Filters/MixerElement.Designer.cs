@@ -5,7 +5,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             chkChannel = new System.Windows.Forms.CheckBox();
             label1 = new System.Windows.Forms.Label();
@@ -102,10 +102,10 @@
 
         #endregion
 
-        public System.Windows.Forms.CheckBox chkChannel;
-        public System.Windows.Forms.Label label1;
-        public System.Windows.Forms.TextBox txtChAttenuation;
-        public System.Windows.Forms.TextBox txtStreamAttenuation;
-        public System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.CheckBox chkChannel;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.TextBox txtChAttenuation;
+        protected System.Windows.Forms.TextBox txtStreamAttenuation;
+        protected System.Windows.Forms.Label label2;
     }
 }

@@ -35,17 +35,17 @@ namespace DSPLib
 
     public class FFT
     {
-        #region Private Variables
+        #region Variables
 
-        private double FFTScale = 1.0;
-        private int LogN = 0;       // log2 of FFT size
-        private int N = 0;          // Time series length
-        private int LengthTotal;    // mN + mZp
-        private int LengthHalf;     // (mN + mZp) / 2
-        private FFTElement[] FFTElements;        // Vector of linked list elements
+        protected double FFTScale = 1.0;
+        protected int LogN = 0;       // log2 of FFT size
+        protected int N = 0;          // Time series length
+        protected int LengthTotal;    // mN + mZp
+        protected int LengthHalf;     // (mN + mZp) / 2
+        protected FFTElement[] FFTElements;        // Vector of linked list elements
 
         // Element for linked list to store input/output data.
-        private class FFTElement
+        public class FFTElement
         {
             public double re = 0.0;     // Real component
             public double im = 0.0;     // Imaginary component
@@ -65,7 +65,7 @@ namespace DSPLib
         {
         }
 
-        private void Init(int inputDataLength, int zeroPaddingLength = 0)
+        protected void Init(int inputDataLength, int zeroPaddingLength = 0)
         {
             N = inputDataLength;
 

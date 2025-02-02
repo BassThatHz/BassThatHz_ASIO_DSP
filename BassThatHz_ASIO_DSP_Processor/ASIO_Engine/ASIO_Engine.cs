@@ -100,16 +100,16 @@ public class ASIO_Engine : IDisposable
     #region Properties
 
     #region States and Defaults
-    public string DeviceName { get; private set; } = "Device Not Found"; //The active ASIO device name
-    public int NumberOf_IO_Channels_Default { get; private set; } = 1; //mono is a safe default
-    public int NumberOf_Input_Channels { get; private set; } = 1; //In and Out must be the same (for now)
-    public int NumberOf_Output_Channels { get; private set; } = 1; //In and Out must be the same (for now)
+    public string DeviceName { get; protected set; } = "Device Not Found"; //The active ASIO device name
+    public int NumberOf_IO_Channels_Default { get; protected set; } = 1; //mono is a safe default
+    public int NumberOf_Input_Channels { get; protected set; } = 1; //In and Out must be the same (for now)
+    public int NumberOf_Output_Channels { get; protected set; } = 1; //In and Out must be the same (for now)
     public int NumberOf_IO_Channels_Total => this.NumberOf_Input_Channels + this.NumberOf_Output_Channels;
 
-    public int SampleRate_Default { get; private set; } = 44100; //44.1k is a pretty safe default
-    public int SampleRate_Current { get; private set; } = 44100; //There is a function to set desired SampleRate
+    public int SampleRate_Default { get; protected set; } = 44100; //44.1k is a pretty safe default
+    public int SampleRate_Current { get; protected set; } = 44100; //There is a function to set desired SampleRate
 
-    public int SamplesPerChannel { get; private set; } = 1; //This default value gets overwritten on ASIO start
+    public int SamplesPerChannel { get; protected set; } = 1; //This default value gets overwritten on ASIO start
 
     public double InputMasterVolume { get; set; } = 0.1f; //Default is -20db
     public double OutputMasterVolume { get; set; } = 0.1f; //Default is -20db
@@ -117,14 +117,14 @@ public class ASIO_Engine : IDisposable
     #endregion
 
     #region DSP Delay Stats
-    public Stopwatch DSP_ProcessingTime { get; private set; } = new();
-    public TimeSpan DSP_PeakProcessingTime { get; private set; }
+    public Stopwatch DSP_ProcessingTime { get; protected set; } = new();
+    public TimeSpan DSP_PeakProcessingTime { get; protected set; }
 
-    public Stopwatch InputBufferConversion_ProcessingTime { get; private set; } = new();
+    public Stopwatch InputBufferConversion_ProcessingTime { get; protected set; } = new();
 
-    public Stopwatch OutputBufferConversion_ProcessingTime { get; private set; } = new();
+    public Stopwatch OutputBufferConversion_ProcessingTime { get; protected set; } = new();
 
-    public double BufferSize_Latency_ms { get; private set; }
+    public double BufferSize_Latency_ms { get; protected set; }
 
     public int Underruns => Underruns_Counter;
     protected int Underruns_Counter = 0;

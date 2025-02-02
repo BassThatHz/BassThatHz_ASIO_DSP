@@ -38,17 +38,21 @@ namespace NAudio.Dsp
     {
         #region Variables
 
-        #region Constants
-        protected const double PI = Math.PI;
-        protected const double PI2 = Math.PI * 2;
-        #endregion
-
+        #region Public
         // coefficients
         public double a0; //protected
         public double a1; //protected
         public double a2; //protected
         public double a3; //protected
         public double a4; //protected
+        #endregion
+
+        #region Protected
+
+        #region Constants
+        protected const double PI = Math.PI;
+        protected const double PI2 = Math.PI * 2;
+        #endregion
 
         // state
         protected double x1 = 0;
@@ -56,10 +60,14 @@ namespace NAudio.Dsp
         protected double y1 = 0;
         protected double y2 = 0;
 
-        #region Private variables
-        private double result = 0;
+        protected double result = 0;
+        #endregion
 
-        public enum BiQuadFilterTypes //Private
+        #endregion
+
+        #region Properties
+        public BiQuadFilterTypes BiQuadFilterType;
+        public enum BiQuadFilterTypes
         {
             PEQ,
             HPF,
@@ -73,24 +81,20 @@ namespace NAudio.Dsp
             APF,
             Inv
         }
-        public BiQuadFilterTypes BiQuadFilterType; //Private
-        #endregion
-        #endregion
 
-        #region Properties
-        public double SampleRate { get; set; } //private set
-        public double Frequency { get; set; } //private set
-        public double Q { get; set; } //private set
-        public double Slope { get; set; } //private set
-        public double Gain { get; set; } //private set
+        public double SampleRate { get; set; } 
+        public double Frequency { get; set; } 
+        public double Q { get; set; } 
+        public double Slope { get; set; } 
+        public double Gain { get; set; } 
 
         // coefficients
-        public double aa0 { get; set; } //private set
-        public double aa1 { get; set; } //private set
-        public double aa2 { get; set; } //private set
-        public double b0 { get; set; } //private set
-        public double b1 { get; set; } //private set
-        public double b2 { get; set; } //private set
+        public double aa0 { get; set; } 
+        public double aa1 { get; set; } 
+        public double aa2 { get; set; } 
+        public double b0 { get; set; } 
+        public double b1 { get; set; } 
+        public double b2 { get; set; } 
         #endregion
 
         #region Constructors and Initializers

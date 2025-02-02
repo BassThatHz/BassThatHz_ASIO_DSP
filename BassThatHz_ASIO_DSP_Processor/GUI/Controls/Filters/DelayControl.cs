@@ -59,7 +59,7 @@ public partial class DelayControl : UserControl, IFilterControl
     }
 
     #region InputValidation
-    private void TxtDelay_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtDelay_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtDelay.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDelay.Text);

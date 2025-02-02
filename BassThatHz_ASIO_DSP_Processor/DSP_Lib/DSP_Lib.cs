@@ -439,7 +439,7 @@
                 return winCoeffs;
             }
 
-            private static double[] SineExpansion(int points, double c0, double c1 = 0.0, double c2 = 0.0, double c3 = 0.0, double c4 = 0.0, double c5 = 0.0, double c6 = 0.0, double c7 = 0.0, double c8 = 0.0, double c9 = 0.0, double c10 = 0.0)
+            public static double[] SineExpansion(int points, double c0, double c1 = 0.0, double c2 = 0.0, double c3 = 0.0, double c4 = 0.0, double c5 = 0.0, double c6 = 0.0, double c7 = 0.0, double c8 = 0.0, double c9 = 0.0, double c10 = 0.0)
             {
                 // z = 2 * pi * (0:N-1)' / N;   // Cosine Vector
                 double[] z = new double[points];

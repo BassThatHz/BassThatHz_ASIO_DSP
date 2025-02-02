@@ -5,7 +5,7 @@
         /// <summary>
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             System.Windows.Forms.DataVisualization.Charting.ChartArea chartArea2 = new System.Windows.Forms.DataVisualization.Charting.ChartArea();
             System.Windows.Forms.DataVisualization.Charting.Series series3 = new System.Windows.Forms.DataVisualization.Charting.Series();
@@ -656,48 +656,48 @@
 
         #endregion
 
-        private System.Windows.Forms.GroupBox groupBox1;
-        private System.Windows.Forms.CheckBox PEQEnabled_CHK;
-        public System.Windows.Forms.Label label6;
-        public System.Windows.Forms.TextBox txtQ;
-        public System.Windows.Forms.Label label5;
-        public System.Windows.Forms.TextBox txtG;
-        public System.Windows.Forms.Label label3;
-        public System.Windows.Forms.TextBox txtF;
-        public System.Windows.Forms.Label label2;
-        public System.Windows.Forms.Label label1;
-        private System.Windows.Forms.ComboBox LPF_CBO;
-        private System.Windows.Forms.ComboBox HPF_CBO;
-        public System.Windows.Forms.TextBox HPFFreq_TXT;
-        public System.Windows.Forms.Label label59;
-        public System.Windows.Forms.TextBox LPFFreq_TXT;
-        public System.Windows.Forms.Label label4;
-        private System.Windows.Forms.Button DeleteFilter_BTN;
-        private System.Windows.Forms.Button Add_PEQ_BTN;
-        private System.Windows.Forms.ListBox Filters_LSB;
-        private System.Windows.Forms.CheckBox ShowTotalMag_CHK;
-        private System.Windows.Forms.CheckBox ShowTotalPhase_CHK;
-        private System.Windows.Forms.CheckBox ShowIndividualMag_CHK;
-        private System.Windows.Forms.CheckBox ShowIndividualPhase_CHK;
-        private System.Windows.Forms.CheckBox ShowComponentPhase_CHK;
-        private System.Windows.Forms.CheckBox ShowComponentMag_CHK;
-        private System.Windows.Forms.Button MoveFilterDown_BTN;
-        private System.Windows.Forms.Button MoveFilterUp_BTN;
-        private System.Windows.Forms.Button Apply_PEQ_BTN;
-        private System.Windows.Forms.Button Refresh_BTN;
-        private System.Windows.Forms.DataVisualization.Charting.Chart GPEQ_Chart;
-        public System.Windows.Forms.TextBox mindB_TXT;
-        public System.Windows.Forms.Label label7;
-        public System.Windows.Forms.TextBox maxdB_TXT;
-        public System.Windows.Forms.Label label8;
-        public System.Windows.Forms.Label label9;
-        private System.Windows.Forms.Button SaveAndClose_BTN;
-        private System.Windows.Forms.Button DiscardAndClose_BTN;
-        private System.Windows.Forms.GroupBox groupBox2;
-        private System.Windows.Forms.Button Apply_HPFLPF_BTN;
-        private System.Windows.Forms.GroupBox groupBox3;
-        private System.Windows.Forms.Button Add_HPFLPF_BTN;
-        private System.Windows.Forms.CheckBox HPF_LPF_Enabled_CHK;
-        private System.Windows.Forms.ComboBox FFTSize_CBO;
+        protected System.Windows.Forms.GroupBox groupBox1;
+        protected System.Windows.Forms.CheckBox PEQEnabled_CHK;
+        protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.TextBox txtQ;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.TextBox txtG;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.TextBox txtF;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.ComboBox LPF_CBO;
+        protected System.Windows.Forms.ComboBox HPF_CBO;
+        protected System.Windows.Forms.TextBox HPFFreq_TXT;
+        protected System.Windows.Forms.Label label59;
+        protected System.Windows.Forms.TextBox LPFFreq_TXT;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Button DeleteFilter_BTN;
+        protected System.Windows.Forms.Button Add_PEQ_BTN;
+        protected System.Windows.Forms.ListBox Filters_LSB;
+        protected System.Windows.Forms.CheckBox ShowTotalMag_CHK;
+        protected System.Windows.Forms.CheckBox ShowTotalPhase_CHK;
+        protected System.Windows.Forms.CheckBox ShowIndividualMag_CHK;
+        protected System.Windows.Forms.CheckBox ShowIndividualPhase_CHK;
+        protected System.Windows.Forms.CheckBox ShowComponentPhase_CHK;
+        protected System.Windows.Forms.CheckBox ShowComponentMag_CHK;
+        protected System.Windows.Forms.Button MoveFilterDown_BTN;
+        protected System.Windows.Forms.Button MoveFilterUp_BTN;
+        protected System.Windows.Forms.Button Apply_PEQ_BTN;
+        protected System.Windows.Forms.Button Refresh_BTN;
+        protected System.Windows.Forms.DataVisualization.Charting.Chart GPEQ_Chart;
+        protected System.Windows.Forms.TextBox mindB_TXT;
+        protected System.Windows.Forms.Label label7;
+        protected System.Windows.Forms.TextBox maxdB_TXT;
+        protected System.Windows.Forms.Label label8;
+        protected System.Windows.Forms.Label label9;
+        protected System.Windows.Forms.Button SaveAndClose_BTN;
+        protected System.Windows.Forms.Button DiscardAndClose_BTN;
+        protected System.Windows.Forms.GroupBox groupBox2;
+        protected System.Windows.Forms.Button Apply_HPFLPF_BTN;
+        protected System.Windows.Forms.GroupBox groupBox3;
+        protected System.Windows.Forms.Button Add_HPFLPF_BTN;
+        protected System.Windows.Forms.CheckBox HPF_LPF_Enabled_CHK;
+        protected System.Windows.Forms.ComboBox FFTSize_CBO;
     }
 }

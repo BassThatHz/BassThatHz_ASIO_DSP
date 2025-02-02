@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
             this.txtGain = new System.Windows.Forms.TextBox();
@@ -215,19 +215,19 @@
         }
 
         #endregion
-        private System.Windows.Forms.TextBox txtGain;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.Button btnApply;
-        private System.Windows.Forms.CheckBox chkPeakHold;
-        private System.Windows.Forms.TextBox txtDuration;
-        private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.Label lblHeadroom;
-        private System.Windows.Forms.Label lblAppliedGain;
-        private System.Windows.Forms.Label lblPeakLevel;
-        private System.Windows.Forms.Timer RefreshStats_Timer;
-        private System.Windows.Forms.CheckBox chkPeak;
+        protected System.Windows.Forms.TextBox txtGain;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.CheckBox chkPeakHold;
+        protected System.Windows.Forms.TextBox txtDuration;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Label lblHeadroom;
+        protected System.Windows.Forms.Label lblAppliedGain;
+        protected System.Windows.Forms.Label lblPeakLevel;
+        protected System.Windows.Forms.Timer RefreshStats_Timer;
+        protected System.Windows.Forms.CheckBox chkPeak;
     }
 }

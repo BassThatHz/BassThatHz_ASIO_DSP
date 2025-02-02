@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             btnAddStream = new System.Windows.Forms.Button();
             lblStreamCount = new System.Windows.Forms.Label();
@@ -119,11 +119,11 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         }
 
         #endregion
-        public System.Windows.Forms.Button btnAddStream;
-        public System.Windows.Forms.Label lblStreamCount;
-        public System.Windows.Forms.TabControl tabControl1;
-        public System.Windows.Forms.HScrollBar hScrollBar1;
-        public System.Windows.Forms.TabPage tabPage1;
-        public Controls.StreamControl stream1;
+        protected System.Windows.Forms.Button btnAddStream;
+        protected System.Windows.Forms.Label lblStreamCount;
+        protected System.Windows.Forms.TabControl tabControl1;
+        protected System.Windows.Forms.HScrollBar hScrollBar1;
+        protected System.Windows.Forms.TabPage tabPage1;
+        protected Controls.StreamControl stream1;
     }
 }

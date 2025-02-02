@@ -56,14 +56,14 @@ public partial class ctl_DSPConfigPage : UserControl
             if (DSP_Stream != null)
             {
                 var StreamControl = this.AddStreamControl(DSP_Stream);
-                StreamControl.In_Volume.Volume = DSP_Stream.InputVolume;
-                StreamControl.Out_Volume.Volume = DSP_Stream.OutputVolume;
+                StreamControl.Get_In_Volume.Volume = DSP_Stream.InputVolume;
+                StreamControl.Get_Out_Volume.Volume = DSP_Stream.OutputVolume;
 
-                if (StreamControl.cboInputStream.Items.Count > DSP_Stream.InputChannelIndex)
-                    StreamControl.cboInputStream.SelectedIndex = DSP_Stream.InputChannelIndex;
+                if (StreamControl.Get_cboInputStream.Items.Count > DSP_Stream.InputChannelIndex)
+                    StreamControl.Get_cboInputStream.SelectedIndex = DSP_Stream.InputChannelIndex;
 
-                if (StreamControl.cboOutputStream.Items.Count > DSP_Stream.OutputChannelIndex)
-                    StreamControl.cboOutputStream.SelectedIndex = DSP_Stream.OutputChannelIndex;
+                if (StreamControl.Get_cboOutputStream.Items.Count > DSP_Stream.OutputChannelIndex)
+                    StreamControl.Get_cboOutputStream.SelectedIndex = DSP_Stream.OutputChannelIndex;
 
                 foreach (var Filter in DSP_Stream.Filters)
                 {
@@ -162,11 +162,11 @@ public partial class ctl_DSPConfigPage : UserControl
 
         if (Capabilities.InputChannelInfos != null)
             foreach (var item in Capabilities.InputChannelInfos)
-                _ = streamControl.cboInputStream.Items.Add("(" + item.channel + ") " + item.name);
+                _ = streamControl.Get_cboInputStream.Items.Add("(" + item.channel + ") " + item.name);
 
         if (Capabilities.OutputChannelInfos != null)
             foreach (var item in Capabilities.OutputChannelInfos)
-                _ = streamControl.cboOutputStream.Items.Add("(" + item.channel + ") " + item.name);
+                _ = streamControl.Get_cboOutputStream.Items.Add("(" + item.channel + ") " + item.name);
     }
 
     protected void Set_HScrollbar(int streamControlCount)
@@ -259,11 +259,11 @@ public partial class ctl_DSPConfigPage : UserControl
         #endregion
 
         #region Volume
-        streamControl.In_Volume.VolumeChanged += (s1, e1) =>
+        streamControl.Get_In_Volume.VolumeChanged += (s1, e1) =>
         {
             try
             {
-                dsp_Stream.InputVolume = streamControl.In_Volume.Volume;
+                dsp_Stream.InputVolume = streamControl.Get_In_Volume.Volume;
             }
             catch (Exception ex)
             {
@@ -271,11 +271,11 @@ public partial class ctl_DSPConfigPage : UserControl
             }
         };
 
-        streamControl.Out_Volume.VolumeChanged += (s1, e1) =>
+        streamControl.Get_Out_Volume.VolumeChanged += (s1, e1) =>
         {
             try
             {
-                dsp_Stream.OutputVolume = streamControl.Out_Volume.Volume;
+                dsp_Stream.OutputVolume = streamControl.Get_Out_Volume.Volume;
             }
             catch (Exception ex)
             {
@@ -285,7 +285,7 @@ public partial class ctl_DSPConfigPage : UserControl
         #endregion
 
         #region Stream Deleted
-        streamControl.btnDelete.Click += (s1, e1) =>
+        streamControl.Get_btnDelete.Click += (s1, e1) =>
         {
             try
             {
@@ -299,7 +299,7 @@ public partial class ctl_DSPConfigPage : UserControl
         #endregion
 
         #region Stream Channel Changed
-        streamControl.cboInputStream.SelectedIndexChanged += (s1, e1) =>
+        streamControl.Get_cboInputStream.SelectedIndexChanged += (s1, e1) =>
         {
             try
             {
@@ -311,7 +311,7 @@ public partial class ctl_DSPConfigPage : UserControl
             }
         };
 
-        streamControl.cboOutputStream.SelectedIndexChanged += (s1, e1) =>
+        streamControl.Get_cboOutputStream.SelectedIndexChanged += (s1, e1) =>
         {
             try
             {
@@ -336,11 +336,11 @@ public partial class ctl_DSPConfigPage : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void RefreshTabPageText(StreamControl stream, TabPage tabPage)
     {
-        var InputText = stream.cboInputStream.SelectedItem != null ?
-            stream.cboInputStream.SelectedItem.ToString()
+        var InputText = stream.Get_cboInputStream.SelectedItem != null ?
+            stream.Get_cboInputStream.SelectedItem.ToString()
             : "null";
-        var OutputText = stream.cboOutputStream.SelectedItem != null ?
-            stream.cboOutputStream.SelectedItem.ToString()
+        var OutputText = stream.Get_cboOutputStream.SelectedItem != null ?
+            stream.Get_cboOutputStream.SelectedItem.ToString()
             : "null";
         var TabIndex = "[" + (this.tabControl1.TabPages.IndexOf(tabPage) + 1).ToString() + "] ";
         tabPage.Text = TabIndex + InputText + " -> " + OutputText;
@@ -349,12 +349,12 @@ public partial class ctl_DSPConfigPage : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void InputStream_SelectedIndexChanged(StreamControl stream, TabPage tabPage, DSP_Stream dsp_Stream)
     {
-        String? InputChannelName = stream?.cboInputStream?.SelectedItem?.ToString();
+        String? InputChannelName = stream?.Get_cboInputStream?.SelectedItem?.ToString();
         if (stream != null && !String.IsNullOrEmpty(InputChannelName))
         {
             //Change the DSP Streams InputChannelIndex to that of what the user has selected
             //Default is -1
-            dsp_Stream.InputChannelIndex = stream.cboInputStream.SelectedIndex;
+            dsp_Stream.InputChannelIndex = stream.Get_cboInputStream.SelectedIndex;
             dsp_Stream.InputChannelName = InputChannelName;
 
             Program.Form_Monitoring?.RefreshStreamInfo(dsp_Stream);
@@ -367,7 +367,7 @@ public partial class ctl_DSPConfigPage : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void OutputStream_SelectedIndexChanged(StreamControl stream, TabPage tabPage, DSP_Stream dsp_Stream)
     {
-        String? OutputChannelName = stream?.cboOutputStream?.SelectedItem?.ToString();
+        String? OutputChannelName = stream?.Get_cboOutputStream?.SelectedItem?.ToString();
         if (stream != null && !String.IsNullOrEmpty(OutputChannelName))
         {
             //Change the DSP Streams OutputChannelIndex to that of what the user has selected
@@ -376,7 +376,7 @@ public partial class ctl_DSPConfigPage : UserControl
             //Clears\mutes the audio data from the now abandoned output channel
             Program.ASIO.RequestClearedOutputBuffer(dsp_Stream.OutputChannelIndex);
             //Set the new Output Channel Index for this stream
-            dsp_Stream.OutputChannelIndex = stream.cboOutputStream.SelectedIndex;
+            dsp_Stream.OutputChannelIndex = stream.Get_cboOutputStream.SelectedIndex;
             dsp_Stream.OutputChannelName = OutputChannelName;
 
             Program.Form_Monitoring?.RefreshStreamInfo(dsp_Stream);

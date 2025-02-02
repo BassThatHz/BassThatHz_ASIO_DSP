@@ -57,16 +57,16 @@ namespace ExtendedXmlSerialization
         /// <summary>
         /// Gets the dictionary of migartions
         /// </summary>
-        private readonly Dictionary<int, Action<XElement>> _migrations;
+        protected readonly Dictionary<int, Action<XElement>> _migrations;
 
         /// <summary>
         /// Gets the version of object
         /// </summary>
         public int Version { get; set; }
 
-        private Func<XElement, T> _deserialize;
-        private Action<XmlWriter, T> _serializer;
-        private Func<T, object> getObjectId;
+        protected Func<XElement, T> _deserialize;
+        protected Action<XmlWriter, T> _serializer;
+        protected Func<T, object> getObjectId;
 
         public void CustomSerializer(Action<XmlWriter, T> serializer, Func<XElement, T> deserialize)
         {

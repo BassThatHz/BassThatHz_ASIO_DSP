@@ -10,23 +10,28 @@ namespace NAudio.Wave
     using System.Text;
     using Microsoft.Win32;
 
+    /// <summary>
+    /// Original Contributor: Mark Heath 
+    /// New Contributor to C# binding : Alexandre Mutel - email: alexandre_mutel at yahoo.fr
+    /// Unified and Refactored by BassThatHz - 2023
+    /// </summary>
     public class ASIO_Unified : IDisposable
     {
         #region Variables
         protected AsioAudioAvailableEventArgs On_Has_ASIO_Data_Args = null;
 
         //ASIO Driver Ext
-        private AsioCallbacks callbacks;
-        private AsioDriverCapability capability;
-        private AsioBufferInfo[] bufferInfos;
-        private bool isOutputReadySupported;
-        private IntPtr[] currentOutputBuffers;
-        private IntPtr[] currentInputBuffers;
-        private int numberOfOutputChannels;
-        private int numberOfInputChannels;
-        private int bufferSize;
-        private int outputChannelOffset;
-        private int inputChannelOffset;
+        protected AsioCallbacks callbacks;
+        protected AsioDriverCapability capability;
+        protected AsioBufferInfo[] bufferInfos;
+        protected bool isOutputReadySupported;
+        protected IntPtr[] currentOutputBuffers;
+        protected IntPtr[] currentInputBuffers;
+        protected int numberOfOutputChannels;
+        protected int numberOfInputChannels;
+        protected int bufferSize;
+        protected int outputChannelOffset;
+        protected int inputChannelOffset;
         public Action Driver_ResetRequestCallback;
         public Action Driver_BufferSizeChangedCallback;
         public Action Driver_ResyncRequestCallback;
@@ -35,9 +40,9 @@ namespace NAudio.Wave
         public Action Driver_SampleRateChangedCallback;
 
         //ASIO Driver
-        private IntPtr pAsioComObject;
-        private IntPtr pinnedcallbacks;
-        private AsioDriverVTable asioDriverVTable;
+        protected IntPtr pAsioComObject;
+        protected IntPtr pinnedcallbacks;
+        protected AsioDriverVTable asioDriverVTable;
 
         #endregion
 
@@ -103,12 +108,12 @@ namespace NAudio.Wave
         #region Public Properties
 
         #region Read Only
-        public string DriverName { get; private set; }
-        public bool IsInitalized { get; private set; }
-        public PlaybackState PlaybackState { get; private set; }
-        public int NumberOfOutputChannels { get; private set; }
-        public int NumberOfInputChannels { get; private set; }
-        public int SamplesPerBuffer { get; private set; }
+        public string DriverName { get; protected set; }
+        public bool IsInitalized { get; protected set; }
+        public PlaybackState PlaybackState { get; protected set; }
+        public int NumberOfOutputChannels { get; protected set; }
+        public int NumberOfInputChannels { get; protected set; }
+        public int SamplesPerBuffer { get; protected set; }
         #endregion
 
         public bool AutoStop { get; set; }
@@ -362,7 +367,7 @@ namespace NAudio.Wave
         /// Builds the capabilities internally.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void BuildCapabilities()
+        protected void BuildCapabilities()
         {
             this.capability = new AsioDriverCapability();
 
@@ -410,7 +415,7 @@ namespace NAudio.Wave
         /// <param name="doubleBufferIndex">Index of the double buffer.</param>
         /// <param name="directProcess">if set to <c>true</c> [direct process].</param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void BufferSwitchCallBack(int doubleBufferIndex, bool directProcess)
+        protected void BufferSwitchCallBack(int doubleBufferIndex, bool directProcess)
         {
             for (int i = 0; i < this.numberOfInputChannels; i++)
                 this.currentInputBuffers[i] = this.bufferInfos[i].Buffer(doubleBufferIndex);
@@ -448,7 +453,7 @@ namespace NAudio.Wave
         /// Callback called by the AsioDriver on event "Samples rate changed".
         /// </summary>
         /// <param name="sRate">The sample rate.</param>
-        private void SampleRateDidChangeCallBack(double sRate)
+        protected void SampleRateDidChangeCallBack(double sRate)
         {
             // Check when this is called?
             this.capability.SampleRate = sRate;
@@ -464,7 +469,7 @@ namespace NAudio.Wave
         /// <param name="opt">The opt.</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private int AsioMessageCallBack(AsioMessageSelector selector, int value, IntPtr message, IntPtr opt)
+        protected int AsioMessageCallBack(AsioMessageSelector selector, int value, IntPtr message, IntPtr opt)
         {
             // Check when this is called?
             switch (selector)
@@ -531,7 +536,7 @@ namespace NAudio.Wave
         /// <param name="directProcess">if set to <c>true</c> [direct process].</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private IntPtr BufferSwitchTimeInfoCallBack(IntPtr asioTimeParam, int doubleBufferIndex, bool directProcess)
+        protected IntPtr BufferSwitchTimeInfoCallBack(IntPtr asioTimeParam, int doubleBufferIndex, bool directProcess)
         {
             // Check when this is called?
             return IntPtr.Zero;
@@ -799,7 +804,7 @@ namespace NAudio.Wave
         /// <param name="error">The error to check.</param>
         /// <param name="methodName">Method name</param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void HandleException(AsioError error, string methodName)
+        protected void HandleException(AsioError error, string methodName)
         {
             if (error != AsioError.ASE_OK && error != AsioError.ASE_SUCCESS)
             {
@@ -817,7 +822,7 @@ namespace NAudio.Wave
         /// </summary>
         /// <param name="asioGuid">The ASIO GUID.</param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void InitFromGuid(Guid asioGuid)
+        protected void InitFromGuid(Guid asioGuid)
         {
             const uint CLSCTX_INPROC_SERVER = 1;
             // Start to query the virtual table a index 3 (init method of AsioDriver)
@@ -860,7 +865,7 @@ namespace NAudio.Wave
         /// Internal VTable structure to store all the delegates to the C++ COM method.
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 2)]
-        private class AsioDriverVTable
+        public class AsioDriverVTable
         {
             //3  virtual ASIOBool init(void *sysHandle) = 0;
             [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
@@ -951,7 +956,7 @@ namespace NAudio.Wave
 
         [DllImport("ole32.Dll")]
 #pragma warning disable SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
-        private static extern int CoCreateInstance(ref Guid clsid,
+        protected static extern int CoCreateInstance(ref Guid clsid,
 #pragma warning restore SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
            IntPtr inner,
            uint context,

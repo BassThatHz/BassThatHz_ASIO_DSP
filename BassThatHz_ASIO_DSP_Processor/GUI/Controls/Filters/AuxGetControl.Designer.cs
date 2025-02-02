@@ -5,7 +5,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -26,7 +26,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             chk_MuteBefore = new System.Windows.Forms.CheckBox();
             cbo_AuxToGet = new System.Windows.Forms.ComboBox();
@@ -135,13 +135,13 @@
 
         #endregion
 
-        private System.Windows.Forms.CheckBox chk_MuteBefore;
-        private System.Windows.Forms.ComboBox cbo_AuxToGet;
-        private System.Windows.Forms.Label label1;
-        public System.Windows.Forms.TextBox txtStreamAttenuation;
-        public System.Windows.Forms.Label label2;
-        public System.Windows.Forms.TextBox txtAuxAttenuation;
-        public System.Windows.Forms.Label label3;
-        private System.Windows.Forms.Button btnApply;
+        protected System.Windows.Forms.CheckBox chk_MuteBefore;
+        protected System.Windows.Forms.ComboBox cbo_AuxToGet;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.TextBox txtStreamAttenuation;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.TextBox txtAuxAttenuation;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Button btnApply;
     }
 }

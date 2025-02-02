@@ -6,7 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             groupBox2 = new System.Windows.Forms.GroupBox();
             chkBackgroundThread = new System.Windows.Forms.CheckBox();
@@ -343,29 +343,29 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         }
         #endregion
 
-        public System.Windows.Forms.GroupBox groupBox2;
-        public System.Windows.Forms.Label label22;
-        public System.Windows.Forms.ListBox lstProcesAffinty;
-        public System.Windows.Forms.Label label21;
-        public System.Windows.Forms.Label label20;
-        public System.Windows.Forms.Label label19;
-        public System.Windows.Forms.ComboBox cboProcessPriority;
-        private System.Windows.Forms.Button btnLoadConfig;
-        private System.Windows.Forms.Button btnSaveConfig;
-        private System.Windows.Forms.CheckBox chkThreading;
-        private System.Windows.Forms.CheckBox chkBackgroundThread;
-        private System.Windows.Forms.SaveFileDialog saveFileDialog1;
-        private System.Windows.Forms.OpenFileDialog openFileDialog1;
-        private System.Windows.Forms.CheckBox chkAutoStartDSP;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.MaskedTextBox maskStartUpDelay;
-        private System.Windows.Forms.GroupBox groupBox1;
-        private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.TextBox txt_NetworkConfigAPI_Host;
-        private System.Windows.Forms.CheckBox chkNetworkConfigAPI;
-        private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.Label label4;
-        private System.Windows.Forms.MaskedTextBox maskNetworkConfig_Port;
+        protected System.Windows.Forms.GroupBox groupBox2;
+        protected System.Windows.Forms.Label label22;
+        protected System.Windows.Forms.ListBox lstProcesAffinty;
+        protected System.Windows.Forms.Label label21;
+        protected System.Windows.Forms.Label label20;
+        protected System.Windows.Forms.Label label19;
+        protected System.Windows.Forms.ComboBox cboProcessPriority;
+        protected System.Windows.Forms.Button btnLoadConfig;
+        protected System.Windows.Forms.Button btnSaveConfig;
+        protected System.Windows.Forms.CheckBox chkThreading;
+        protected System.Windows.Forms.CheckBox chkBackgroundThread;
+        protected System.Windows.Forms.SaveFileDialog saveFileDialog1;
+        protected System.Windows.Forms.OpenFileDialog openFileDialog1;
+        protected System.Windows.Forms.CheckBox chkAutoStartDSP;
+        protected System.Windows.Forms.Label label1;
+        protected System.Windows.Forms.MaskedTextBox maskStartUpDelay;
+        protected System.Windows.Forms.GroupBox groupBox1;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Label label2;
+        protected System.Windows.Forms.TextBox txt_NetworkConfigAPI_Host;
+        protected System.Windows.Forms.CheckBox chkNetworkConfigAPI;
+        protected System.Windows.Forms.Label label5;
+        protected System.Windows.Forms.Label label4;
+        protected System.Windows.Forms.MaskedTextBox maskNetworkConfig_Port;
     }
 }

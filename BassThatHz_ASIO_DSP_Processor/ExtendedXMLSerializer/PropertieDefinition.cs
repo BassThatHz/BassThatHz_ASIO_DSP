@@ -24,7 +24,7 @@ namespace ExtendedXmlSerialization.Cache
     using System;
     using System.Reflection;
 
-    internal class PropertieDefinition
+    public class PropertieDefinition
     {
         public PropertieDefinition(Type type, PropertyInfo propertyInfo)
         {
@@ -42,11 +42,11 @@ namespace ExtendedXmlSerialization.Cache
             _propertySetter = ObjectAccessors.CreatePropertySetter(type, fieldInfo.Name);
         }
 
-        private readonly ObjectAccessors.PropertyGetter _getter;
-        private readonly ObjectAccessors.PropertySetter _propertySetter;
+        protected readonly ObjectAccessors.PropertyGetter _getter;
+        protected readonly ObjectAccessors.PropertySetter _propertySetter;
         
-        public string Name { get; private set; }
-        public Type Type { get; private set; }
+        public string Name { get; protected set; }
+        public Type Type { get; protected set; }
 
         public object GetValue(object obj)
         {

@@ -8,10 +8,10 @@
     /// </summary>
     public class CircularBuffer
     {
-        private double[] buffer;
-        private int writePosition;
-        private int readPosition;
-        private int _Count;
+        protected double[] buffer;
+        protected int writePosition;
+        protected int readPosition;
+        protected int _Count;
 
         /// <summary>
         /// Create a new circular buffer

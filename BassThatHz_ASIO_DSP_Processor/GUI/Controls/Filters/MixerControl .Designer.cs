@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             btnConfigMixer = new System.Windows.Forms.Button();
             listBox1 = new System.Windows.Forms.ListBox();
@@ -64,7 +64,7 @@
         }
 
         #endregion
-        private System.Windows.Forms.Button btnConfigMixer;
-        private System.Windows.Forms.ListBox listBox1;
+        protected System.Windows.Forms.Button btnConfigMixer;
+        protected System.Windows.Forms.ListBox listBox1;
     }
 }

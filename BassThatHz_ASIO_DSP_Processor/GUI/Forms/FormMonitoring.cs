@@ -62,7 +62,7 @@ public partial class FormMonitoring : Form
     #region Event Handlers
 
     #region InputValidation
-    private void Msb_RefreshInterval_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Msb_RefreshInterval_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.msb_RefreshInterval.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.msb_RefreshInterval.Text);
@@ -90,7 +90,7 @@ public partial class FormMonitoring : Form
         {
             this.timer_Refresh.Enabled = false;
             foreach (var item in this.VolControlList)
-                item.timer_Refresh.Enabled = false;
+                item.Get_timer_Refresh.Enabled = false;
         }
         catch (Exception ex)
         {
@@ -104,7 +104,7 @@ public partial class FormMonitoring : Form
         {
             this.timer_Refresh.Enabled = true;
             foreach (var item in this.VolControlList)
-                item.timer_Refresh.Enabled = true;
+                item.Get_timer_Refresh.Enabled = true;
         }
         catch (Exception ex)
         {
@@ -164,7 +164,7 @@ public partial class FormMonitoring : Form
             {
                 var VolControl = new BTH_VolumeLevel();
                 this.VolControlList.Add(VolControl);
-                VolControl.btn_View.Text = "[" + (this.VolControlList.IndexOf(VolControl) + 1).ToString() + "] View";
+                VolControl.Get_btn_View.Text = "[" + (this.VolControlList.IndexOf(VolControl) + 1).ToString() + "] View";
                 VolControl.Set_StreamInfo(stream);
                 this.PlaceControl(this.VolControlList.Count() - 1, VolControl);
                 this.pnl_Main.Controls.Add(VolControl);

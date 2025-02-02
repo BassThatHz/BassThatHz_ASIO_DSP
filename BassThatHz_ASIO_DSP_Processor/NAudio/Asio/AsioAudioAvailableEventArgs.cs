@@ -11,13 +11,13 @@
     /// </summary>
     public class AsioAudioAvailableEventArgs : EventArgs
     {
-        private const float Int32LSB_MaxValue = (float)Int32.MaxValue;
-        private const float Int32MaxValueReciprocal = 1f / (float)Int32.MaxValue;
-        private const float Int16MaxValue = (float)Int16.MaxValue;
-        private const float Int16MaxValueReciprocal = 1f / (float)Int16.MaxValue;
-        private const float Int24LSBMaxValue = 8388608.0f;
-        private const float Int24LSBMaxValueReciprocal = 1f / 8388608.0f;
-        private const int Int24MaxValue = (1 << 23) - 1; // Max value for a 24-bit signed integer
+        protected const float Int32LSB_MaxValue = (float)Int32.MaxValue;
+        protected const float Int32MaxValueReciprocal = 1f / (float)Int32.MaxValue;
+        protected const float Int16MaxValue = (float)Int16.MaxValue;
+        protected const float Int16MaxValueReciprocal = 1f / (float)Int16.MaxValue;
+        protected const float Int24LSBMaxValue = 8388608.0f;
+        protected const float Int24LSBMaxValueReciprocal = 1f / 8388608.0f;
+        protected const int Int24MaxValue = (1 << 23) - 1; // Max value for a 24-bit signed integer
 
         /// <summary>
         /// Initialises a new instance of AsioAudioAvailableEventArgs
@@ -45,19 +45,19 @@
         /// <summary>
         /// Pointer to a buffer per input channel
         /// </summary>
-        public IntPtr[] InputBuffers { get; private set; }
+        public IntPtr[] InputBuffers { get; protected set; }
 
         /// <summary>
         /// Pointer to a buffer per output channel
         /// Allows you to write directly to the output buffers
         /// and make sure all buffers are written to with valid data
         /// </summary>
-        public IntPtr[] OutputBuffers { get; private set; }
+        public IntPtr[] OutputBuffers { get; protected set; }
 
         /// <summary>
         /// Number of samples in each buffer
         /// </summary>
-        public int SamplesPerBuffer { get; private set; }
+        public int SamplesPerBuffer { get; protected set; }
 
         /// <summary>
         /// Converts all the recorded audio into a buffer of 32 bit floating point samples, interleaved by channel
@@ -414,6 +414,6 @@
         /// Audio format within each buffer
         /// Most commonly this will be one of, Int32LSB, Int16LSB, Int24LSB or Float32LSB
         /// </summary>
-        public AsioSampleType AsioSampleType { get; private set; }
+        public AsioSampleType AsioSampleType { get; protected set; }
     }
 }

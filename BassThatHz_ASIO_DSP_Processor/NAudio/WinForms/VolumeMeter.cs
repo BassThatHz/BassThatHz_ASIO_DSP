@@ -39,7 +39,7 @@ namespace NAudio.Gui
             base.OnForeColorChanged(e);
         }
 
-        private double amplitude;
+        protected double amplitude;
 
         /// <summary>
         /// Current Value

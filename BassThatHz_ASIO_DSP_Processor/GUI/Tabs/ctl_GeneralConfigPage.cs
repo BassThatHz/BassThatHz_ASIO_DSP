@@ -162,7 +162,7 @@ public partial class ctl_GeneralConfigPage : UserControl
                 Program.Form_Main?.ApplyXMLConfig(XML);
 
                 //Place filename into the General Config tab text
-                var GeneralConfigTab = Program.Form_Main?.tabControl1.TabPages[0];
+                var GeneralConfigTab = Program.Form_Main?.Get_tabControl1.TabPages[0];
                 if (GeneralConfigTab != null)
                     GeneralConfigTab.Text = "General Config (" + this.openFileDialog1.SafeFileName + ")";
             }

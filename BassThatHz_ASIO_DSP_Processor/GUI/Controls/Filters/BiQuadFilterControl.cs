@@ -5,6 +5,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 #region Usings
 using NAudio.Dsp;
 using System;
+using System.ComponentModel;
 using System.Windows.Forms;
 #endregion
 
@@ -33,6 +34,17 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
 {
     #region Variables
     protected BiQuadFilter BiQuad = new();
+    #endregion
+
+    #region Public Properties
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtF => this.txtF;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtG => this.txtG;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtQ => this.txtQ;
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public TextBox Get_txtS => this.txtS;
     #endregion
 
     #region Constructora and MapEventHandlers
@@ -81,12 +93,12 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
     }
 
     #region InputValidation
-    private void TxtF_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtF_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtF.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtF.Text);
     }
-    private void TxtF_TextChanged(object? sender, EventArgs e)
+    protected void TxtF_TextChanged(object? sender, EventArgs e)
     {
         if (string.IsNullOrEmpty(this.txtF.Text))
             this.txtF.Text = "1";
@@ -99,7 +111,7 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
                 this.txtF.Text = "0.01";
         }
     }
-    private void TxtG_TextChanged(object? sender, EventArgs e)
+    protected void TxtG_TextChanged(object? sender, EventArgs e)
     {
         //this.txtG.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtG.Text, true);
 
@@ -116,52 +128,52 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
                 this.txtG.Text = "-999999999";
         }
     }
-    private void TxtG_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtG_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }
-    private void TxtQ_TextChanged(object? sender, EventArgs e)
+    protected void TxtQ_TextChanged(object? sender, EventArgs e)
     {
         if (string.IsNullOrEmpty(this.txtQ.Text))
             this.txtQ.Text = "1";
     }
-    private void TxtQ_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtQ_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtQ.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtQ.Text);
     }
-    private void TxtS_TextChanged(object? sender, EventArgs e)
+    protected void TxtS_TextChanged(object? sender, EventArgs e)
     {
         if (string.IsNullOrEmpty(this.txtS.Text))
             this.txtS.Text = "1";
     }
-    private void TxtS_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void TxtS_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
         this.txtS.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtS.Text);
     }
 
-    private void Txta0_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Txta0_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }
-    private void Txta1_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Txta1_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }
-    private void Txta2_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Txta2_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }
-    private void Txtb0_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Txtb0_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }
-    private void Txtb1_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Txtb1_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }
-    private void Txtb2_KeyPress(object? sender, KeyPressEventArgs e)
+    protected void Txtb2_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
     }

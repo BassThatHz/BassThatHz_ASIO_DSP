@@ -42,7 +42,7 @@ public partial class PolarityControl : UserControl, IFilterControl
     #endregion
 
     #region Event Handlers
-    private void cboInverted_CheckedChanged(object? sender, System.EventArgs e)
+    protected void cboInverted_CheckedChanged(object? sender, System.EventArgs e)
     {
         try
         {

@@ -8,10 +8,10 @@ namespace NAudio.Utils
     public class Decibels
     {
         // 20 / ln( 10 )
-        private const double LOG_2_DB = 8.6858896380650365530225783783321;
+        protected const double LOG_2_DB = 8.6858896380650365530225783783321;
 
         // ln( 10 ) / 20
-        private const double DB_2_LOG = 0.11512925464970228420089957273422;
+        protected const double DB_2_LOG = 0.11512925464970228420089957273422;
 
         /// <summary>
         /// linear to dB conversion

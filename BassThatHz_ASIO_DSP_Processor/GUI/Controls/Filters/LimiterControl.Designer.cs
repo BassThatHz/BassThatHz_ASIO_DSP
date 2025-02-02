@@ -6,7 +6,7 @@
         /// <summary> 
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -27,7 +27,7 @@
         /// Required method for Designer support - do not modify 
         /// the contents of this method with the code editor.
         /// </summary>
-        private void InitializeComponent()
+        protected void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
             btnApply = new System.Windows.Forms.Button();
@@ -197,17 +197,17 @@
 
         #endregion
 
-        private System.Windows.Forms.Button btnApply;
-        public BTH_VolumeSlider Limit;
-        private System.Windows.Forms.Label label1;
-        public BTH_VolumeSlider Threshold;
-        private System.Windows.Forms.Label label2;
-        public BTH_VolumeSlider CompressionApplied;
-        private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.Timer RefreshTimer;
-        private System.Windows.Forms.CheckBox chk_PeakHoldRelease;
-        private System.Windows.Forms.MaskedTextBox mask_Release;
-        private System.Windows.Forms.MaskedTextBox mask_Attack;
-        private System.Windows.Forms.CheckBox chk_PeakHoldAttack;
+        protected System.Windows.Forms.Button btnApply;
+        protected BTH_VolumeSlider Limit;
+        protected System.Windows.Forms.Label label1;
+        protected BTH_VolumeSlider Threshold;
+        protected System.Windows.Forms.Label label2;
+        protected BTH_VolumeSlider CompressionApplied;
+        protected System.Windows.Forms.Label label3;
+        protected System.Windows.Forms.Timer RefreshTimer;
+        protected System.Windows.Forms.CheckBox chk_PeakHoldRelease;
+        protected System.Windows.Forms.MaskedTextBox mask_Release;
+        protected System.Windows.Forms.MaskedTextBox mask_Attack;
+        protected System.Windows.Forms.CheckBox chk_PeakHoldAttack;
     }
 }
