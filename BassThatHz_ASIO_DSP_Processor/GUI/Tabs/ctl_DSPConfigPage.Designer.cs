@@ -35,13 +35,15 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             tabPage1 = new System.Windows.Forms.TabPage();
             stream1 = new Controls.StreamControl();
             hScrollBar1 = new System.Windows.Forms.HScrollBar();
+            btn_Add_Stream_At_Index = new System.Windows.Forms.Button();
+            txt_AddIndex = new System.Windows.Forms.TextBox();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
             SuspendLayout();
             // 
             // btnAddStream
             // 
-            btnAddStream.Location = new System.Drawing.Point(14, 961);
+            btnAddStream.Location = new System.Drawing.Point(14, 965);
             btnAddStream.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             btnAddStream.Name = "btnAddStream";
             btnAddStream.Size = new System.Drawing.Size(70, 25);
@@ -53,7 +55,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             // lblStreamCount
             // 
             lblStreamCount.AutoSize = true;
-            lblStreamCount.Location = new System.Drawing.Point(90, 968);
+            lblStreamCount.Location = new System.Drawing.Point(90, 972);
             lblStreamCount.Name = "lblStreamCount";
             lblStreamCount.Size = new System.Drawing.Size(13, 15);
             lblStreamCount.TabIndex = 3;
@@ -100,11 +102,32 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             hScrollBar1.TabIndex = 5;
             hScrollBar1.Scroll += hScrollBar1_Scroll;
             // 
+            // btn_Add_Stream_At_Index
+            // 
+            btn_Add_Stream_At_Index.Location = new System.Drawing.Point(172, 965);
+            btn_Add_Stream_At_Index.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            btn_Add_Stream_At_Index.Name = "btn_Add_Stream_At_Index";
+            btn_Add_Stream_At_Index.Size = new System.Drawing.Size(89, 25);
+            btn_Add_Stream_At_Index.TabIndex = 6;
+            btn_Add_Stream_At_Index.Text = "Add At Index";
+            btn_Add_Stream_At_Index.UseVisualStyleBackColor = true;
+            btn_Add_Stream_At_Index.Click += btn_Add_Stream_At_Index_Click;
+            // 
+            // txt_AddIndex
+            // 
+            txt_AddIndex.Location = new System.Drawing.Point(265, 966);
+            txt_AddIndex.Name = "txt_AddIndex";
+            txt_AddIndex.Size = new System.Drawing.Size(43, 23);
+            txt_AddIndex.TabIndex = 7;
+            txt_AddIndex.Text = "1";
+            // 
             // ctl_DSPConfigPage
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             AutoScroll = true;
+            Controls.Add(txt_AddIndex);
+            Controls.Add(btn_Add_Stream_At_Index);
             Controls.Add(hScrollBar1);
             Controls.Add(tabControl1);
             Controls.Add(lblStreamCount);
@@ -125,5 +148,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         protected System.Windows.Forms.HScrollBar hScrollBar1;
         protected System.Windows.Forms.TabPage tabPage1;
         protected Controls.StreamControl stream1;
+        protected System.Windows.Forms.Button btn_Add_Stream_At_Index;
+        private System.Windows.Forms.TextBox txt_AddIndex;
     }
 }

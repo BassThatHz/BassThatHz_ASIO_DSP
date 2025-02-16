@@ -5,6 +5,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 #region Usings
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 #endregion
 
@@ -70,6 +71,6 @@ public class DSP_Info
     #endregion
 
     #region Streams
-    public List<DSP_Stream> Streams { get; set; } = new();
+    public ObservableCollection<DSP_Stream> Streams { get; set; } = new();
     #endregion
 }

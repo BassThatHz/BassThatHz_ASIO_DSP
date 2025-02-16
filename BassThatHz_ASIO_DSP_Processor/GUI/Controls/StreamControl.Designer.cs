@@ -50,6 +50,8 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             In_Volume = new BTH_VolumeSlider();
             Out_Volume = new BTH_VolumeSlider();
             btnDelete = new System.Windows.Forms.Button();
+            btn_MoveTo = new System.Windows.Forms.Button();
+            txtMoveToIndex = new System.Windows.Forms.TextBox();
             groupBox1.SuspendLayout();
             panel1.SuspendLayout();
             SuspendLayout();
@@ -260,22 +262,16 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             In_Volume.Location = new System.Drawing.Point(542, 36);
             In_Volume.Margin = new System.Windows.Forms.Padding(2);
             In_Volume.Name = "In_Volume";
-            In_Volume.ReadOnly = false;
             In_Volume.Size = new System.Drawing.Size(891, 20);
             In_Volume.TabIndex = 139;
-            In_Volume.TextColor = System.Drawing.Color.Black;
-            In_Volume.VolumedB = 0D;
             // 
             // Out_Volume
             // 
             Out_Volume.Location = new System.Drawing.Point(542, 79);
             Out_Volume.Margin = new System.Windows.Forms.Padding(2);
             Out_Volume.Name = "Out_Volume";
-            Out_Volume.ReadOnly = false;
             Out_Volume.Size = new System.Drawing.Size(891, 20);
             Out_Volume.TabIndex = 141;
-            Out_Volume.TextColor = System.Drawing.Color.Black;
-            Out_Volume.VolumedB = 0D;
             // 
             // btnDelete
             // 
@@ -287,11 +283,30 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             btnDelete.Text = "Delete";
             btnDelete.UseVisualStyleBackColor = true;
             // 
+            // btn_MoveTo
+            // 
+            btn_MoveTo.Location = new System.Drawing.Point(0, 42);
+            btn_MoveTo.Name = "btn_MoveTo";
+            btn_MoveTo.Size = new System.Drawing.Size(75, 23);
+            btn_MoveTo.TabIndex = 148;
+            btn_MoveTo.Text = "MoveTo";
+            btn_MoveTo.UseVisualStyleBackColor = true;
+            // 
+            // txtMoveToIndex
+            // 
+            txtMoveToIndex.Location = new System.Drawing.Point(3, 71);
+            txtMoveToIndex.Name = "txtMoveToIndex";
+            txtMoveToIndex.Size = new System.Drawing.Size(70, 23);
+            txtMoveToIndex.TabIndex = 150;
+            txtMoveToIndex.Text = "1";
+            // 
             // StreamControl
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             BackColor = System.Drawing.SystemColors.ControlDark;
+            Controls.Add(txtMoveToIndex);
+            Controls.Add(btn_MoveTo);
             Controls.Add(btnDelete);
             Controls.Add(groupBox1);
             Margin = new System.Windows.Forms.Padding(2);
@@ -301,6 +316,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             groupBox1.PerformLayout();
             panel1.ResumeLayout(false);
             ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
@@ -326,5 +342,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         protected System.Windows.Forms.TextBox txt_REW_ID;
         protected System.Windows.Forms.Label label5;
         protected System.Windows.Forms.Button btnImportFromREW_API;
+        private System.Windows.Forms.Button btn_MoveTo;
+        private System.Windows.Forms.TextBox txtMoveToIndex;
     }
 }

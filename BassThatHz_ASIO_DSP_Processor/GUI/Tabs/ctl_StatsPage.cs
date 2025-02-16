@@ -2,6 +2,8 @@
 
 namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs;
 
+using NAudio.Wave.Asio;
+
 #region Usings
 using System;
 using System.Diagnostics;
@@ -115,29 +117,38 @@ public partial class ctl_StatsPage : UserControl
                 return;
             }
 
-            var Capabilities = Program.ASIO.GetDriverCapabilities(DSPInfo.ASIO_InputDevice);
-            if (Capabilities.InputChannelInfos != null && Capabilities.OutputChannelInfos != null)
+            AsioDriverCapability? Capabilities = null;
+            try
             {
-                var InputChannelCount = Capabilities.InputChannelInfos.Length;
-                var OutputChannelCount = Capabilities.OutputChannelInfos.Length;
-                DSPInfo.InChannelCount = InputChannelCount;
-                DSPInfo.OutChannelCount = OutputChannelCount;
-
-                this.DSP_StartTime = DateTime.Now;
-                this.DSP_StopTime = DateTime.MinValue;
-
-                if(!this.No_GC_Set)
-                    GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
-
-                Program.ASIO.Start(DSPInfo.ASIO_InputDevice, DSPInfo.InSampleRate, InputChannelCount, OutputChannelCount);
-                //Asynchronously update the Starting Stats after a delay (rather than synchronously with the UI thread that just initiatlized ASIO.)
-                //I don't know if this is actually "needed" but it sounds like a good idea to me
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(2000);
-                    this.ShowStartingStats();
-                });
+                Capabilities = Program.ASIO.GetDriverCapabilities(DSPInfo.ASIO_InputDevice);
             }
+            catch (Exception ex)
+            {
+                _ = ex;
+                _ = MessageBox.Show("Cannot start. Can't fetch Driver Capabilities.");
+            }
+            if (Capabilities == null)
+                return;
+
+            var InputChannelCount = Capabilities.Value.InputChannelInfos.Length;
+            var OutputChannelCount = Capabilities.Value.OutputChannelInfos.Length;
+            DSPInfo.InChannelCount = InputChannelCount;
+            DSPInfo.OutChannelCount = OutputChannelCount;
+
+            this.DSP_StartTime = DateTime.Now;
+            this.DSP_StopTime = DateTime.MinValue;
+
+            if(!this.No_GC_Set)
+                GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+
+            Program.ASIO.Start(DSPInfo.ASIO_InputDevice, DSPInfo.InSampleRate, InputChannelCount, OutputChannelCount);
+            //Asynchronously update the Starting Stats after a delay (rather than synchronously with the UI thread that just initiatlized ASIO.)
+            //I don't know if this is actually "needed" but it sounds like a good idea to me
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(2000);
+                this.ShowStartingStats();
+            });
         }
         catch (Exception ex)
         {

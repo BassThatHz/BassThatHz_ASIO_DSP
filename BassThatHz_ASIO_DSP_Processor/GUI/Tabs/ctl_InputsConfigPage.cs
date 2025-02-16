@@ -87,7 +87,7 @@ public partial class ctl_InputsConfigPage : UserControl
         catch (AsioException ex)
         {
             _ = ex;
-            _ = MessageBox.Show("Cannot init ASIO device or no ASIO drivers detected. " + ex.Message, "ASIO Error");
+            _ = MessageBox.Show("Cannot init ASIO device or no ASIO drivers detected. " + ex.Message + "|" + ex.StackTrace, "ASIO Error");
         }
         catch (Exception ex)
         {
@@ -200,10 +200,22 @@ public partial class ctl_InputsConfigPage : UserControl
         string? DeviceName = this.cboDevices.SelectedItem?.ToString();
         if (!String.IsNullOrEmpty(DeviceName))
         {
-            var Capabilities = Program.ASIO.GetDriverCapabilities(DeviceName);
-            if (Capabilities.InputChannelInfos != null)
-                foreach (var item in Capabilities.InputChannelInfos)
-                    _ = this.lstChannels.Items.Add("(" + item.channel + ") " + item.name);
+            AsioDriverCapability? Capabilities = null;
+            try
+            {
+                Capabilities = Program.ASIO.GetDriverCapabilities(DeviceName);
+            }
+            catch (Exception ex)
+            {
+                _ = ex;
+                //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
+                _ = MessageBox.Show("Can't fetch Driver Capabilities. The app may not work correctly without them. " + ex.Message + "|" + ex.StackTrace);
+            }
+            if (Capabilities == null)
+                return;
+
+            foreach (var item in Capabilities.Value.InputChannelInfos)
+                _ = this.lstChannels.Items.Add("(" + item.channel + ") " + item.name);
         }
     }
 
@@ -227,7 +239,7 @@ public partial class ctl_InputsConfigPage : UserControl
     {
         foreach (var Device in this.cboDevices.Items)
         {
-            if (Device.ToString() == Program.DSP_Info.ASIO_OutputDevice)
+            if (Device.ToString() == Program.DSP_Info.ASIO_InputDevice)
             {
                 this.cboDevices.SelectedItem = Device;
                 break;

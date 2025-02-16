@@ -190,10 +190,21 @@ public partial class ctl_OutputsConfigPage : UserControl
         string? DeviceName = this.cboDevices.SelectedItem?.ToString();
         if (!String.IsNullOrEmpty(DeviceName))
         {
-            var Capabilities = Program.ASIO.GetDriverCapabilities(DeviceName);
-            if (Capabilities.OutputChannelInfos != null)
-                foreach (var item in Capabilities.OutputChannelInfos)
-                    _ = this.lstChannels.Items.Add("(" + item.channel + ") " + item.name);
+            AsioDriverCapability? Capabilities = null;
+            try
+            {
+                Capabilities = Program.ASIO.GetDriverCapabilities(DeviceName);
+            }
+            catch (Exception ex)
+            {
+                _ = ex;
+                //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
+            }
+            if (Capabilities == null)
+                return;
+
+            foreach (var item in Capabilities.Value.OutputChannelInfos)
+                _ = this.lstChannels.Items.Add("(" + item.channel + ") " + item.name);
         }
     }
 

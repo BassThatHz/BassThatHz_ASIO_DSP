@@ -61,6 +61,8 @@ public partial class StreamControl : UserControl
     public ComboBox Get_cboInputStream => this.cboInputStream;
     public ComboBox Get_cboOutputStream => this.cboOutputStream;
     public Button Get_btnDelete => this.btnDelete;
+    public Button Get_btn_MoveTo => this.btn_MoveTo;
+    public TextBox Get_txtMoveToIndex => this.txtMoveToIndex;
     #endregion
 
     #region Constructor
@@ -290,7 +292,7 @@ public partial class StreamControl : UserControl
         try
         {
             REW_API.REW_TargetSettings REW_TargetSettings = new();
-            List<REW_API.REW_Filter > REW_Filters = new();
+            List<REW_API.REW_Filter> REW_Filters = new();
 
             #region Compose REW Filters and TargetSettings
             int i = 0;

@@ -244,9 +244,21 @@ public partial class FormMixer : Form
         if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
             return;
 
-        var Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
+        AsioDriverCapability? Capabilities = null;
+        try
+        {
+            Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
+        }
+        catch (Exception ex)
+        {
+            _ = ex;
+            //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
+        }
+        if (Capabilities == null)
+            return;
+
         int i = 0;
-        foreach (var item in Capabilities.InputChannelInfos)
+        foreach (var item in Capabilities.Value.InputChannelInfos)
         {
             var tempMixerElement = this.CreateMixerElement(item, i);
             var tempMixerInput = this.CreateMixerInput(item.channel, item.name);
