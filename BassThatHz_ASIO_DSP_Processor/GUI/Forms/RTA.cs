@@ -6,6 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Forms;
 using DSPLib;
 using NAudio.Utils;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Numerics;
@@ -13,7 +14,6 @@ using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
-using Windows.Devices.WiFiDirect.Services;
 #endregion
 
 /// <summary>
@@ -302,7 +302,7 @@ public partial class RTA : Form
     }
     #endregion
 
-    #region Plot Timers
+    #region Waveform Plot Timers
     [SupportedOSPlatform("windows")]
     protected void timer_ResetWaveform_Tick(object sender, EventArgs e)
     {
@@ -320,48 +320,88 @@ public partial class RTA : Form
     }
 
     [SupportedOSPlatform("windows")]
-    protected void timer_PlotWaveforms_Tick(object sender, EventArgs e)
+    protected async void timer_PlotWaveforms_Tick(object sender, EventArgs e)
     {
+        // Disable the timer while processing.
         this.timer_PlotWaveforms.Enabled = false;
         try
         {
-            if (this.Input_ChannelIndex > -1 && this.chart_InputWaveform.Visible && Program.ASIO.InputBuffer != null)
-            {
-                if (this.chart_InputWaveform_ResetAutoRange)
-                {
-                    this.chart_InputWaveform.ChartAreas[0].AxisY.Maximum = 0;
-                    this.chart_InputWaveform.ChartAreas[0].AxisY.Minimum = 0;
-                    this.chart_InputWaveform.ChartAreas[0].AxisY.Interval = 0;
-                    this.chart_InputWaveform_ResetAutoRange = false;
-                }
+            var updateTasks = new List<Task<ChartUpdateData>>();
 
-                double[] timeSeries_Input = Program.ASIO.InputBuffer[this.Input_ChannelIndex];
-                var scaleYAxis = 1.5;
-                this.Plot_Waveform(this.chart_InputWaveform, timeSeries_Input, scaleYAxis);
+            // Process input waveform if conditions are met.
+            if (this.Input_ChannelIndex > -1 &&
+                this.chart_InputWaveform.Visible &&
+                Program.ASIO.InputBuffer != null)
+            {
+                double[] yDataInput = Program.ASIO.InputBuffer[this.Input_ChannelIndex];
+                double scaleYAxis = 1.5;
+                bool resetAutoRange = this.chart_InputWaveform_ResetAutoRange;
+
+                updateTasks.Add(Task.Run(() =>
+                {
+                    WaveformPlotData plotData = ComputeWaveformPlotData(yDataInput, scaleYAxis);
+                    return new ChartUpdateData
+                    {
+                        Chart = this.chart_InputWaveform,
+                        PlotData = plotData,
+                        ResetAutoRange = resetAutoRange
+                    };
+                }));
             }
 
-            if (this.Output_ChannelIndex > -1 && this.chart_OutputWaveform.Visible && Program.ASIO.OutputBuffer != null)
+            // Process output waveform if conditions are met.
+            if (this.Output_ChannelIndex > -1 &&
+                this.chart_OutputWaveform.Visible &&
+                Program.ASIO.OutputBuffer != null)
             {
-                if (this.chart_OutputWaveform_ResetAutoRange)
-                {
-                    this.chart_OutputWaveform.ChartAreas[0].AxisY.Maximum = 0;
-                    this.chart_OutputWaveform.ChartAreas[0].AxisY.Minimum = 0;
-                    this.chart_OutputWaveform.ChartAreas[0].AxisY.Interval = 0;
-                    this.chart_OutputWaveform_ResetAutoRange = false;
-                }
+                double[] yDataOutput = Program.ASIO.OutputBuffer[this.Output_ChannelIndex];
+                double scaleYAxis = 1.5;
+                bool resetAutoRange = this.chart_OutputWaveform_ResetAutoRange;
 
-                double[] timeSeries_Output = Program.ASIO.OutputBuffer[this.Output_ChannelIndex];
-                var scaleYAxis = 1.5;
-                this.Plot_Waveform(this.chart_OutputWaveform, timeSeries_Output, scaleYAxis);
+                updateTasks.Add(Task.Run(() =>
+                {
+                    WaveformPlotData plotData = ComputeWaveformPlotData(yDataOutput, scaleYAxis);
+                    return new ChartUpdateData
+                    {
+                        Chart = this.chart_OutputWaveform,
+                        PlotData = plotData,
+                        ResetAutoRange = resetAutoRange
+                    };
+                }));
             }
+
+            // Await all background tasks.
+            ChartUpdateData[] updates = await Task.WhenAll(updateTasks);
+
+            // Batch all UI updates on the UI thread.
+            this.SafeInvoke(() =>
+            {
+                foreach (var update in updates)
+                {
+                    if (update.Chart == null || update.PlotData == null)
+                        continue;
+
+                    UpdateChartWithPlotData(update.Chart, update.PlotData, update.ResetAutoRange);
+                    // Reset the auto-range flags after updating.
+                    if (update.Chart == this.chart_InputWaveform)
+                        this.chart_InputWaveform_ResetAutoRange = false;
+                    else if (update.Chart == this.chart_OutputWaveform)
+                        this.chart_OutputWaveform_ResetAutoRange = false;
+                }
+            });
         }
         catch (Exception ex)
-        {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
-            _ = ex;
+        {
+            this.Error(ex);
         }
-        this.timer_PlotWaveforms.Enabled = true;
+        finally
+        {
+            this.timer_PlotWaveforms.Enabled = true;
+        }
     }
+    #endregion
 
+    #region FFT Plot Timers
     [SupportedOSPlatform("windows")]
     protected void timer_PlotTopFFTs_Tick(object sender, EventArgs e)
     {
@@ -434,25 +474,47 @@ public partial class RTA : Form
 
     #region ChartMouseMove
     [SupportedOSPlatform("windows")]
-    protected void Chart_MouseMove(object? sender, MouseEventArgs e)
+    protected async void Chart_MouseMove(object? sender, MouseEventArgs e)
     {
         try
         {
             if (sender == null) return;
-            var chart = (Chart)sender;
-            if (chart == null || chart.ChartAreas.Count < 1) return;
-            ChartArea ca = chart.ChartAreas[0];
-            if (ca == null || chart.Titles.Count < 6) return;
+            if (!(sender is Chart chart)) return;
+            if (chart.ChartAreas.Count < 1 || chart.Titles.Count < 6) return;
 
-            if (InnerPlotPositionClientRectangle(chart, ca).Contains(e.Location))
+            ChartArea ca = chart.ChartAreas[0];
+            if (ca == null) return;
+
+            // Check if the mouse is within the inner plot area (UI thread)
+            RectangleF innerRect = InnerPlotPositionClientRectangle(chart, ca);
+            if (!innerRect.Contains(e.Location))
+                return;
+
+            // Capture values from the UI thread to pass to the background task.
+            int pixelX = e.X;
+            int pixelY = e.Y;
+            var ax = ca.AxisX;
+            var ay = ca.AxisY;
+            double sampleRate = Program.DSP_Info.InSampleRate;
+
+            // Offload the computations to a background thread.
+            string newTitle = await Task.Run(() =>
             {
-                Axis ax = ca.AxisX;
-                Axis ay = ca.AxisY;
-                double x = Math.Pow(10, ax.PixelPositionToValue(e.X));
-                double y = ay.PixelPositionToValue(e.Y);
-                if (x < Program.DSP_Info.InSampleRate * 0.5) //Limit X data to nyquist
-                    chart.Titles[5].Text = "Mouse: " + x.ToString("0.0") + " | " + y.ToString("0.0");
-            }
+                // Perform computations.
+                // (Note: Ensure that these methods are thread-safe in your context.)
+                double xValue = Math.Pow(10, ax.PixelPositionToValue(pixelX));
+                double yValue = ay.PixelPositionToValue(pixelY);
+
+                // Only update the title if within Nyquist limit.
+                if (xValue < sampleRate * 0.5)
+                    return $"Mouse: {xValue:0.0} | {yValue:0.0}";
+                return string.Empty;
+            });
+
+            // Update the UI on the UI thread.
+            if (!string.IsNullOrEmpty(newTitle))
+                this.SafeInvoke(() => 
+                    chart.Titles[5].Text = newTitle);
         }
         catch (Exception ex)
         {
@@ -573,7 +635,7 @@ public partial class RTA : Form
         this.chart_Output_ULF_FFT.MouseMove += this.Chart_MouseMove;
         this.chart_Output_Top_FFT.MouseMove += this.Chart_MouseMove;
 
-        this.checkedListBox1.ItemCheck += CheckedListBox1_ItemCheck;
+        this.checkedListBox1.ItemCheck += CheckedListBox1_ItemCheck;       
     }
     #endregion
 
@@ -770,9 +832,48 @@ public partial class RTA : Form
     }
     #endregion
 
-    #region Plot Charts
+    #region Waveform Charts Logic
+    // One‑time initialization for a Chart control. This sets up properties
+    // that don't change per tick (like the baseline strip line, Y‑axis label format,
+    // and X‑axis starting point).
     [SupportedOSPlatform("windows")]
-    protected void Plot_Waveform(Chart chartControl, double[] yData, double scaleYAxis)
+    protected void InitializeChart(Chart chartControl)
+    {
+        if (chartControl == null || chartControl.ChartAreas.Count < 1)
+            return;
+
+        // Use the Tag property to store a flag indicating initialization.
+        if (chartControl.Tag is bool initialized && initialized)
+            return;
+
+        ChartArea area = chartControl.ChartAreas[0];
+
+        // Create and add a baseline strip line at y = 0.
+        var line = new StripLine()
+        {
+            BorderColor = Color.Black,
+            Interval = 0,
+            IntervalOffset = 0,
+            StripWidth = 0,
+            StripWidthType = DateTimeIntervalType.NotSet
+        };
+        area.AxisY.StripLines.Clear();
+        area.AxisY.StripLines.Add(line);
+
+        // Format the Y‑axis labels.
+        area.AxisY.LabelStyle.Format = "0.0000";
+
+        // Set the X‑axis to start from zero.
+        area.AxisX.IsStartedFromZero = true;
+
+        // Mark this chart as initialized.
+        chartControl.Tag = true;
+    }
+
+    // Updates a Chart control with the computed waveform data. This method is
+    // invoked on the UI thread and assumes that the chart has been initialized.
+    [SupportedOSPlatform("windows")]
+    protected void UpdateChartWithPlotData(Chart chartControl, WaveformPlotData plotData, bool resetAutoRange)
     {
         if (this.IsDisposed || !this.IsHandleCreated)
             return;
@@ -783,69 +884,114 @@ public partial class RTA : Form
 
         try
         {
+            // Perform one‑time initialization if not already done.
+            InitializeChart(chartControl);
+
             chartControl.SuspendLayout();
 
+            // If auto‑range needs to be reset, set the Y‑axis values to 0.
+            if (resetAutoRange)
+            {
+                chartControl.ChartAreas[0].AxisY.Maximum = 0;
+                chartControl.ChartAreas[0].AxisY.Minimum = 0;
+                chartControl.ChartAreas[0].AxisY.Interval = 0;
+            }
+
+            // Set basic axis properties.
+            ChartArea area = chartControl.ChartAreas[0];
+            area.AxisX.IntervalType = DateTimeIntervalType.Number;
+            area.AxisY.IntervalType = DateTimeIntervalType.Number;
+            area.AxisX.Minimum = plotData.XMinimum;
+            area.AxisX.Maximum = plotData.XMaximum;
+            area.AxisX.Interval = plotData.XInterval;
+
+            // Clear existing data points and bind new data.
             chartControl.Series["Series1"].Points.Clear();
+            chartControl.Series["Series1"].Points.DataBindXY(plotData.XData, plotData.YDataDec);
 
-            //// Set basic axis properties.
-            chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
-            chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
-            chartControl.ChartAreas[0].AxisX.IsStartedFromZero = true;
-
-            chartControl.ChartAreas[0].AxisX.Minimum = 0;
-            chartControl.ChartAreas[0].AxisX.Maximum = yData.Length;
-            chartControl.ChartAreas[0].AxisX.Interval = yData.Length * 0.25;
-
-            // Generate X Data starting at 0.
-            double[] xData = DSP.Generate.LinSpace(0, yData.Length - 1, yData.Length);
-            if (xData[0] < 0) //This should never be negative
+            // Update Y‑axis scaling if needed.
+            if (area.AxisY.Maximum < plotData.YMaximum || area.AxisY.Minimum > plotData.YMinimum)
             {
-                chartControl.ResumeLayout();
-                return;
+                area.AxisY.Maximum = plotData.YMaximum;
+                area.AxisY.Minimum = plotData.YMinimum;
             }
-
-            // Add a baseline strip line at y = 0.
-            var line = new StripLine()
-            {
-                BorderColor = Color.Black,
-                Interval = 0,
-                IntervalOffset = 0,
-                StripWidth = 0,
-                StripWidthType = DateTimeIntervalType.NotSet
-            };
-            chartControl.ChartAreas[0].AxisY.StripLines.Clear();
-            chartControl.ChartAreas[0].AxisY.StripLines.Add(line);
-
-            //MS Chart can't handle full doubles. LOL!
-            var yDataDec = new decimal[yData.Length];
-            for (int i = 0; i < yData.Length; i++)
-                yDataDec[i] = (decimal)yData[i];
-
-            chartControl.Series["Series1"].Points.DataBindXY(xData, yDataDec);
-
-            var max = Math.Min(yData.Max() * scaleYAxis, scaleYAxis);
-            var min = Math.Min(yData.Min() * scaleYAxis, -0.0001);
-            var mag = Math.Max(Math.Abs(max), Math.Abs(min));
-            mag = Math.Max(mag, 0.0001);
-
-            var axisY = chartControl.ChartAreas[0].AxisY;
-            if (axisY.Maximum < mag || axisY.Minimum > -mag)
-            {
-                axisY.Maximum = mag;
-                axisY.Minimum = -mag;
-            }
-
-            // Format Y-axis labels.
-            chartControl.ChartAreas[0].AxisY.LabelStyle.Format = "0.0000";
 
             chartControl.ResumeLayout();
         }
-        catch (Exception ex) 
+        catch (Exception ex)
         {
-            _ = ex;
+            this.Error(ex);
         }
     }
 
+    // Computes all the data needed to plot a waveform. This method is called on a
+    // background thread and performs operations like generating X‑axis data,
+    // converting the Y data to decimals, and computing axis scales.
+    protected WaveformPlotData ComputeWaveformPlotData(double[] yData, double scaleYAxis)
+    {
+        // Generate X‑axis data.
+        double[] xData = DSP.Generate.LinSpace(0, yData.Length - 1, yData.Length);
+        // If xData is not valid, return empty plot data.
+        if (xData.Length == 0 || xData[0] < 0)
+        {
+            return new WaveformPlotData();
+        }
+
+        // Convert yData to decimals because MSChart cannot handle full doubles.
+        decimal[] yDataDec = new decimal[yData.Length];
+        for (int i = 0; i < yData.Length; i++)
+        {
+            yDataDec[i] = (decimal)yData[i];
+        }
+
+        double xMin = 0;
+        double xMax = yData.Length;
+        double xInterval = yData.Length * 0.25;
+
+        // Compute Y‑axis limits.
+        double maxCandidate = yData.Max() * scaleYAxis;
+        maxCandidate = Math.Min(maxCandidate, scaleYAxis);
+        double minCandidate = yData.Min() * scaleYAxis;
+        minCandidate = Math.Min(minCandidate, -0.0001);
+        double mag = Math.Max(Math.Abs(maxCandidate), Math.Abs(minCandidate));
+        mag = Math.Max(mag, 0.0001);
+
+        return new WaveformPlotData
+        {
+            XData = xData,
+            YDataDec = yDataDec,
+            XMinimum = xMin,
+            XMaximum = xMax,
+            XInterval = xInterval,
+            YMaximum = mag,
+            YMinimum = -mag
+        };
+    }
+
+    // Data container for all the computed data needed for a chart update.
+    protected class WaveformPlotData
+    {
+        public double[] XData { get; set; } = Array.Empty<double>();
+        public decimal[] YDataDec { get; set; } = Array.Empty<decimal>();
+        public double XMinimum { get; set; }
+        public double XMaximum { get; set; }
+        public double XInterval { get; set; }
+        public double YMaximum { get; set; }
+        public double YMinimum { get; set; }
+    }
+
+    // Container that pairs a Chart control with its computed waveform data and
+    // whether auto-range needs to be reset.
+    protected class ChartUpdateData
+    {
+        public Chart? Chart { get; set; }
+        public WaveformPlotData? PlotData { get; set; }
+        public bool ResetAutoRange { get; set; }
+    }
+
+    #endregion
+
+    #region FFT Charts Logic
     [SupportedOSPlatform("windows")]
     protected void Plot_FFT(Chart chartControl, double min, double max, double[] xData, double[] yData)
     {
@@ -930,7 +1076,7 @@ public partial class RTA : Form
         float ph = CArp.Height / 100f;
 
         return new RectangleF(CArp.X + pw * IPP.X, CArp.Y + ph * IPP.Y,
-                                pw * IPP.Width, ph * IPP.Height);
+                              pw * IPP.Width, ph * IPP.Height);
     }
 
     [SupportedOSPlatform("windows")]
