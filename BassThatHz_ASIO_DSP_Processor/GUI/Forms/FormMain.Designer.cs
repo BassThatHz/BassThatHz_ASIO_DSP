@@ -202,7 +202,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             Margin = new System.Windows.Forms.Padding(2);
             MinimumSize = new System.Drawing.Size(836, 320);
             Name = "FormMain";
-            Text = "BassThatHz_ASIO_DSP_Processor 1.0.41 Beta";
+            Text = "BassThatHz_ASIO_DSP_Processor 1.0.42 Beta";
             WindowState = System.Windows.Forms.FormWindowState.Maximized;
             Load += FormMain_Load;
             tabControl1.ResumeLayout(false);

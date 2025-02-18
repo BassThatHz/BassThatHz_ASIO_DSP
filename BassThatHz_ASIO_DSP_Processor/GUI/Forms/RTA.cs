@@ -13,6 +13,7 @@ using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
+using Windows.Devices.WiFiDirect.Services;
 #endregion
 
 /// <summary>
@@ -62,6 +63,9 @@ public partial class RTA : Form
 
     protected CircularBuffer RTA_InputTopBuffer;
     protected CircularBuffer RTA_OutputTopBuffer;
+
+    protected bool chart_InputWaveform_ResetAutoRange = false;
+    protected bool chart_OutputWaveform_ResetAutoRange = false;
     #endregion
 
     #region Constructor
@@ -305,11 +309,8 @@ public partial class RTA : Form
         this.timer_ResetWaveform.Enabled = false;
         try
         {
-            this.chart_InputWaveform.ChartAreas[0].AxisY.Maximum = 0.0000001d;
-            this.chart_InputWaveform.ChartAreas[0].AxisY.Minimum = -0.0000001d;
-
-            this.chart_OutputWaveform.ChartAreas[0].AxisY.Maximum = 0.0000001d;
-            this.chart_OutputWaveform.ChartAreas[0].AxisY.Minimum = -0.0000001d;
+            this.chart_InputWaveform_ResetAutoRange = true;
+            this.chart_OutputWaveform_ResetAutoRange = true;
         }
         catch (Exception ex)
         {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
@@ -326,14 +327,32 @@ public partial class RTA : Form
         {
             if (this.Input_ChannelIndex > -1 && this.chart_InputWaveform.Visible && Program.ASIO.InputBuffer != null)
             {
+                if (this.chart_InputWaveform_ResetAutoRange)
+                {
+                    this.chart_InputWaveform.ChartAreas[0].AxisY.Maximum = 0;
+                    this.chart_InputWaveform.ChartAreas[0].AxisY.Minimum = 0;
+                    this.chart_InputWaveform.ChartAreas[0].AxisY.Interval = 0;
+                    this.chart_InputWaveform_ResetAutoRange = false;
+                }
+
                 double[] timeSeries_Input = Program.ASIO.InputBuffer[this.Input_ChannelIndex];
-                this.Plot_Waveform(this.chart_InputWaveform, timeSeries_Input);
+                var scaleYAxis = 1.5;
+                this.Plot_Waveform(this.chart_InputWaveform, timeSeries_Input, scaleYAxis);
             }
 
             if (this.Output_ChannelIndex > -1 && this.chart_OutputWaveform.Visible && Program.ASIO.OutputBuffer != null)
             {
+                if (this.chart_OutputWaveform_ResetAutoRange)
+                {
+                    this.chart_OutputWaveform.ChartAreas[0].AxisY.Maximum = 0;
+                    this.chart_OutputWaveform.ChartAreas[0].AxisY.Minimum = 0;
+                    this.chart_OutputWaveform.ChartAreas[0].AxisY.Interval = 0;
+                    this.chart_OutputWaveform_ResetAutoRange = false;
+                }
+
                 double[] timeSeries_Output = Program.ASIO.OutputBuffer[this.Output_ChannelIndex];
-                this.Plot_Waveform(this.chart_OutputWaveform, timeSeries_Output);
+                var scaleYAxis = 1.5;
+                this.Plot_Waveform(this.chart_OutputWaveform, timeSeries_Output, scaleYAxis);
             }
         }
         catch (Exception ex)
@@ -753,69 +772,113 @@ public partial class RTA : Form
 
     #region Plot Charts
     [SupportedOSPlatform("windows")]
-    protected void Plot_Waveform(Chart chartControl, double[] yData)
+    protected void Plot_Waveform(Chart chartControl, double[] yData, double scaleYAxis)
     {
-        chartControl.SuspendLayout();
-        chartControl.Series["Series1"].Points.Clear();
-        // Start X Data at zero! Not like the chart default of 1!
-        double[] xData = DSP.Generate.LinSpace(0, yData.Length - 1, (int)yData.Length);
-        chartControl.Series["Series1"].Points.DataBindXY(xData, yData);
+        if (this.IsDisposed || !this.IsHandleCreated)
+            return;
+        if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
+            return;
+        if (chartControl.Series.IndexOf("Series1") < 0)
+            return;
 
-        chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
-        chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
-        chartControl.ChartAreas[0].AxisX.Minimum = 0;
-
-        var line = new StripLine()
+        try
         {
-            BorderColor = Color.Black,
-            Interval = 0,
-            IntervalOffset = 0,
-            StripWidth = 0,
-            StripWidthType = DateTimeIntervalType.NotSet
-        };
-        chartControl.ChartAreas[0].AxisY.StripLines.Clear();
-        chartControl.ChartAreas[0].AxisY.StripLines.Add(line);
+            chartControl.SuspendLayout();
 
-        var Max = yData.Max() * 1.5;
-        var Min = yData.Min() * 1.5;
-        var Mag = Math.Max(Math.Abs(Max), Math.Abs(Min));
+            chartControl.Series["Series1"].Points.Clear();
 
-        if (chartControl.ChartAreas[0].AxisY.Maximum < Mag)
-        {
-            chartControl.ChartAreas[0].AxisY.Maximum = Mag;
-            chartControl.ChartAreas[0].AxisY.Minimum = -Mag;
+            //// Set basic axis properties.
+            chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
+            chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
+            chartControl.ChartAreas[0].AxisX.IsStartedFromZero = true;
+
+            chartControl.ChartAreas[0].AxisX.Minimum = 0;
+            chartControl.ChartAreas[0].AxisX.Maximum = yData.Length;
+            chartControl.ChartAreas[0].AxisX.Interval = yData.Length * 0.25;
+
+            // Generate X Data starting at 0.
+            double[] xData = DSP.Generate.LinSpace(0, yData.Length - 1, yData.Length);
+            if (xData[0] < 0) //This should never be negative
+            {
+                chartControl.ResumeLayout();
+                return;
+            }
+
+            // Add a baseline strip line at y = 0.
+            var line = new StripLine()
+            {
+                BorderColor = Color.Black,
+                Interval = 0,
+                IntervalOffset = 0,
+                StripWidth = 0,
+                StripWidthType = DateTimeIntervalType.NotSet
+            };
+            chartControl.ChartAreas[0].AxisY.StripLines.Clear();
+            chartControl.ChartAreas[0].AxisY.StripLines.Add(line);
+
+            //MS Chart can't handle full doubles. LOL!
+            var yDataDec = new decimal[yData.Length];
+            for (int i = 0; i < yData.Length; i++)
+                yDataDec[i] = (decimal)yData[i];
+
+            chartControl.Series["Series1"].Points.DataBindXY(xData, yDataDec);
+
+            var max = Math.Min(yData.Max() * scaleYAxis, scaleYAxis);
+            var min = Math.Min(yData.Min() * scaleYAxis, -0.0001);
+            var mag = Math.Max(Math.Abs(max), Math.Abs(min));
+            mag = Math.Max(mag, 0.0001);
+
+            var axisY = chartControl.ChartAreas[0].AxisY;
+            if (axisY.Maximum < mag || axisY.Minimum > -mag)
+            {
+                axisY.Maximum = mag;
+                axisY.Minimum = -mag;
+            }
+
+            // Format Y-axis labels.
+            chartControl.ChartAreas[0].AxisY.LabelStyle.Format = "0.0000";
+
+            chartControl.ResumeLayout();
         }
-
-        if (chartControl.ChartAreas[0].AxisY.Minimum > Mag)
+        catch (Exception ex) 
         {
-            chartControl.ChartAreas[0].AxisY.Maximum = Mag;
-            chartControl.ChartAreas[0].AxisY.Minimum = -Mag;
+            _ = ex;
         }
-
-        chartControl.ChartAreas[0].AxisY.LabelStyle.Format = "0.0000";
-
-        chartControl.ResumeLayout();
     }
 
     [SupportedOSPlatform("windows")]
     protected void Plot_FFT(Chart chartControl, double min, double max, double[] xData, double[] yData)
     {
-        chartControl.SuspendLayout();
-        chartControl.Series["Series1"].Points.Clear();
-        chartControl.Series["Series1"].Points.DataBindXY(xData, yData);
+        try
+        {
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return;
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
+                return;
+            if (chartControl.Series.IndexOf("Series1") < 0)
+                return;
 
-        chartControl.ChartAreas[0].AxisY.Interval = 12;
-        chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
-        chartControl.ChartAreas[0].AxisY.Maximum = 0;
-        chartControl.ChartAreas[0].AxisY.Minimum = -144;
+            chartControl.SuspendLayout();
+            chartControl.Series["Series1"].Points.Clear();
+            chartControl.Series["Series1"].Points.DataBindXY(xData, yData);
 
-        chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
-        chartControl.ChartAreas[0].AxisX.MinorGrid.Enabled = true;
-        chartControl.ChartAreas[0].AxisX.MinorGrid.Interval = 1;
-        chartControl.ChartAreas[0].AxisX.Minimum = min;
-        chartControl.ChartAreas[0].AxisX.Maximum = max;
-        chartControl.ChartAreas[0].AxisX.IsLogarithmic = true;
-        chartControl.ResumeLayout();
+            chartControl.ChartAreas[0].AxisY.Interval = 12;
+            chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
+            chartControl.ChartAreas[0].AxisY.Maximum = 0;
+            chartControl.ChartAreas[0].AxisY.Minimum = -144;
+
+            chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
+            chartControl.ChartAreas[0].AxisX.MinorGrid.Enabled = true;
+            chartControl.ChartAreas[0].AxisX.MinorGrid.Interval = 1;
+            chartControl.ChartAreas[0].AxisX.Minimum = min;
+            chartControl.ChartAreas[0].AxisX.Maximum = max;
+            chartControl.ChartAreas[0].AxisX.IsLogarithmic = true;
+            chartControl.ResumeLayout();
+        }
+        catch (Exception ex)
+        {
+            _ = ex;
+        }
     }
 
     [SupportedOSPlatform("windows")]
@@ -827,11 +890,13 @@ public partial class RTA : Form
 
         _ = Task.Run(() =>
         {
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
+                return;
+
             var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
             var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
             chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
             chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
-
         });
     }
 
@@ -844,6 +909,8 @@ public partial class RTA : Form
 
         _ = Task.Run(() =>
         {
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
+                return;
             var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
             var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
             chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");

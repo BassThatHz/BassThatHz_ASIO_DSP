@@ -128,7 +128,7 @@
             // 
             // timer_ResetWaveform
             // 
-            this.timer_ResetWaveform.Interval = 30000;
+            this.timer_ResetWaveform.Interval = 5000;
             this.timer_ResetWaveform.Tick += new System.EventHandler(this.timer_ResetWaveform_Tick);
             // 
             // timer_Plot_ULF_FFT
@@ -576,7 +576,7 @@
             title15.Docking = System.Windows.Forms.DataVisualization.Charting.Docking.Left;
             title15.Font = new System.Drawing.Font("Microsoft Sans Serif", 10.2F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             title15.Name = "AxisY";
-            title15.Text = "Volts";
+            title15.Text = "Amplitude";
             this.chart_OutputWaveform.Titles.Add(title13);
             this.chart_OutputWaveform.Titles.Add(title14);
             this.chart_OutputWaveform.Titles.Add(title15);
@@ -735,7 +735,7 @@
             title30.Docking = System.Windows.Forms.DataVisualization.Charting.Docking.Left;
             title30.Font = new System.Drawing.Font("Microsoft Sans Serif", 10.2F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
             title30.Name = "AxisY";
-            title30.Text = "Volts";
+            title30.Text = "Amplitude";
             this.chart_InputWaveform.Titles.Add(title28);
             this.chart_InputWaveform.Titles.Add(title29);
             this.chart_InputWaveform.Titles.Add(title30);

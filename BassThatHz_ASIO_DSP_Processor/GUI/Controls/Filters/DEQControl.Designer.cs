@@ -2,10 +2,6 @@
 {
     partial class DEQControl
     {
-        /// <summary> 
-        /// Required designer variable.
-        /// </summary>
-        protected System.ComponentModel.IContainer components = null;
 
         /// <summary> 
         /// Clean up any resources being used.
@@ -63,12 +59,9 @@
             Threshold.Location = new System.Drawing.Point(196, 29);
             Threshold.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
             Threshold.Name = "Threshold";
-            Threshold.ReadOnly = false;
             Threshold.Size = new System.Drawing.Size(272, 20);
             Threshold.TabIndex = 179;
-            Threshold.TextColor = System.Drawing.Color.Black;
             Threshold.Volume = 0.010000000000000004D;
-            Threshold.VolumedB = -40D;
             // 
             // btnApply
             // 
@@ -160,7 +153,7 @@
             chk_PeakHoldAttack.AutoSize = true;
             chk_PeakHoldAttack.Checked = true;
             chk_PeakHoldAttack.CheckState = System.Windows.Forms.CheckState.Checked;
-            chk_PeakHoldAttack.Location = new System.Drawing.Point(895, 5);
+            chk_PeakHoldAttack.Location = new System.Drawing.Point(893, 5);
             chk_PeakHoldAttack.Name = "chk_PeakHoldAttack";
             chk_PeakHoldAttack.Size = new System.Drawing.Size(60, 19);
             chk_PeakHoldAttack.TabIndex = 188;
@@ -267,12 +260,9 @@
             DynamicsApplied.MaxDb = 100D;
             DynamicsApplied.MinDb = -100D;
             DynamicsApplied.Name = "DynamicsApplied";
-            DynamicsApplied.ReadOnly = false;
             DynamicsApplied.RestPosition = 0.5D;
             DynamicsApplied.Size = new System.Drawing.Size(241, 20);
             DynamicsApplied.TabIndex = 197;
-            DynamicsApplied.TextColor = System.Drawing.Color.Black;
-            DynamicsApplied.VolumedB = 0D;
             // 
             // RefreshTimer
             // 
@@ -394,5 +384,6 @@
         protected System.Windows.Forms.TextBox txtS;
         protected System.Windows.Forms.Label label6;
         protected System.Windows.Forms.ComboBox cboThresholdType;
+        private System.ComponentModel.IContainer components;
     }
 }
