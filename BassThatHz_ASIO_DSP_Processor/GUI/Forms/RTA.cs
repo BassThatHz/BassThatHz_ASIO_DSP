@@ -316,7 +316,7 @@ public partial class RTA : Form
         {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
             _ = ex;
         }
-        this.timer_ResetWaveform.Enabled = true;
+        this.timer_ResetWaveform.Enabled = !this.Pause_CHK.Checked;
     }
 
     [SupportedOSPlatform("windows")]
@@ -396,7 +396,7 @@ public partial class RTA : Form
         }
         finally
         {
-            this.timer_PlotWaveforms.Enabled = true;
+            this.timer_PlotWaveforms.Enabled = !this.Pause_CHK.Checked;
         }
     }
     #endregion
@@ -433,7 +433,7 @@ public partial class RTA : Form
         {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
             _ = ex;
         }
-        this.timer_Plot_Top_FFTs.Enabled = true;
+        this.timer_Plot_Top_FFTs.Enabled = !this.Pause_CHK.Checked;
     }
 
     [SupportedOSPlatform("windows")]
@@ -468,7 +468,7 @@ public partial class RTA : Form
         {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
             _ = ex;
         }
-        this.timer_Plot_ULF_FFT.Enabled = true;
+        this.timer_Plot_ULF_FFT.Enabled = !this.Pause_CHK.Checked;
     }
     #endregion
 
@@ -513,7 +513,7 @@ public partial class RTA : Form
 
             // Update the UI on the UI thread.
             if (!string.IsNullOrEmpty(newTitle))
-                this.SafeInvoke(() => 
+                this.SafeInvoke(() =>
                     chart.Titles[5].Text = newTitle);
         }
         catch (Exception ex)
@@ -562,6 +562,23 @@ public partial class RTA : Form
                 this.msb_ULF_FFT_RefreshInterval.Text = "1";
 
             this.timer_Plot_ULF_FFT.Interval = Math.Max(1, int.Parse(this.msb_ULF_FFT_RefreshInterval.Text));
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+    #endregion
+
+    #region Pause
+    protected void Pause_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        try
+        {
+            this.timer_PlotWaveforms.Enabled = !this.Pause_CHK.Checked;
+            this.timer_Plot_Top_FFTs.Enabled = !this.Pause_CHK.Checked;
+            this.timer_Plot_ULF_FFT.Enabled = !this.Pause_CHK.Checked;
+            this.timer_ResetWaveform.Enabled = !this.Pause_CHK.Checked;
         }
         catch (Exception ex)
         {
@@ -635,7 +652,7 @@ public partial class RTA : Form
         this.chart_Output_ULF_FFT.MouseMove += this.Chart_MouseMove;
         this.chart_Output_Top_FFT.MouseMove += this.Chart_MouseMove;
 
-        this.checkedListBox1.ItemCheck += CheckedListBox1_ItemCheck;       
+        this.checkedListBox1.ItemCheck += CheckedListBox1_ItemCheck;
     }
     #endregion
 
@@ -832,6 +849,80 @@ public partial class RTA : Form
     }
     #endregion
 
+    #region FFT Charts Logic
+    [SupportedOSPlatform("windows")]
+    protected void Plot_FFT(Chart chartControl, double min, double max, double[] xData, double[] yData)
+    {
+        try
+        {
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return;
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
+                return;
+            if (chartControl.Series.IndexOf("Series1") < 0)
+                return;
+
+            chartControl.SuspendLayout();
+            chartControl.Series["Series1"].Points.Clear();
+            chartControl.Series["Series1"].Points.DataBindXY(xData, yData);
+
+            chartControl.ChartAreas[0].AxisY.Interval = 12;
+            chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
+            chartControl.ChartAreas[0].AxisY.Maximum = 0;
+            chartControl.ChartAreas[0].AxisY.Minimum = -144;
+
+            chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
+            chartControl.ChartAreas[0].AxisX.MinorGrid.Enabled = true;
+            chartControl.ChartAreas[0].AxisX.MinorGrid.Interval = 1;
+            chartControl.ChartAreas[0].AxisX.Minimum = min;
+            chartControl.ChartAreas[0].AxisX.Maximum = max;
+            chartControl.ChartAreas[0].AxisX.IsLogarithmic = true;
+            chartControl.ResumeLayout();
+        }
+        catch (Exception ex)
+        {
+            _ = ex;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    protected void Plot_ULF_FFT(Chart chartControl, double[] xData, double[] yData)
+    {
+        int MinHz = 1;
+        int MaxHz = 100;
+        this.Plot_FFT(chartControl, MinHz, MaxHz, xData, yData);
+
+        _ = Task.Run(() =>
+        {
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
+                return;
+
+            var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
+            var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
+            chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
+            chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
+        });
+    }
+
+    [SupportedOSPlatform("windows")]
+    protected void Plot_Top_FFT(Chart chartControl, double[] xData, double[] yData)
+    {
+        int MinHz = 10;
+        int MaxHz = 20000;
+        this.Plot_FFT(chartControl, MinHz, MaxHz, xData, yData);
+
+        _ = Task.Run(() =>
+        {
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
+                return;
+            var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
+            var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
+            chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
+            chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
+        });
+    }
+    #endregion
+
     #region Waveform Charts Logic
     // One‑time initialization for a Chart control. This sets up properties
     // that don't change per tick (like the baseline strip line, Y‑axis label format,
@@ -989,80 +1080,6 @@ public partial class RTA : Form
         public bool ResetAutoRange { get; set; }
     }
 
-    #endregion
-
-    #region FFT Charts Logic
-    [SupportedOSPlatform("windows")]
-    protected void Plot_FFT(Chart chartControl, double min, double max, double[] xData, double[] yData)
-    {
-        try
-        {
-            if (this.IsDisposed || !this.IsHandleCreated)
-                return;
-            if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
-                return;
-            if (chartControl.Series.IndexOf("Series1") < 0)
-                return;
-
-            chartControl.SuspendLayout();
-            chartControl.Series["Series1"].Points.Clear();
-            chartControl.Series["Series1"].Points.DataBindXY(xData, yData);
-
-            chartControl.ChartAreas[0].AxisY.Interval = 12;
-            chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
-            chartControl.ChartAreas[0].AxisY.Maximum = 0;
-            chartControl.ChartAreas[0].AxisY.Minimum = -144;
-
-            chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
-            chartControl.ChartAreas[0].AxisX.MinorGrid.Enabled = true;
-            chartControl.ChartAreas[0].AxisX.MinorGrid.Interval = 1;
-            chartControl.ChartAreas[0].AxisX.Minimum = min;
-            chartControl.ChartAreas[0].AxisX.Maximum = max;
-            chartControl.ChartAreas[0].AxisX.IsLogarithmic = true;
-            chartControl.ResumeLayout();
-        }
-        catch (Exception ex)
-        {
-            _ = ex;
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    protected void Plot_ULF_FFT(Chart chartControl, double[] xData, double[] yData)
-    {
-        int MinHz = 1;
-        int MaxHz = 100;
-        this.Plot_FFT(chartControl, MinHz, MaxHz, xData, yData);
-
-        _ = Task.Run(() =>
-        {
-            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
-                return;
-
-            var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
-            var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
-            chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
-            chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
-        });
-    }
-
-    [SupportedOSPlatform("windows")]
-    protected void Plot_Top_FFT(Chart chartControl, double[] xData, double[] yData)
-    {
-        int MinHz = 10;
-        int MaxHz = 20000;
-        this.Plot_FFT(chartControl, MinHz, MaxHz, xData, yData);
-
-        _ = Task.Run(() =>
-        {
-            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
-                return;
-            var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
-            var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
-            chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
-            chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
-        });
-    }
     #endregion
 
     #region ChartMouseArea

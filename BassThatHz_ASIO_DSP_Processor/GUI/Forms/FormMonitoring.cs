@@ -48,13 +48,10 @@ public partial class FormMonitoring : Form
         this.MapEventHandlers();
     }
 
-    public void MapEventHandlers()
+    protected void MapEventHandlers()
     {
-        this.Activated += Activated_Handler;
-        this.Deactivate += Deactivate_Handler;
         this.Resize += Resize_Handler;
         this.msb_RefreshInterval.TextChanged += Msb_RefreshInterval_TextChanged;
-
         this.msb_RefreshInterval.KeyPress += Msb_RefreshInterval_KeyPress;
     }
     #endregion
@@ -77,34 +74,6 @@ public partial class FormMonitoring : Form
                 this.msb_RefreshInterval.Text = "1";
 
             this.timer_Refresh.Interval = Math.Max(1, int.Parse(this.msb_RefreshInterval.Text));
-        }
-        catch (Exception ex)
-        {
-            this.Error(ex);
-        }
-    }
-
-    protected void Deactivate_Handler(object? sender, EventArgs e)
-    {
-        try
-        {
-            this.timer_Refresh.Enabled = false;
-            foreach (var item in this.VolControlList)
-                item.Get_timer_Refresh.Enabled = false;
-        }
-        catch (Exception ex)
-        {
-            this.Error(ex);
-        }
-    }
-
-    protected void Activated_Handler(object? sender, EventArgs e)
-    {
-        try
-        {
-            this.timer_Refresh.Enabled = true;
-            foreach (var item in this.VolControlList)
-                item.Get_timer_Refresh.Enabled = true;
         }
         catch (Exception ex)
         {
@@ -147,6 +116,20 @@ public partial class FormMonitoring : Form
         {
             this.RelocateControls();
             this.timer_Refresh.Enabled = true;
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+
+    protected void Pause_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        try
+        {
+            this.timer_Refresh.Enabled = !this.Pause_CHK.Checked;
+            foreach (var item in this.VolControlList)
+                item.Get_timer_Refresh.Enabled = !this.Pause_CHK.Checked;
         }
         catch (Exception ex)
         {
