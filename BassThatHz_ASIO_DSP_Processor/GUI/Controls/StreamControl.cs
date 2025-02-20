@@ -56,8 +56,8 @@ public partial class StreamControl : UserControl
     #endregion
 
     #region Public Properties
-    public BTH_VolumeSlider Get_Out_Volume => this.Out_Volume;
-    public BTH_VolumeSlider Get_In_Volume => this.In_Volume;
+    public BTH_VolumeSliderControl Get_Out_Volume => this.Out_Volume;
+    public BTH_VolumeSliderControl Get_In_Volume => this.In_Volume;
     public ComboBox Get_cboInputStream => this.cboInputStream;
     public ComboBox Get_cboOutputStream => this.cboOutputStream;
     public Button Get_btnDelete => this.btnDelete;

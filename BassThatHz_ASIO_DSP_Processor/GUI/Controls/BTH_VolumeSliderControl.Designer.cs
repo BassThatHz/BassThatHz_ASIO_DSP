@@ -1,6 +1,6 @@
 ﻿namespace BassThatHz_ASIO_DSP_Processor
 {
-    partial class BTH_VolumeSlider
+    partial class BTH_VolumeSliderControl
     {
         /// <summary> 
         /// Required designer variable.

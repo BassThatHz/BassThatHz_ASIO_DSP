@@ -31,11 +31,11 @@
         {
             components = new System.ComponentModel.Container();
             btnApply = new System.Windows.Forms.Button();
-            Limit = new BTH_VolumeSlider();
+            Limit = new BTH_VolumeSliderControl();
             label1 = new System.Windows.Forms.Label();
-            Threshold = new BTH_VolumeSlider();
+            Threshold = new BTH_VolumeSliderControl();
             label2 = new System.Windows.Forms.Label();
-            CompressionApplied = new BTH_VolumeSlider();
+            CompressionApplied = new BTH_VolumeSliderControl();
             label3 = new System.Windows.Forms.Label();
             RefreshTimer = new System.Windows.Forms.Timer(components);
             chk_PeakHoldRelease = new System.Windows.Forms.CheckBox();
@@ -198,11 +198,11 @@
         #endregion
 
         protected System.Windows.Forms.Button btnApply;
-        protected BTH_VolumeSlider Limit;
+        protected BTH_VolumeSliderControl Limit;
         protected System.Windows.Forms.Label label1;
-        protected BTH_VolumeSlider Threshold;
+        protected BTH_VolumeSliderControl Threshold;
         protected System.Windows.Forms.Label label2;
-        protected BTH_VolumeSlider CompressionApplied;
+        protected BTH_VolumeSliderControl CompressionApplied;
         protected System.Windows.Forms.Label label3;
         protected System.Windows.Forms.Timer RefreshTimer;
         protected System.Windows.Forms.CheckBox chk_PeakHoldRelease;

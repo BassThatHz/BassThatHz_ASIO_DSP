@@ -47,8 +47,8 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             btnAdd = new System.Windows.Forms.Button();
             panel1 = new System.Windows.Forms.Panel();
             filterControl1 = new FilterControl();
-            In_Volume = new BTH_VolumeSlider();
-            Out_Volume = new BTH_VolumeSlider();
+            In_Volume = new BTH_VolumeSliderControl();
+            Out_Volume = new BTH_VolumeSliderControl();
             btnDelete = new System.Windows.Forms.Button();
             btn_MoveTo = new System.Windows.Forms.Button();
             txtMoveToIndex = new System.Windows.Forms.TextBox();
@@ -322,9 +322,9 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
         #endregion
 
         protected System.Windows.Forms.Label label2;
-        protected BTH_VolumeSlider Out_Volume;
+        protected BTH_VolumeSliderControl Out_Volume;
         protected System.Windows.Forms.Label label1;
-        protected BTH_VolumeSlider In_Volume;
+        protected BTH_VolumeSliderControl In_Volume;
         protected System.Windows.Forms.ComboBox cboInputStream;
         protected System.Windows.Forms.Label label3;
         protected System.Windows.Forms.Label label4;

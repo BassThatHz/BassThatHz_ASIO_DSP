@@ -25,7 +25,7 @@
         protected void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
-            Threshold = new BTH_VolumeSlider();
+            Threshold = new BTH_VolumeSliderControl();
             btnApply = new System.Windows.Forms.Button();
             label1 = new System.Windows.Forms.Label();
             txtQ = new System.Windows.Forms.TextBox();
@@ -45,7 +45,7 @@
             lbl_KneeWidth_db = new System.Windows.Forms.Label();
             chkSoftKnee = new System.Windows.Forms.CheckBox();
             label2 = new System.Windows.Forms.Label();
-            DynamicsApplied = new BTH_VolumeSlider();
+            DynamicsApplied = new BTH_VolumeSliderControl();
             RefreshTimer = new System.Windows.Forms.Timer(components);
             cboDEQType = new System.Windows.Forms.ComboBox();
             cboBiquadType = new System.Windows.Forms.ComboBox();
@@ -357,7 +357,7 @@
 
         #endregion
 
-        protected BTH_VolumeSlider Threshold;
+        protected BTH_VolumeSliderControl Threshold;
         protected System.Windows.Forms.Button btnApply;
         protected System.Windows.Forms.Label label1;
         protected System.Windows.Forms.TextBox txtQ;
@@ -378,7 +378,7 @@
         protected System.Windows.Forms.CheckBox chkSoftKnee;
         protected System.Windows.Forms.Label label2;
         protected System.Windows.Forms.Timer RefreshTimer;
-        protected BTH_VolumeSlider DynamicsApplied;
+        protected BTH_VolumeSliderControl DynamicsApplied;
         protected System.Windows.Forms.ComboBox cboDEQType;
         protected System.Windows.Forms.ComboBox cboBiquadType;
         protected System.Windows.Forms.TextBox txtS;

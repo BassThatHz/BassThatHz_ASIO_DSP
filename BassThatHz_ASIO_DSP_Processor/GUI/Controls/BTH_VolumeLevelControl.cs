@@ -32,7 +32,7 @@ using System.Windows.Forms;
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
-public partial class BTH_VolumeLevel : UserControl
+public partial class BTH_VolumeLevelControl : UserControl
 {
     #region Variables
     public DSP_Stream? Stream;
@@ -61,7 +61,7 @@ public partial class BTH_VolumeLevel : UserControl
     #endregion
 
     #region Constructor and MapEventHandlers
-    public BTH_VolumeLevel()
+    public BTH_VolumeLevelControl()
     {
         InitializeComponent();
         this.MapEventHandlers();
@@ -120,7 +120,7 @@ public partial class BTH_VolumeLevel : UserControl
         {
             if (this.Stream != null)
             {
-                var x = new RTA();
+                var x = new FormRTA();
                 x.Text += "  " + this.Stream.InputChannelName + "-> " + this.Stream.OutputChannelName;
                 x.Init_Channels(this.Stream.InputChannelIndex, this.Stream.OutputChannelIndex);
                 x.Show();

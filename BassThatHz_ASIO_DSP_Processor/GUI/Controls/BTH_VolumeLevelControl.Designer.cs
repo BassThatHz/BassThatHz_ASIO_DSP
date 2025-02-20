@@ -1,6 +1,6 @@
 ﻿namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
 {
-    partial class BTH_VolumeLevel
+    partial class BTH_VolumeLevelControl
     {
         /// <summary> 
         /// Required designer variable.
@@ -41,8 +41,8 @@
             this.lbl_OutputSource = new System.Windows.Forms.Label();
             this.btn_View = new System.Windows.Forms.Button();
             this.timer_Refresh = new System.Windows.Forms.Timer(this.components);
-            this.vol_Out = new BassThatHz_ASIO_DSP_Processor.GUI.Controls.BTH_VolumeLevel_Simple();
-            this.vol_In = new BassThatHz_ASIO_DSP_Processor.GUI.Controls.BTH_VolumeLevel_Simple();
+            this.vol_Out = new BassThatHz_ASIO_DSP_Processor.GUI.Controls.BTH_VolumeLevel_SimpleControl();
+            this.vol_In = new BassThatHz_ASIO_DSP_Processor.GUI.Controls.BTH_VolumeLevel_SimpleControl();
             this.SuspendLayout();
             // 
             // pnl_InputClip
@@ -224,7 +224,7 @@
         protected System.Windows.Forms.Label lbl_OutputSource;
         protected System.Windows.Forms.Button btn_View;
         protected System.Windows.Forms.Timer timer_Refresh;
-        protected BTH_VolumeLevel_Simple vol_In;
-        protected BTH_VolumeLevel_Simple vol_Out;
+        protected BTH_VolumeLevel_SimpleControl vol_In;
+        protected BTH_VolumeLevel_SimpleControl vol_Out;
     }
 }

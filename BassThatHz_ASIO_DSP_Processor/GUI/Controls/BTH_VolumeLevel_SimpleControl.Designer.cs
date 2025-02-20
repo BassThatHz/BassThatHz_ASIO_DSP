@@ -1,6 +1,6 @@
 ﻿namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
 {
-    partial class BTH_VolumeLevel_Simple
+    partial class BTH_VolumeLevel_SimpleControl
     {
         /// <summary> 
         /// Required designer variable.

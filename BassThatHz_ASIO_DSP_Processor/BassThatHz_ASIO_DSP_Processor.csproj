@@ -45,10 +45,10 @@
     <ProduceReferenceAssembly>False</ProduceReferenceAssembly>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Update="GUI\Controls\BTH_VolumeLevel.cs">
+    <Compile Update="GUI\Controls\BTH_VolumeLevelControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Update="GUI\Controls\BTH_VolumeLevel_Simple.cs">
+    <Compile Update="GUI\Controls\BTH_VolumeLevel_SimpleControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Update="GUI\Controls\Filters\AuxGetControl.cs">
@@ -123,7 +123,7 @@
     <Compile Update="NAudio\WinForms\VolumeMeter.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Update="GUI\Controls\BTH_VolumeSlider.cs">
+    <Compile Update="GUI\Controls\BTH_VolumeSliderControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
   </ItemGroup>

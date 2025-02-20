@@ -1,6 +1,6 @@
 ﻿namespace BassThatHz_ASIO_DSP_Processor.GUI.Forms
 {
-    partial class RTA
+    partial class FormRTA
     {
 
         /// <summary>
@@ -67,7 +67,7 @@
             System.Windows.Forms.DataVisualization.Charting.Title title28 = new System.Windows.Forms.DataVisualization.Charting.Title();
             System.Windows.Forms.DataVisualization.Charting.Title title29 = new System.Windows.Forms.DataVisualization.Charting.Title();
             System.Windows.Forms.DataVisualization.Charting.Title title30 = new System.Windows.Forms.DataVisualization.Charting.Title();
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(RTA));
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormRTA));
             timer_PlotWaveforms = new System.Windows.Forms.Timer(components);
             timer_Plot_Top_FFTs = new System.Windows.Forms.Timer(components);
             timer_ResetWaveform = new System.Windows.Forms.Timer(components);

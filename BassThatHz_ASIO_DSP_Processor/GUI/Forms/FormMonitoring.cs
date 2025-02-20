@@ -37,7 +37,7 @@ using System.Windows.Forms;
 public partial class FormMonitoring : Form
 {
     #region Variables
-    List<BTH_VolumeLevel> VolControlList = new();
+    List<BTH_VolumeLevelControl> VolControlList = new();
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -145,7 +145,7 @@ public partial class FormMonitoring : Form
         {
             try
             {
-                var VolControl = new BTH_VolumeLevel();
+                var VolControl = new BTH_VolumeLevelControl();
                 this.VolControlList.Add(VolControl);
                 VolControl.Get_btn_View.Text = "[" + (this.VolControlList.IndexOf(VolControl) + 1).ToString() + "] View";
                 VolControl.Set_StreamInfo(stream);
@@ -165,7 +165,7 @@ public partial class FormMonitoring : Form
         {
             try
             {
-                BTH_VolumeLevel? FoundControl = null;
+                BTH_VolumeLevelControl? FoundControl = null;
                 foreach (var item in this.VolControlList)
                     if (item.Stream == stream)
                     {

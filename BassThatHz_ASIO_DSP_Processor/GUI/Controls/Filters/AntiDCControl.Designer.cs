@@ -39,8 +39,8 @@
             label4 = new System.Windows.Forms.Label();
             chkOutputMuted = new System.Windows.Forms.CheckBox();
             label5 = new System.Windows.Forms.Label();
-            ClipThreshold = new BTH_VolumeSlider();
-            DCThreshold = new BTH_VolumeSlider();
+            ClipThreshold = new BTH_VolumeSliderControl();
+            DCThreshold = new BTH_VolumeSliderControl();
             label6 = new System.Windows.Forms.Label();
             SuspendLayout();
             // 
@@ -215,8 +215,8 @@
         protected System.Windows.Forms.Label label4;
         protected System.Windows.Forms.CheckBox chkOutputMuted;
         protected System.Windows.Forms.Label label5;
-        protected BTH_VolumeSlider ClipThreshold;
-        protected BTH_VolumeSlider DCThreshold;
+        protected BTH_VolumeSliderControl ClipThreshold;
+        protected BTH_VolumeSliderControl DCThreshold;
         protected System.Windows.Forms.Label label6;
     }
 }

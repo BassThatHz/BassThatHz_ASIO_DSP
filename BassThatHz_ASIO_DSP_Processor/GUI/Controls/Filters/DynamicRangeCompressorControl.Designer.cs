@@ -42,9 +42,9 @@
             lbl_ReleaseTime_ms = new System.Windows.Forms.Label();
             msb_KneeWidth_db = new System.Windows.Forms.MaskedTextBox();
             lbl_KneeWidth_db = new System.Windows.Forms.Label();
-            Threshold = new BTH_VolumeSlider();
+            Threshold = new BTH_VolumeSliderControl();
             label3 = new System.Windows.Forms.Label();
-            CompressionApplied = new BTH_VolumeSlider();
+            CompressionApplied = new BTH_VolumeSliderControl();
             RefreshTimer = new System.Windows.Forms.Timer(components);
             SuspendLayout();
             // 
@@ -249,9 +249,9 @@
         protected System.Windows.Forms.Label lbl_ReleaseTime_ms;
         protected System.Windows.Forms.MaskedTextBox msb_KneeWidth_db;
         protected System.Windows.Forms.Label lbl_KneeWidth_db;
-        protected BTH_VolumeSlider Threshold;
+        protected BTH_VolumeSliderControl Threshold;
         protected System.Windows.Forms.Label label3;
-        protected BTH_VolumeSlider CompressionApplied;
+        protected BTH_VolumeSliderControl CompressionApplied;
         protected System.Windows.Forms.Timer RefreshTimer;
     }
 }

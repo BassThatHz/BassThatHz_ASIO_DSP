@@ -39,7 +39,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             this.lstDevices = new System.Windows.Forms.ListBox();
             this.cboDevices = new System.Windows.Forms.ComboBox();
             this.label1 = new System.Windows.Forms.Label();
-            this.volMaster = new BassThatHz_ASIO_DSP_Processor.BTH_VolumeSlider();
+            this.volMaster = new BassThatHz_ASIO_DSP_Processor.BTH_VolumeSliderControl();
             this.label10 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.cboBufferSize = new System.Windows.Forms.ComboBox();
@@ -284,7 +284,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         protected System.Windows.Forms.ListBox lstDevices;
         protected System.Windows.Forms.ComboBox cboDevices;
         protected System.Windows.Forms.Label label1;
-        protected BTH_VolumeSlider volMaster;
+        protected BTH_VolumeSliderControl volMaster;
         protected System.Windows.Forms.Label label10;
         protected System.Windows.Forms.Label label2;
         protected System.Windows.Forms.ComboBox cboBufferSize;

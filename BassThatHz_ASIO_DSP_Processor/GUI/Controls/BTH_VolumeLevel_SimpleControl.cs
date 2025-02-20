@@ -29,7 +29,7 @@ using System.Windows.Forms;
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
-public partial class BTH_VolumeLevel_Simple : UserControl
+public partial class BTH_VolumeLevel_SimpleControl : UserControl
 {
     #region Public Properties
     [DefaultValue(-60f)]
@@ -40,7 +40,7 @@ public partial class BTH_VolumeLevel_Simple : UserControl
     #endregion
 
     #region Constructor
-    public BTH_VolumeLevel_Simple()
+    public BTH_VolumeLevel_SimpleControl()
     {
         InitializeComponent();
 

@@ -33,7 +33,7 @@
             this.label4 = new System.Windows.Forms.Label();
             this.txtRatio = new System.Windows.Forms.TextBox();
             this.label3 = new System.Windows.Forms.Label();
-            this.Threshold = new BassThatHz_ASIO_DSP_Processor.BTH_VolumeSlider();
+            this.Threshold = new BassThatHz_ASIO_DSP_Processor.BTH_VolumeSliderControl();
             this.label1 = new System.Windows.Forms.Label();
             this.btnApply = new System.Windows.Forms.Button();
             this.SuspendLayout();
@@ -132,7 +132,7 @@
         protected System.Windows.Forms.Label label4;
         protected System.Windows.Forms.TextBox txtRatio;
         protected System.Windows.Forms.Label label3;
-        protected BTH_VolumeSlider Threshold;
+        protected BTH_VolumeSliderControl Threshold;
         protected System.Windows.Forms.Label label1;
         protected System.Windows.Forms.Button btnApply;
     }
