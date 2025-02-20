@@ -74,6 +74,7 @@
             timer_Plot_ULF_FFT = new System.Windows.Forms.Timer(components);
             splitContainer1 = new System.Windows.Forms.SplitContainer();
             panel1 = new System.Windows.Forms.Panel();
+            Pause_CHK = new System.Windows.Forms.CheckBox();
             label8 = new System.Windows.Forms.Label();
             label9 = new System.Windows.Forms.Label();
             cbo_ULF_FFT_Overlap = new System.Windows.Forms.ComboBox();
@@ -99,7 +100,6 @@
             chart_Input_Top_FFT = new System.Windows.Forms.DataVisualization.Charting.Chart();
             chart_Input_ULF_FFT = new System.Windows.Forms.DataVisualization.Charting.Chart();
             chart_InputWaveform = new System.Windows.Forms.DataVisualization.Charting.Chart();
-            Pause_CHK = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -184,6 +184,17 @@
             panel1.Size = new System.Drawing.Size(1399, 77);
             panel1.TabIndex = 37;
             // 
+            // Pause_CHK
+            // 
+            Pause_CHK.AutoSize = true;
+            Pause_CHK.Location = new System.Drawing.Point(533, 11);
+            Pause_CHK.Name = "Pause_CHK";
+            Pause_CHK.Size = new System.Drawing.Size(57, 19);
+            Pause_CHK.TabIndex = 55;
+            Pause_CHK.Text = "Pause";
+            Pause_CHK.UseVisualStyleBackColor = true;
+            Pause_CHK.CheckedChanged += Pause_CHK_CheckedChanged;
+            // 
             // label8
             // 
             label8.AutoSize = true;
@@ -219,7 +230,7 @@
             // 
             cbo_Top_FFT_Overlap.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cbo_Top_FFT_Overlap.FormattingEnabled = true;
-            cbo_Top_FFT_Overlap.Items.AddRange(new object[] { "None", "25%", "50%", "75%", "90%", "95%" });
+            cbo_Top_FFT_Overlap.Items.AddRange(new object[] { "None", "5%", "10%", "25%", "50%", "75%", "90%", "95%" });
             cbo_Top_FFT_Overlap.Location = new System.Drawing.Point(1086, 33);
             cbo_Top_FFT_Overlap.Margin = new System.Windows.Forms.Padding(1);
             cbo_Top_FFT_Overlap.Name = "cbo_Top_FFT_Overlap";
@@ -715,17 +726,6 @@
             chart_InputWaveform.Titles.Add(title28);
             chart_InputWaveform.Titles.Add(title29);
             chart_InputWaveform.Titles.Add(title30);
-            // 
-            // Pause_CHK
-            // 
-            Pause_CHK.AutoSize = true;
-            Pause_CHK.Location = new System.Drawing.Point(533, 11);
-            Pause_CHK.Name = "Pause_CHK";
-            Pause_CHK.Size = new System.Drawing.Size(57, 19);
-            Pause_CHK.TabIndex = 55;
-            Pause_CHK.Text = "Pause";
-            Pause_CHK.UseVisualStyleBackColor = true;
-            Pause_CHK.CheckedChanged += Pause_CHK_CheckedChanged;
             // 
             // RTA
             // 

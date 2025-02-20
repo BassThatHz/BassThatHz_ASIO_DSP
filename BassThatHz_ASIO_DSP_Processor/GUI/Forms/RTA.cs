@@ -40,6 +40,11 @@ using System.Windows.Forms.DataVisualization.Charting;
 public partial class RTA : Form
 {
     #region Variables
+    protected bool IsClosing = false;
+    protected List<Task> ULF_FFT_Tasks = new();
+    protected List<Task> Top_FFT_Tasks = new();
+    protected List<Task<ChartUpdateData>> Waveform_Tasks = new();
+
     protected int Default_ULF_FFTSize = 2048;
     protected int Default_Top_FFTSize = 2048;
     protected int Input_ChannelIndex = -1;
@@ -48,12 +53,14 @@ public partial class RTA : Form
     protected int ULF_FFT_OverLapPercentage = 90;
     protected int Top_FFT_OverLapPercentage = 50;
 
-    protected FFT Top_FFT;
+    protected FFT InputTop_FFT;
+    protected FFT OutputTop_FFT;
     protected double[] Top_FFT_FSpan;
     protected double[] Top_FFT_WindowCoefficients;
     protected double Top_FFT_WindowScaleFactor = 1;
 
-    protected FFT ULF_FFT;
+    protected FFT InputULF_FFT;
+    protected FFT OutputULF_FFT;
     protected double[] ULF_FFT_FSpan;
     protected double[] ULF_FFT_WindowCoefficients;
     protected double ULF_FFT_WindowScaleFactor = 1;
@@ -81,8 +88,10 @@ public partial class RTA : Form
         this.chart_Output_Top_FFT.SuppressExceptions = true;
         this.chart_Output_ULF_FFT.SuppressExceptions = true;
 
-        this.Top_FFT = new FFT(this.Default_Top_FFTSize, 0);
-        this.ULF_FFT = new FFT(this.Default_ULF_FFTSize, 0);
+        this.InputTop_FFT = new FFT(this.Default_Top_FFTSize, 0);
+        this.OutputTop_FFT = new FFT(this.Default_Top_FFTSize, 0);
+        this.InputULF_FFT = new FFT(this.Default_ULF_FFTSize, 0);
+        this.OutputULF_FFT = new FFT(this.Default_ULF_FFTSize, 0);
         this.Top_FFT_WindowCoefficients = new double[this.Default_Top_FFTSize];
         this.ULF_FFT_WindowCoefficients = new double[this.Default_ULF_FFTSize];
         this.Top_FFT_FSpan = new double[this.Default_Top_FFTSize];
@@ -132,12 +141,23 @@ public partial class RTA : Form
     }
 
     [SupportedOSPlatform("windows")]
-    protected void RTA_FormClosing(object? sender, FormClosingEventArgs e)
+    protected async void RTA_FormClosing(object? sender, FormClosingEventArgs e)
     {
         try
         {
+            this.IsClosing = true;
+            this.timer_PlotWaveforms.Enabled = false;
+            this.timer_Plot_Top_FFTs.Enabled = false;
+            this.timer_Plot_ULF_FFT.Enabled = false;
+            this.timer_ResetWaveform.Enabled = false;
+            this.Pause_CHK.Checked = true;
+
             Program.ASIO.InputDataAvailable -= ASIO_InputDataAvailable;
             Program.ASIO.OutputDataAvailable -= ASIO_OutputDataAvailable;
+
+            await Task.WhenAll(this.ULF_FFT_Tasks);
+            await Task.WhenAll(this.Top_FFT_Tasks);
+            await Task.WhenAll(this.Waveform_Tasks);
         }
         catch (Exception ex)
         {
@@ -233,22 +253,28 @@ public partial class RTA : Form
                     this.Top_FFT_OverLapPercentage = 0;
                     break;
                 case 1:
-                    this.Top_FFT_OverLapPercentage = 25;
+                    this.Top_FFT_OverLapPercentage = 5;
                     break;
                 case 2:
-                    this.Top_FFT_OverLapPercentage = 50;
+                    this.Top_FFT_OverLapPercentage = 10;
                     break;
                 case 3:
-                    this.Top_FFT_OverLapPercentage = 75;
+                    this.Top_FFT_OverLapPercentage = 25;
                     break;
                 case 4:
-                    this.Top_FFT_OverLapPercentage = 90;
+                    this.Top_FFT_OverLapPercentage = 50;
                     break;
                 case 5:
+                    this.Top_FFT_OverLapPercentage = 75;
+                    break;
+                case 6:
+                    this.Top_FFT_OverLapPercentage = 90;
+                    break;
+                case 7:
                     this.Top_FFT_OverLapPercentage = 95;
                     break;
                 default:
-                    this.Top_FFT_OverLapPercentage = 50;
+                    this.Top_FFT_OverLapPercentage = 10;
                     break;
             }
         }
@@ -326,7 +352,7 @@ public partial class RTA : Form
         this.timer_PlotWaveforms.Enabled = false;
         try
         {
-            var updateTasks = new List<Task<ChartUpdateData>>();
+            this.Waveform_Tasks.Clear();
 
             // Process input waveform if conditions are met.
             if (this.Input_ChannelIndex > -1 &&
@@ -337,9 +363,9 @@ public partial class RTA : Form
                 double scaleYAxis = 1.5;
                 bool resetAutoRange = this.chart_InputWaveform_ResetAutoRange;
 
-                updateTasks.Add(Task.Run(() =>
+                this.Waveform_Tasks.Add(Task.Run(() =>
                 {
-                    WaveformPlotData plotData = ComputeWaveformPlotData(yDataInput, scaleYAxis);
+                    WaveformPlotData plotData = this.ComputeWaveformPlotData(yDataInput, scaleYAxis);
                     return new ChartUpdateData
                     {
                         Chart = this.chart_InputWaveform,
@@ -358,9 +384,9 @@ public partial class RTA : Form
                 double scaleYAxis = 1.5;
                 bool resetAutoRange = this.chart_OutputWaveform_ResetAutoRange;
 
-                updateTasks.Add(Task.Run(() =>
+                this.Waveform_Tasks.Add(Task.Run(() =>
                 {
-                    WaveformPlotData plotData = ComputeWaveformPlotData(yDataOutput, scaleYAxis);
+                    WaveformPlotData plotData = this.ComputeWaveformPlotData(yDataOutput, scaleYAxis);
                     return new ChartUpdateData
                     {
                         Chart = this.chart_OutputWaveform,
@@ -371,24 +397,25 @@ public partial class RTA : Form
             }
 
             // Await all background tasks.
-            ChartUpdateData[] updates = await Task.WhenAll(updateTasks);
+            ChartUpdateData[] updates = await Task.WhenAll(this.Waveform_Tasks);
 
             // Batch all UI updates on the UI thread.
-            this.SafeInvoke(() =>
-            {
-                foreach (var update in updates)
+            if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                this.SafeInvoke(() =>
                 {
-                    if (update.Chart == null || update.PlotData == null)
-                        continue;
+                    foreach (var update in updates)
+                    {
+                        if (update.Chart == null || update.PlotData == null)
+                            continue;
 
-                    UpdateChartWithPlotData(update.Chart, update.PlotData, update.ResetAutoRange);
-                    // Reset the auto-range flags after updating.
-                    if (update.Chart == this.chart_InputWaveform)
-                        this.chart_InputWaveform_ResetAutoRange = false;
-                    else if (update.Chart == this.chart_OutputWaveform)
-                        this.chart_OutputWaveform_ResetAutoRange = false;
-                }
-            });
+                        this.UpdateChartWithPlotData(update.Chart, update.PlotData, update.ResetAutoRange);
+                        // Reset the auto-range flags after updating.
+                        if (update.Chart == this.chart_InputWaveform)
+                            this.chart_InputWaveform_ResetAutoRange = false;
+                        else if (update.Chart == this.chart_OutputWaveform)
+                            this.chart_OutputWaveform_ResetAutoRange = false;
+                    }
+                });
         }
         catch (Exception ex)
         {
@@ -403,73 +430,209 @@ public partial class RTA : Form
 
     #region FFT Plot Timers
     [SupportedOSPlatform("windows")]
-    protected void timer_PlotTopFFTs_Tick(object sender, EventArgs e)
-    {
-        this.timer_Plot_Top_FFTs.Enabled = false;
-        try
-        {
-            double Overlap = this.Top_FFT_OverLapPercentage / 100d;
-            double OverlapAdd = 1d + Overlap;
-            double OverlapRemove = 1d - Overlap;
-            var RemoveLength = (int)(this.Default_Top_FFTSize * OverlapRemove);
-
-            if (this.chart_Input_Top_FFT.Visible && this.RTA_InputTopBuffer.Count > this.Default_Top_FFTSize * OverlapAdd)
-            {
-                var Data = new double[this.Default_Top_FFTSize];
-                _ = this.RTA_InputTopBuffer.Read(Data, 0, this.Default_Top_FFTSize);
-                this.Render_Top_FFT(this.chart_Input_Top_FFT, Data);
-                this.RTA_InputTopBuffer.Advance(RemoveLength);
-            }
-
-            if (this.chart_Output_Top_FFT.Visible && this.RTA_OutputTopBuffer.Count > this.Default_Top_FFTSize * OverlapAdd)
-            {
-                var Data = new double[this.Default_Top_FFTSize];
-                _ = this.RTA_OutputTopBuffer.Read(Data, 0, this.Default_Top_FFTSize);
-                this.Render_Top_FFT(this.chart_Output_Top_FFT, Data);
-                this.RTA_OutputTopBuffer.Advance(RemoveLength);
-            }
-        }
-        catch (Exception ex)
-        {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
-            _ = ex;
-        }
-        this.timer_Plot_Top_FFTs.Enabled = !this.Pause_CHK.Checked;
-    }
-
-    [SupportedOSPlatform("windows")]
-    protected void timer_Plot_ULF_FFT_Tick(object sender, EventArgs e)
+    protected async void timer_Plot_ULF_FFT_Tick(object sender, EventArgs e)
     {
         this.timer_Plot_ULF_FFT.Enabled = false;
         try
         {
-            var InSampleRate = Program.DSP_Info.InSampleRate;
-            double Overlap = this.ULF_FFT_OverLapPercentage / 100d;
-            double OverlapAdd = 1d + Overlap;
-            double OverlapRemove = 1d - Overlap;
-            var RemoveLength = (int)(InSampleRate * OverlapRemove);
+            int inSampleRate = Program.DSP_Info.InSampleRate;
+            double overlap = this.ULF_FFT_OverLapPercentage / 100d;
+            double overlapAdd = 1d + overlap;
+            double overlapRemove = 1d - overlap;
+            int removeLength = (int)(inSampleRate * overlapRemove);
 
-            if (this.chart_Input_ULF_FFT.Visible && this.RTA_InputULFBuffer.Count > InSampleRate * OverlapAdd)
+            this.ULF_FFT_Tasks.Clear();
+
+            // Input ULF
+            if (this.chart_Input_ULF_FFT.Visible &&
+                this.RTA_InputULFBuffer.Count > inSampleRate * overlapAdd)
             {
-                var Data = new double[InSampleRate];
-                _ = this.RTA_InputULFBuffer.Read(Data, 0, InSampleRate);
-                this.Render_ULF_FFT(this.chart_Input_ULF_FFT, Data);
-                this.RTA_InputULFBuffer.Advance(RemoveLength);
+                this.ULF_FFT_Tasks.Add(Task.Run(() =>
+                {
+                    var data = new double[inSampleRate];
+                    _ = this.RTA_InputULFBuffer.Read(data, 0, inSampleRate);
+
+                    return this.Compute_ULF_FFT_Data(this.InputULF_FFT, data);
+                })
+                .ContinueWith(t =>
+                 {
+                     var (xData, magLog) = t.Result;
+                     if (xData.Length > 0 && magLog.Length > 0)
+                     {
+                         if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                            this.SafeInvoke(() =>
+                                this.Plot_ULF_FFT(this.chart_Input_ULF_FFT, xData, magLog));
+                     }
+                     this.RTA_InputULFBuffer.Advance(removeLength);
+                 }));
             }
 
-            if (this.chart_Output_ULF_FFT.Visible && this.RTA_OutputULFBuffer.Count > InSampleRate * OverlapAdd)
+            // Output ULF
+            if (this.chart_Output_ULF_FFT.Visible &&
+                this.RTA_OutputULFBuffer.Count > inSampleRate * overlapAdd)
             {
-                var Data = new double[InSampleRate];
-                _ = this.RTA_OutputULFBuffer.Read(Data, 0, InSampleRate);
-                this.Render_ULF_FFT(this.chart_Output_ULF_FFT, Data);
-                this.RTA_OutputULFBuffer.Advance(RemoveLength);
+                this.ULF_FFT_Tasks.Add(Task.Run(() =>
+                {
+                    var data = new double[inSampleRate];
+                    _ = this.RTA_OutputULFBuffer.Read(data, 0, inSampleRate);
+
+                    return this.Compute_ULF_FFT_Data(this.OutputULF_FFT, data);
+                })
+                .ContinueWith(t =>
+                 {
+                     var (xData, magLog) = t.Result;
+                     if (xData.Length > 0 && magLog.Length > 0)
+                     {
+                         if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                             this.SafeInvoke(() =>
+                               this.Plot_ULF_FFT(this.chart_Output_ULF_FFT, xData, magLog));
+                     }
+                     this.RTA_OutputULFBuffer.Advance(removeLength);
+                 }));
             }
+
+            // Wait for all background tasks to finish
+            await Task.WhenAll(this.ULF_FFT_Tasks);
         }
         catch (Exception ex)
-        {   //MsChart is buggy and sensitive, it crashing shouldn't kill the DSP app.
-            _ = ex;
+        {
+            this.Error(ex);
         }
-        this.timer_Plot_ULF_FFT.Enabled = !this.Pause_CHK.Checked;
+        finally
+        {
+            this.timer_Plot_ULF_FFT.Enabled = !this.Pause_CHK.Checked;
+        }
     }
+
+    [SupportedOSPlatform("windows")]
+    protected async void timer_PlotTopFFTs_Tick(object sender, EventArgs e)
+    {
+        this.timer_Plot_Top_FFTs.Enabled = false;
+        try
+        {
+            double overlap = this.Top_FFT_OverLapPercentage / 100d;
+            double overlapAdd = 1d + overlap;
+            double overlapRemove = 1d - overlap;
+            int removeLength = (int)(this.Default_Top_FFTSize * overlapRemove);
+
+            this.Top_FFT_Tasks.Clear();
+
+            // Input Top FFT
+            if (this.chart_Input_Top_FFT.Visible &&
+                this.RTA_InputTopBuffer.Count > this.Default_Top_FFTSize * overlapAdd)
+            {
+                this.Top_FFT_Tasks.Add(Task.Run(() =>
+                {
+                    var data = new double[this.Default_Top_FFTSize];
+                    _ = this.RTA_InputTopBuffer.Read(data, 0, this.Default_Top_FFTSize);
+                    return this.Compute_Top_FFT_Data(this.InputTop_FFT, data);
+                })
+                .ContinueWith(t =>
+                 {
+                     var (xData, magLog) = t.Result;
+                     if (xData.Length > 0 && magLog.Length > 0)
+                     {
+                         if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                            this.SafeInvoke(() =>
+                                this.Plot_Top_FFT(this.chart_Input_Top_FFT, xData, magLog));
+                     }
+                     this.RTA_InputTopBuffer.Advance(removeLength);
+                 }));
+            }
+
+            // Output Top FFT
+            if (this.chart_Output_Top_FFT.Visible &&
+                this.RTA_OutputTopBuffer.Count > this.Default_Top_FFTSize * overlapAdd)
+            {
+                this.Top_FFT_Tasks.Add(Task.Run(() =>
+                {
+                    var data = new double[this.Default_Top_FFTSize];
+                    _ = this.RTA_OutputTopBuffer.Read(data, 0, this.Default_Top_FFTSize);
+                    return this.Compute_Top_FFT_Data(this.OutputTop_FFT, data);
+                })
+                .ContinueWith(t =>
+                 {
+                     var (xData, magLog) = t.Result;
+                     if (xData.Length > 0 && magLog.Length > 0)
+                     {
+                         if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                             this.SafeInvoke(() =>
+                                this.Plot_Top_FFT(this.chart_Output_Top_FFT, xData, magLog));
+                     }
+                     this.RTA_OutputTopBuffer.Advance(removeLength);
+                 }));
+            }
+
+            await Task.WhenAll(this.Top_FFT_Tasks);
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+        finally
+        {
+            this.timer_Plot_Top_FFTs.Enabled = !this.Pause_CHK.Checked;
+        }
+    }
+
+    protected (double[] xData, double[] magLog) Compute_ULF_FFT_Data(FFT fft, double[] timeSeries)
+    {
+        if (timeSeries.Length < this.Default_ULF_FFTSize)
+            return (Array.Empty<double>(), Array.Empty<double>());
+
+        int FFTSize = Math.Min(this.Default_ULF_FFTSize, timeSeries.Length);
+        //Downsample for ULF
+        var Down = DownSampler.downsample(timeSeries, FFTSize);
+
+        // Perform a FFT
+        Complex[] FFTResult = fft.Perform_FFT(Down, this.ULF_FFT_WindowCoefficients);
+        var HalfLength = FFTResult.Length / 2 + 1;
+        var RealResult = new Complex[HalfLength];
+        Array.Copy(FFTResult, RealResult, HalfLength);
+
+        double[] magResult = DSP.ConvertComplex.ToMagnitude(RealResult);
+        double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(
+                             magResult,
+                             this.ULF_FFT_WindowScaleFactor * Math.Sqrt(2),
+                             -400d);
+
+        // Return just the data needed to plot.
+        return (this.ULF_FFT_FSpan, magLog);
+    }
+
+    protected (double[] xData, double[] magLog) Compute_Top_FFT_Data(FFT fft, double[] timeSeries)
+    {
+        int FFTSize = this.Default_Top_FFTSize;
+
+        // If the incoming buffer is too short, return empty arrays so we skip plotting.
+        if (timeSeries.Length < FFTSize)
+            return (Array.Empty<double>(), Array.Empty<double>());
+
+        // Exactly as in Render_Top_FFT: resize to the chosen FFT length.
+        Array.Resize(ref timeSeries, FFTSize);
+
+        // Perform the FFT using your existing Top_FFT instance & window coefficients.
+        Complex[] fftResult = fft.Perform_FFT(timeSeries, this.Top_FFT_WindowCoefficients);
+
+        // Keep only the real, non-mirrored half.
+        int halfLength = fftResult.Length / 2 + 1;
+        Complex[] realResult = new Complex[halfLength];
+        Array.Copy(fftResult, realResult, halfLength);
+
+        // Convert to magnitude.
+        double[] magResult = DSP.ConvertComplex.ToMagnitude(realResult);
+
+        // Convert magnitude to dBV with your original scale factor & floor of -400 dB.
+        double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(
+            magResult,
+            this.Top_FFT_WindowScaleFactor * Math.Sqrt(2),
+            -400d
+        );
+
+        // Return the frequency span (already stored in Top_FFT_FSpan) plus the final magnitude array.
+        return (this.Top_FFT_FSpan, magLog);
+    }
+
     #endregion
 
     #region ChartMouseMove
@@ -486,7 +649,7 @@ public partial class RTA : Form
             if (ca == null) return;
 
             // Check if the mouse is within the inner plot area (UI thread)
-            RectangleF innerRect = InnerPlotPositionClientRectangle(chart, ca);
+            RectangleF innerRect = this.InnerPlotPositionClientRectangle(chart, ca);
             if (!innerRect.Contains(e.Location))
                 return;
 
@@ -513,8 +676,9 @@ public partial class RTA : Form
 
             // Update the UI on the UI thread.
             if (!string.IsNullOrEmpty(newTitle))
-                this.SafeInvoke(() =>
-                    chart.Titles[5].Text = newTitle);
+                if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                    this.SafeInvoke(() =>
+                        chart.Titles[5].Text = newTitle);
         }
         catch (Exception ex)
         {
@@ -765,10 +929,11 @@ public partial class RTA : Form
             this.Top_FFT_WindowScaleFactor = DSP.Window.ScaleFactor.Signal(this.Top_FFT_WindowCoefficients);
         }
 
-        this.Top_FFT = new FFT(this.Default_Top_FFTSize);
+        this.InputTop_FFT = new FFT(this.Default_Top_FFTSize);
+        this.OutputTop_FFT = new FFT(this.Default_Top_FFTSize);
         int SampleRate = Program.DSP_Info.InSampleRate;
         // Calculate the frequency span
-        this.Top_FFT_FSpan = this.Top_FFT.FrequencySpan(SampleRate);
+        this.Top_FFT_FSpan = this.InputTop_FFT.FrequencySpan(SampleRate);
         this.Top_FFT_FSpan[0] = 0.0001;
 
         this.RTA_InputTopBuffer = new(this.Default_Top_FFTSize * 10);
@@ -786,66 +951,11 @@ public partial class RTA : Form
             this.ULF_FFT_WindowScaleFactor = DSP.Window.ScaleFactor.Signal(this.ULF_FFT_WindowCoefficients);
         }
 
-        this.ULF_FFT = new FFT(this.Default_ULF_FFTSize);
+        this.InputULF_FFT = new FFT(this.Default_ULF_FFTSize);
+        this.OutputULF_FFT = new FFT(this.Default_ULF_FFTSize);
         // Calculate the frequency span
-        this.ULF_FFT_FSpan = this.ULF_FFT.FrequencySpan(this.Default_ULF_FFTSize);
+        this.ULF_FFT_FSpan = this.InputULF_FFT.FrequencySpan(this.Default_ULF_FFTSize);
         this.ULF_FFT_FSpan[0] = 0.0001;
-    }
-    #endregion
-
-    #region Perform ULF and Top FFTs
-    [SupportedOSPlatform("windows")]
-    protected void Render_ULF_FFT(Chart chart, double[] timeSeries)
-    {
-        if (timeSeries.Length < this.Default_ULF_FFTSize)
-            return;
-
-        int FFTSize = Math.Min(this.Default_ULF_FFTSize, timeSeries.Length);
-        //Downsample for ULF
-        var Down = DownSampler.downsample(timeSeries, FFTSize);
-
-        // Perform a FFT
-        Complex[] FFTResult = this.ULF_FFT.Perform_FFT(Down, this.ULF_FFT_WindowCoefficients);
-        Application.DoEvents();
-        //We only care about the Real non-mirrored half
-        var HalfLength = FFTResult.Length / 2 + 1;
-        var RealResult = new Complex[HalfLength];
-        Array.Copy(FFTResult, RealResult, HalfLength);
-
-        // Convert the complex result to a scalar magnitude 
-        double[] magResult = DSP.ConvertComplex.ToMagnitude(RealResult);
-
-        // Convert and Plot Log Magnitude
-        double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(magResult, this.ULF_FFT_WindowScaleFactor * Math.Sqrt(2), -400d);
-
-        this.Plot_ULF_FFT(chart, this.ULF_FFT_FSpan, magLog);
-    }
-
-    [SupportedOSPlatform("windows")]
-    protected void Render_Top_FFT(Chart chart, double[] timeSeries)
-    {
-        int FFTSize = this.Default_Top_FFTSize;
-
-        if (timeSeries.Length < FFTSize)
-            return;
-
-        Array.Resize(ref timeSeries, FFTSize);
-
-        // Perform a FFT
-        Complex[] FFTResult = this.Top_FFT.Perform_FFT(timeSeries, this.Top_FFT_WindowCoefficients);
-        Application.DoEvents();
-        //We only care about the Real non-mirrored half
-        var HalfLength = FFTResult.Length / 2 + 1;
-        var RealResult = new Complex[HalfLength];
-        Array.Copy(FFTResult, RealResult, HalfLength);
-
-        // Convert the complex result to a scalar magnitude 
-        double[] magResult = DSP.ConvertComplex.ToMagnitude(RealResult);
-
-        // Convert and Plot Log Magnitude
-        double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(magResult, this.Top_FFT_WindowScaleFactor * Math.Sqrt(2), -400d);
-
-        this.Plot_Top_FFT(chart, this.Top_FFT_FSpan, magLog);
     }
     #endregion
 
@@ -855,7 +965,7 @@ public partial class RTA : Form
     {
         try
         {
-            if (this.IsDisposed || !this.IsHandleCreated)
+            if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
                 return;
             if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
                 return;
@@ -892,16 +1002,14 @@ public partial class RTA : Form
         int MaxHz = 100;
         this.Plot_FFT(chartControl, MinHz, MaxHz, xData, yData);
 
-        _ = Task.Run(() =>
-        {
-            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
-                return;
-
-            var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
-            var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
-            chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
-            chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
-        });
+        var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
+        var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
+        if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
+            return;
+        if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
+            return;
+        chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
+        chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");    
     }
 
     [SupportedOSPlatform("windows")]
@@ -911,15 +1019,14 @@ public partial class RTA : Form
         int MaxHz = 20000;
         this.Plot_FFT(chartControl, MinHz, MaxHz, xData, yData);
 
-        _ = Task.Run(() =>
-        {
-            if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
-                return;
-            var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
-            var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
-            chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
-            chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
-        });
+        var MaxIndex = DSP.Analyze.FindMaxPosition(yData, 0, MaxHz);
+        var MinIndex = DSP.Analyze.FindMinPosition(yData, 0, MaxHz);
+        if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
+            return;
+        if (chartControl.IsDisposed || !chartControl.IsHandleCreated)
+            return;
+        chartControl.Titles[3].Text = "Max: " + xData[MaxIndex].ToString("0.0") + " | " + yData[MaxIndex].ToString("0.0");
+        chartControl.Titles[4].Text = "Min: " + xData[MinIndex].ToString("0.0") + " | " + yData[MinIndex].ToString("0.0");
     }
     #endregion
 
@@ -930,7 +1037,9 @@ public partial class RTA : Form
     [SupportedOSPlatform("windows")]
     protected void InitializeChart(Chart chartControl)
     {
-        if (chartControl == null || chartControl.ChartAreas.Count < 1)
+        if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
+            return;
+        if (chartControl.IsDisposed ||!chartControl.IsHandleCreated || chartControl == null || chartControl.ChartAreas.Count < 1)
             return;
 
         // Use the Tag property to store a flag indicating initialization.
@@ -966,7 +1075,7 @@ public partial class RTA : Form
     [SupportedOSPlatform("windows")]
     protected void UpdateChartWithPlotData(Chart chartControl, WaveformPlotData plotData, bool resetAutoRange)
     {
-        if (this.IsDisposed || !this.IsHandleCreated)
+        if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
             return;
         if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
             return;
@@ -976,7 +1085,7 @@ public partial class RTA : Form
         try
         {
             // Perform one‑time initialization if not already done.
-            InitializeChart(chartControl);
+            this.InitializeChart(chartControl);
 
             chartControl.SuspendLayout();
 
