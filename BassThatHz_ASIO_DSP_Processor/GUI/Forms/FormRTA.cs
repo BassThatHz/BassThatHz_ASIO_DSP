@@ -54,7 +54,7 @@ public partial class FormRTA : Form
     protected int Input_ChannelIndex = -1;
     protected int Output_ChannelIndex = -1;
     protected int ULF_FFT_OverLapPercentage = 90;
-    protected int Top_FFT_OverLapPercentage = 5;
+    protected int Top_FFT_OverLapPercentage = 10;
     protected double Top_FFT_WindowScaleFactor = 1;
     protected double ULF_FFT_WindowScaleFactor = 1;
     protected readonly int MouseMoveThrottleMs = 50;
