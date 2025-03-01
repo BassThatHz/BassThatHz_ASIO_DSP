@@ -73,4 +73,12 @@ public class DSP_Info
     #region Streams
     public ObservableCollection<DSP_Stream> Streams { get; set; } = new();
     #endregion
+
+    #region Buses
+    //public ObservableCollection<DSP_Bus> Buses { get; set; } = new();
+    #endregion
+
+    #region AbstractBuses
+    //public ObservableCollection<DSP_AbstractBus> AbstractBuses { get; set; } = new();
+    #endregion
 }

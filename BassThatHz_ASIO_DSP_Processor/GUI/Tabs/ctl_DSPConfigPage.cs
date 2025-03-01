@@ -239,11 +239,39 @@ public partial class ctl_DSPConfigPage : UserControl
         if (Capabilities == null)
             return;
 
-        foreach (var item in Capabilities.Value.InputChannelInfos)
-            _ = streamControl.Get_cboInputStream.Items.Add("(" + item.channel + ") " + item.name);
+        int InputIndex = -1;
+        int OutputIndex = -1;
+        for (int i = 0; i < Capabilities.Value.InputChannelInfos.Length; i++)
+        {
+            InputIndex++;
+            var InputChannel = Capabilities.Value.InputChannelInfos[i];
+            _ = streamControl.Get_cboInputStream.Items.Add("(" + InputChannel.channel + ") " + InputChannel.name);
+        }
 
-        foreach (var item in Capabilities.Value.OutputChannelInfos)
-            _ = streamControl.Get_cboOutputStream.Items.Add("(" + item.channel + ") " + item.name);
+        for (int i = 0; i < Capabilities.Value.OutputChannelInfos.Length; i++)
+        {
+            OutputIndex++;
+            var OutputChannel = Capabilities.Value.OutputChannelInfos[i];
+            _ = streamControl.Get_cboOutputStream.Items.Add("(" + OutputChannel.channel + ") " + OutputChannel.name);
+        }
+
+        //for (int i = 0; i < Program.DSP_Info.Buses.Count; i++)
+        //{
+        //    InputIndex++;
+        //    OutputIndex++;
+        //    var Bus = Program.DSP_Info.Buses[i];
+        //    _ = streamControl.Get_cboInputStream.Items.Add("(" + InputIndex + ") Input " + Bus.Name);            
+        //    _ = streamControl.Get_cboOutputStream.Items.Add("(" + OutputIndex + ") Output " + Bus.Name);
+        //}
+
+        //for (int i = 0; i < Program.DSP_Info.AbstractBuses.Count; i++)
+        //{
+        //    InputIndex++;
+        //    OutputIndex++;
+        //    var AbstractBus = Program.DSP_Info.AbstractBuses[i];
+        //    _ = streamControl.Get_cboInputStream.Items.Add("(" + InputIndex + ") Input " + AbstractBus.Name);
+        //    _ = streamControl.Get_cboOutputStream.Items.Add("(" + OutputIndex + ") Output " + AbstractBus.Name);
+        //}
     }
 
     protected void Set_HScrollbar(int streamControlCount)
