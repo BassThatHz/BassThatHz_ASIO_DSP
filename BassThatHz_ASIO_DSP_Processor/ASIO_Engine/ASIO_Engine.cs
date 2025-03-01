@@ -403,16 +403,19 @@ public class ASIO_Engine : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public double[]? GetInputAudioData(int channelIndex)
     {
-        //We don't check that the parameter is in range for performance reasons.
-        //It will throw an exception if the calling logic isn't valid, it just won't be an ArgException
-        return this.InputBuffer?[channelIndex].ToArray();
+        if (this.InputBuffer == null || channelIndex < 0 || channelIndex >= this.InputBuffer.Length)
+            return null;
+
+        return this.InputBuffer[channelIndex]?.ToArray();
     }
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public double[]? GetOutputAudioData(int channelIndex)
     {
-        //We don't check that the parameter is in range for performance reasons.
-        //It will throw an exception if the calling logic isn't valid, it just won't be an ArgException
+        if (this.OutputBuffer == null || channelIndex < 0 || channelIndex >= this.OutputBuffer.Length)
+            return null;
+
         return this.OutputBuffer?[channelIndex].ToArray();
     }
     #endregion
@@ -706,14 +709,17 @@ public class ASIO_Engine : IDisposable
         //Function must be thread-safe
 
         //Make sure the Stream and Buffers and Channel Index are legit, otherwise return (i.e. output buffer is muted zeroes)
-        if (
-            CurrentStream == null
-            ||
-            this.OutputBuffer == null || CurrentStream.OutputChannelIndex == -1
-            ||
-            this.InputBuffer == null || CurrentStream.InputChannelIndex == -1
-            )
-            return; //Should probably throw Arg Exception instead. Caller provided an invalid stream.
+        if (CurrentStream == null ||
+            this.OutputBuffer == null || 
+            this.InputBuffer == null ||
+            CurrentStream.OutputChannelIndex < 0 || CurrentStream.InputChannelIndex < 0 ||
+            CurrentStream.OutputChannelIndex >= this.OutputBuffer.Length ||
+            CurrentStream.InputChannelIndex >= this.InputBuffer.Length ||
+            this.OutputBuffer[CurrentStream.OutputChannelIndex] == null ||
+            this.InputBuffer[CurrentStream.InputChannelIndex] == null)
+        {
+            return;
+        }
 
         double[] Local_OutputBuffer = this.OutputBuffer[CurrentStream.OutputChannelIndex];
         double[] Local_InputBuffer = this.InputBuffer[CurrentStream.InputChannelIndex];
