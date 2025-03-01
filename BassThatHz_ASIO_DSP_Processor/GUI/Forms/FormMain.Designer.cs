@@ -1,6 +1,8 @@
 ﻿
 namespace BassThatHz_ASIO_DSP_Processor
 {
+    using BassThatHz_ASIO_DSP_Processor.GUI.Tabs;
+
     partial class FormMain
     {
         /// <summary>
@@ -32,21 +34,24 @@ namespace BassThatHz_ASIO_DSP_Processor
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormMain));
             tabControl1 = new System.Windows.Forms.TabControl();
             GeneralConfigPage = new System.Windows.Forms.TabPage();
-            ctl_GeneralConfigPage1 = new GUI.Tabs.ctl_GeneralConfigPage();
+            ctl_GeneralConfigPage1 = new ctl_GeneralConfigPage();
             InputsConfigPage = new System.Windows.Forms.TabPage();
-            ctl_InputsConfigPage1 = new GUI.Tabs.ctl_InputsConfigPage();
+            ctl_InputsConfigPage1 = new ctl_InputsConfigPage();
             OutputsConfigPage = new System.Windows.Forms.TabPage();
-            ctl_OutputsConfigPage1 = new GUI.Tabs.ctl_OutputsConfigPage();
+            ctl_OutputsConfigPage1 = new ctl_OutputsConfigPage();
+            BusesPage = new System.Windows.Forms.TabPage();
+            ctl_BusesPage1 = new ctl_BusesPage();
             DSPConfigPage = new System.Windows.Forms.TabPage();
-            ctl_DSPConfigPage1 = new GUI.Tabs.ctl_DSPConfigPage();
+            ctl_DSPConfigPage1 = new ctl_DSPConfigPage();
             StatsPage = new System.Windows.Forms.TabPage();
-            ctl_StatsPage1 = new GUI.Tabs.ctl_StatsPage();
+            ctl_StatsPage1 = new ctl_StatsPage();
             Monitor = new System.Windows.Forms.TabPage();
-            ctl_MonitorPage1 = new GUI.Tabs.ctl_MonitorPage();
+            ctl_MonitorPage1 = new ctl_MonitorPage();
             tabControl1.SuspendLayout();
             GeneralConfigPage.SuspendLayout();
             InputsConfigPage.SuspendLayout();
             OutputsConfigPage.SuspendLayout();
+            BusesPage.SuspendLayout();
             DSPConfigPage.SuspendLayout();
             StatsPage.SuspendLayout();
             Monitor.SuspendLayout();
@@ -57,6 +62,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             tabControl1.Controls.Add(GeneralConfigPage);
             tabControl1.Controls.Add(InputsConfigPage);
             tabControl1.Controls.Add(OutputsConfigPage);
+            tabControl1.Controls.Add(BusesPage);
             tabControl1.Controls.Add(DSPConfigPage);
             tabControl1.Controls.Add(StatsPage);
             tabControl1.Controls.Add(Monitor);
@@ -65,7 +71,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             tabControl1.Margin = new System.Windows.Forms.Padding(2);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new System.Drawing.Size(958, 409);
+            tabControl1.Size = new System.Drawing.Size(1090, 529);
             tabControl1.TabIndex = 0;
             // 
             // GeneralConfigPage
@@ -75,7 +81,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             GeneralConfigPage.Margin = new System.Windows.Forms.Padding(2);
             GeneralConfigPage.Name = "GeneralConfigPage";
             GeneralConfigPage.Padding = new System.Windows.Forms.Padding(2);
-            GeneralConfigPage.Size = new System.Drawing.Size(950, 381);
+            GeneralConfigPage.Size = new System.Drawing.Size(1082, 501);
             GeneralConfigPage.TabIndex = 0;
             GeneralConfigPage.Text = "General Config";
             GeneralConfigPage.UseVisualStyleBackColor = true;
@@ -86,7 +92,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             ctl_GeneralConfigPage1.Location = new System.Drawing.Point(2, 2);
             ctl_GeneralConfigPage1.Margin = new System.Windows.Forms.Padding(2);
             ctl_GeneralConfigPage1.Name = "ctl_GeneralConfigPage1";
-            ctl_GeneralConfigPage1.Size = new System.Drawing.Size(946, 377);
+            ctl_GeneralConfigPage1.Size = new System.Drawing.Size(1078, 497);
             ctl_GeneralConfigPage1.TabIndex = 0;
             // 
             // InputsConfigPage
@@ -129,6 +135,25 @@ namespace BassThatHz_ASIO_DSP_Processor
             ctl_OutputsConfigPage1.Name = "ctl_OutputsConfigPage1";
             ctl_OutputsConfigPage1.Size = new System.Drawing.Size(192, 72);
             ctl_OutputsConfigPage1.TabIndex = 0;
+            // 
+            // BusesPage
+            // 
+            BusesPage.Controls.Add(ctl_BusesPage1);
+            BusesPage.Location = new System.Drawing.Point(4, 24);
+            BusesPage.Name = "BusesPage";
+            BusesPage.Size = new System.Drawing.Size(192, 72);
+            BusesPage.TabIndex = 6;
+            BusesPage.Text = "Buses (Optional)";
+            BusesPage.UseVisualStyleBackColor = true;
+            // 
+            // ctl_BusesPage1
+            // 
+            ctl_BusesPage1.AutoScroll = true;
+            ctl_BusesPage1.Dock = System.Windows.Forms.DockStyle.Fill;
+            ctl_BusesPage1.Location = new System.Drawing.Point(0, 0);
+            ctl_BusesPage1.Name = "ctl_BusesPage1";
+            ctl_BusesPage1.Size = new System.Drawing.Size(192, 72);
+            ctl_BusesPage1.TabIndex = 0;
             // 
             // DSPConfigPage
             // 
@@ -196,19 +221,20 @@ namespace BassThatHz_ASIO_DSP_Processor
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            ClientSize = new System.Drawing.Size(958, 409);
+            ClientSize = new System.Drawing.Size(1090, 529);
             Controls.Add(tabControl1);
             Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
             Margin = new System.Windows.Forms.Padding(2);
             MinimumSize = new System.Drawing.Size(836, 320);
             Name = "FormMain";
-            Text = "BassThatHz_ASIO_DSP_Processor 1.0.43 Beta";
+            Text = "BassThatHz_ASIO_DSP_Processor 1.0.44 Beta";
             WindowState = System.Windows.Forms.FormWindowState.Maximized;
             Load += FormMain_Load;
             tabControl1.ResumeLayout(false);
             GeneralConfigPage.ResumeLayout(false);
             InputsConfigPage.ResumeLayout(false);
             OutputsConfigPage.ResumeLayout(false);
+            BusesPage.ResumeLayout(false);
             DSPConfigPage.ResumeLayout(false);
             StatsPage.ResumeLayout(false);
             Monitor.ResumeLayout(false);
@@ -230,5 +256,7 @@ namespace BassThatHz_ASIO_DSP_Processor
         protected GUI.Tabs.ctl_DSPConfigPage ctl_DSPConfigPage1;
         protected GUI.Tabs.ctl_StatsPage ctl_StatsPage1;
         protected GUI.Tabs.ctl_MonitorPage ctl_MonitorPage1;
+        protected GUI.Tabs.ctl_BusesPage ctl_BusesPage1;
+        private System.Windows.Forms.TabPage BusesPage;
     }
 }

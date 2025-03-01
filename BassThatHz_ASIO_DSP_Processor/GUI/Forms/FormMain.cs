@@ -120,6 +120,8 @@ public partial class FormMain : Form
         Application.DoEvents();
         this.ctl_GeneralConfigPage1.LoadConfigRefresh();
         Application.DoEvents();
+        this.ctl_BusesPage1.LoadConfigRefresh();
+        Application.DoEvents();
         this.ctl_DSPConfigPage1.LoadConfigRefresh();
         //Application.DoEvents();
         //this.ctl_MonitorPage1.LoadConfigRefresh();
