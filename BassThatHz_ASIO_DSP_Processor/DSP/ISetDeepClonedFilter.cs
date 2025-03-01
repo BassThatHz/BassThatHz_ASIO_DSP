@@ -1,4 +1,6 @@
-﻿namespace BassThatHz_ASIO_DSP_Processor;
+﻿#nullable enable
+
+namespace BassThatHz_ASIO_DSP_Processor;
 /// <summary>
  ///  BassThatHz ASIO DSP Processor Engine
  ///  Copyright (c) 2025 BassThatHz
