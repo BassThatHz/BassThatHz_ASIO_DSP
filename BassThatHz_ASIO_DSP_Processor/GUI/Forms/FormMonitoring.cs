@@ -53,34 +53,41 @@ public partial class FormMonitoring : Form
         this.Resize += Resize_Handler;
         this.msb_RefreshInterval.TextChanged += Msb_RefreshInterval_TextChanged;
         this.msb_RefreshInterval.KeyPress += Msb_RefreshInterval_KeyPress;
+        this.Shown += FormMonitoring_Shown;
     }
     #endregion
 
     #region Event Handlers
 
-    #region InputValidation
-    protected void Msb_RefreshInterval_KeyPress(object? sender, KeyPressEventArgs e)
-    {
-        InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.msb_RefreshInterval.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.msb_RefreshInterval.Text);
-    }
-    #endregion
-
-    protected void Msb_RefreshInterval_TextChanged(object? sender, EventArgs e)
+    #region Shown
+    protected void FormMonitoring_Shown(object? sender, EventArgs e)
     {
         try
         {
-            if (string.IsNullOrEmpty(this.msb_RefreshInterval.Text) || this.msb_RefreshInterval.Text == "0")
-                this.msb_RefreshInterval.Text = "1";
-
-            this.timer_Refresh.Interval = Math.Max(1, int.Parse(this.msb_RefreshInterval.Text));
+            this.Set_Pause_States();
         }
         catch (Exception ex)
         {
             this.Error(ex);
         }
     }
+    #endregion
 
+    #region Pause
+    protected void Pause_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        try
+        {
+            this.Set_Pause_States();
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+    #endregion
+
+    #region Timer
     protected void timer_Refresh_Tick(object? sender, EventArgs e)
     {
         try
@@ -95,7 +102,34 @@ public partial class FormMonitoring : Form
             this.Error(ex);
         }
     }
+    #endregion
 
+    #region Refresh Interval
+    protected void Msb_RefreshInterval_TextChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(this.msb_RefreshInterval.Text) || this.msb_RefreshInterval.Text == "0")
+                this.msb_RefreshInterval.Text = "1";
+
+            this.timer_Refresh.Interval = Math.Max(1, int.Parse(this.msb_RefreshInterval.Text));
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+    #endregion
+
+    #region InputValidation
+    protected void Msb_RefreshInterval_KeyPress(object? sender, KeyPressEventArgs e)
+    {
+        InputValidator.Validate_IsNumeric_NonNegative(e);
+        this.msb_RefreshInterval.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.msb_RefreshInterval.Text);
+    }
+    #endregion
+
+    #region Reset
     protected void btn_ResetClip_Click(object? sender, EventArgs e)
     {
         try
@@ -109,7 +143,9 @@ public partial class FormMonitoring : Form
             this.Error(ex);
         }
     }
+    #endregion
 
+    #region Resize
     protected void Resize_Handler(object? sender, EventArgs e)
     {
         try
@@ -122,20 +158,8 @@ public partial class FormMonitoring : Form
             this.Error(ex);
         }
     }
+    #endregion
 
-    protected void Pause_CHK_CheckedChanged(object sender, EventArgs e)
-    {
-        try
-        {
-            this.timer_Refresh.Enabled = !this.Pause_CHK.Checked;
-            foreach (var item in this.VolControlList)
-                item.Get_timer_Refresh.Enabled = !this.Pause_CHK.Checked;
-        }
-        catch (Exception ex)
-        {
-            this.Error(ex);
-        }
-    }
     #endregion
 
     #region Public Functions
@@ -209,6 +233,12 @@ public partial class FormMonitoring : Form
     #endregion
 
     #region Protected Functions
+    protected void Set_Pause_States()
+    {
+        this.timer_Refresh.Enabled = !this.Pause_CHK.Checked;
+        foreach (var item in this.VolControlList)
+            item.Get_timer_Refresh.Enabled = !this.Pause_CHK.Checked;
+    }
     protected void RelocateControls()
     {
         for (var i = 0; i < this.VolControlList.Count; i++)

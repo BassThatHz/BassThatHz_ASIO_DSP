@@ -28,10 +28,10 @@
             pnl_Main = new System.Windows.Forms.Panel();
             timer_Refresh = new System.Windows.Forms.Timer(components);
             splitContainer1 = new System.Windows.Forms.SplitContainer();
+            Pause_CHK = new System.Windows.Forms.CheckBox();
             msb_RefreshInterval = new System.Windows.Forms.MaskedTextBox();
             label1 = new System.Windows.Forms.Label();
             btn_ResetClip = new System.Windows.Forms.Button();
-            Pause_CHK = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -50,6 +50,7 @@
             // 
             // timer_Refresh
             // 
+            timer_Refresh.Enabled = true;
             timer_Refresh.Tick += timer_Refresh_Tick;
             // 
             // splitContainer1
@@ -75,6 +76,17 @@
             splitContainer1.Size = new System.Drawing.Size(700, 422);
             splitContainer1.SplitterDistance = 32;
             splitContainer1.TabIndex = 2;
+            // 
+            // Pause_CHK
+            // 
+            Pause_CHK.AutoSize = true;
+            Pause_CHK.Location = new System.Drawing.Point(399, 7);
+            Pause_CHK.Name = "Pause_CHK";
+            Pause_CHK.Size = new System.Drawing.Size(57, 19);
+            Pause_CHK.TabIndex = 3;
+            Pause_CHK.Text = "Pause";
+            Pause_CHK.UseVisualStyleBackColor = true;
+            Pause_CHK.CheckedChanged += Pause_CHK_CheckedChanged;
             // 
             // msb_RefreshInterval
             // 
@@ -109,17 +121,6 @@
             btn_ResetClip.Text = "Reset Peak and Clip Indicators";
             btn_ResetClip.UseVisualStyleBackColor = true;
             btn_ResetClip.Click += btn_ResetClip_Click;
-            // 
-            // Pause_CHK
-            // 
-            Pause_CHK.AutoSize = true;
-            Pause_CHK.Location = new System.Drawing.Point(399, 7);
-            Pause_CHK.Name = "Pause_CHK";
-            Pause_CHK.Size = new System.Drawing.Size(57, 19);
-            Pause_CHK.TabIndex = 3;
-            Pause_CHK.Text = "Pause";
-            Pause_CHK.UseVisualStyleBackColor = true;
-            Pause_CHK.CheckedChanged += Pause_CHK_CheckedChanged;
             // 
             // FormMonitoring
             // 
