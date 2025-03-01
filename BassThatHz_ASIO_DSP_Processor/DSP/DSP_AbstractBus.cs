@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 
 #region Usings
 using System;
+using System.Xml.Serialization;
 #endregion
 
 /// <summary>
@@ -32,16 +33,22 @@ public class DSP_AbstractBus : IAbstractBus
 {
     #region IAbstractBus
     public string Name { get; set; } = string.Empty;
+
+    [XmlIgnoreAttribute]
     public double[] Data { get; set; } = Array.Empty<double>();
 
+    [XmlIgnoreAttribute]
     public string SourceName { get; set; } = string.Empty;
     public int SourceIndex { get; set; } = 0;
 
+    [XmlIgnoreAttribute]
     public string DestinationName { get; set; } = string.Empty;
     public int DestinationIndex { get; set; } = 0;
 
     #endregion
 
     public override string ToString() => this.Name;
+    
+    [XmlIgnoreAttribute]
     public string DisplayMember => this.Name + " | " + this.SourceName + " | " + this.DestinationName;
 }
