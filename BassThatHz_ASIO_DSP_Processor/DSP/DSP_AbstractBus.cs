@@ -29,26 +29,37 @@ using System.Xml.Serialization;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 
+public interface IAbstractBus : IBus
+{
+    #region Properties
+    StreamItem InputSource { get; set; }
+    StreamItem OutputDestination { get; set; }
+
+    bool IsBypassed { get; set; }
+    #endregion
+}
+
+[Serializable]
 public class DSP_AbstractBus : IAbstractBus
 {
     #region IAbstractBus
     public string Name { get; set; } = string.Empty;
 
     [XmlIgnoreAttribute]
-    public double[] Data { get; set; } = Array.Empty<double>();
+    public double[] Buffer { get; set; } = Array.Empty<double>();
+
+    public bool IsBypassed { get; set; } = false;
 
     [XmlIgnoreAttribute]
-    public string SourceName { get; set; } = string.Empty;
-    public int SourceIndex { get; set; } = 0;
+    public string DisplayMember => this.Name + " | " + 
+                                    this.InputSource.DisplayMember + " | " + 
+                                    this.OutputDestination.DisplayMember;
 
-    [XmlIgnoreAttribute]
-    public string DestinationName { get; set; } = string.Empty;
-    public int DestinationIndex { get; set; } = 0;
+    public StreamItem InputSource { get; set; } = new();
+
+    public StreamItem OutputDestination { get; set; } = new();
 
     #endregion
 
-    public override string ToString() => this.Name;
-    
-    [XmlIgnoreAttribute]
-    public string DisplayMember => this.Name + " | " + this.SourceName + " | " + this.DestinationName;
+    public override string ToString() => this.DisplayMember;   
 }

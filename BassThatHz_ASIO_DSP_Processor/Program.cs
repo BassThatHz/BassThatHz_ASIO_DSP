@@ -74,11 +74,25 @@ public static class Program
 
 public static class ExtensionMethods
 {
-    public static void SafeInvoke(this Control control, Action handler)
+    public static void SafeInvoke(this Control control, Action action)
     {
-        if (control.InvokeRequired)
-            control.Invoke(handler);
-        else
-            handler();
+        try
+        {
+            if (control == null || control.IsDisposed) //|| !control.IsHandleCreated
+                return;
+            if (control.InvokeRequired)
+                control.Invoke(action);
+            else
+                action();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The control was disposed between the check and the invoke call.
+        }
+        catch (InvalidOperationException)
+        {
+            // Handle other potential exceptions, e.g., if the handle is lost.
+        }
     }
+
 }

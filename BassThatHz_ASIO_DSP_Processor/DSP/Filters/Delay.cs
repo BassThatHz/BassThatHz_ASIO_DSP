@@ -187,5 +187,10 @@ public class Delay : IFilter
     
     public FilterTypes FilterType { get; } = FilterTypes.Delay;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

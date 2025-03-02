@@ -140,6 +140,7 @@ public partial class ctl_GeneralConfigPage : UserControl
             if (this.saveFileDialog1.ShowDialog(this) == DialogResult.OK)
             {
                 var xml = new ExtendedXmlSerializer().Serialize(Program.DSP_Info);
+                xml = CommonFunctions.RemoveDeprecatedXMLTags(xml);
                 File.WriteAllText(this.saveFileDialog1.FileName, xml);
             }
         }

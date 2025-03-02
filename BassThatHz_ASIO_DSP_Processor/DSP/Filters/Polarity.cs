@@ -65,6 +65,11 @@ public class Polarity : IFilter
     
     public FilterTypes FilterType { get; } = FilterTypes.Polarity;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 
 }

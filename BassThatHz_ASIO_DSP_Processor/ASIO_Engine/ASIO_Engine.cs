@@ -7,9 +7,13 @@ using NAudio.Wave;
 using NAudio.Wave.Asio;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading;
 using System.Threading.Tasks;
 #endregion
@@ -50,8 +54,8 @@ public class ASIO_Engine : IDisposable
 
     #region Buffers
     //An jagged array of ASIO sample data from DSP_ASIO_Data as processed by NAudio
-    public double[][] InputBuffer = new double[0][];
-    public double[][] OutputBuffer = new double[0][];
+    public double[][] InputBuffer = [];
+    public double[][] OutputBuffer = [];
     #endregion
 
     #region MultiThreading
@@ -291,7 +295,7 @@ public class ASIO_Engine : IDisposable
     /// <returns>A string of ASIO Driver names</returns>
     public string[] GetDriverNames()
     {
-        IASIO_GetDriverNames ASIO_GetDriverNames = new ASIO_GetDriverNames();
+        var ASIO_GetDriverNames = new ASIO_GetDriverNames();
         return ASIO_GetDriverNames.GetDriverNames();
     }
 
@@ -403,20 +407,18 @@ public class ASIO_Engine : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public double[]? GetInputAudioData(int channelIndex)
     {
-        if (this.InputBuffer == null || channelIndex < 0 || channelIndex >= this.InputBuffer.Length)
-            return null;
-
-        return this.InputBuffer[channelIndex]?.ToArray();
+        return this.InputBuffer == null || channelIndex < 0 || channelIndex >= this.InputBuffer.Length
+            ? null
+            : (this.InputBuffer[channelIndex]?.ToArray());
     }
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public double[]? GetOutputAudioData(int channelIndex)
     {
-        if (this.OutputBuffer == null || channelIndex < 0 || channelIndex >= this.OutputBuffer.Length)
-            return null;
-
-        return this.OutputBuffer?[channelIndex].ToArray();
+        return this.OutputBuffer == null || channelIndex < 0 || channelIndex >= this.OutputBuffer.Length
+            ? null
+            : (this.OutputBuffer?[channelIndex].ToArray());
     }
     #endregion
 
@@ -535,7 +537,7 @@ public class ASIO_Engine : IDisposable
         //Just allow the run-time to hard abort. Debug.cs has first chance and last chance handlers for debugging all errors. Put break points there.
 
         //Stats init
-        this.ASIO_THreadID = Thread.CurrentThread.ManagedThreadId;
+        this.ASIO_THreadID = Environment.CurrentManagedThreadId;
         this.DSP_ProcessingTime.Reset();
         this.InputBufferConversion_ProcessingTime.Reset();
         this.OutputBufferConversion_ProcessingTime.Reset();
@@ -576,45 +578,321 @@ public class ASIO_Engine : IDisposable
     }
     #endregion
 
+    #region Group and Chain Streams and Buses as-needed
+    // ----- 1. CloneStream Stub -----
+    protected DSP_Stream CloneAbstractBusStream(DSP_Stream original)
+    {
+        DSP_Stream clone = new();
+
+        // Clone auxiliary buffer if needed
+        if (original.AuxBuffer != null)
+        {
+            clone.AuxBuffer = [.. original.AuxBuffer.Select(buffer => (double[])buffer.Clone())];
+        }
+
+        // Clone the stream items (assuming they provide a clone method)
+        clone.InputSource = original.InputSource.DeepClone();
+        clone.OutputDestination = original.OutputDestination.DeepClone();
+
+        // Copy volumes
+        clone.InputVolume = original.InputVolume;
+        clone.OutputVolume = original.OutputVolume;
+
+        // Deep clone each filter
+        clone.Filters = [];
+        foreach (IFilter filter in original.Filters)
+        {
+            clone.Filters.Add(filter.DeepClone());
+        }
+
+        return clone;
+    }
+
+    // ----- 2. DFS to Build Raw Chains (Without Injection) -----
+    protected void DFS_Chains(DSP_Stream current, Dictionary<IStreamItem, List<DSP_Stream>> adjacency,
+        List<DSP_Stream> path, List<List<DSP_Stream>> rawChains, HashSet<DSP_Stream> visited)
+    {
+        // Loop detection: if 'current' is already in this path, abort this branch.
+        if (!visited.Add(current))
+            return;
+
+        // Add current stream to the ongoing chain path.
+        path.Add(current);
+
+        // If current stream outputs to a Channel, we have a complete chain.
+        if (current.OutputDestination.StreamType == StreamType.Channel)
+        {
+            rawChains.Add([.. path]);
+            // Backtrack:
+            path.RemoveAt(path.Count - 1);
+            visited.Remove(current);
+            return;
+        }
+
+        // Follow all streams that use current.OutputDestination as their input.
+        var outKey = current.OutputDestination;
+        if (adjacency.TryGetValue(outKey, out var nextStreams))
+        {
+            foreach (var nxt in nextStreams)
+            {
+                DFS_Chains(nxt, adjacency, path, rawChains, visited);
+            }
+        }
+
+        // Backtrack: remove current stream from the path and visited set.
+        path.RemoveAt(path.Count - 1);
+        visited.Remove(current);
+    }
+
+    // ----- 3. Build the Adjacency Map -----
+    // Key: StreamItem (the input source) → Value: list of streams that consume it.
+    protected Dictionary<IStreamItem, List<DSP_Stream>> BuildAdjacencyMap(List<DSP_Stream> streams)
+    {
+        var adjacency = new Dictionary<IStreamItem, List<DSP_Stream>>();
+        foreach (var s in streams)
+        {
+            if (s == null)
+                continue;
+            var key = s.InputSource;
+            if (!adjacency.TryGetValue(key, out var list))
+            {
+                list = [];
+                adjacency[key] = list;
+            }
+            list.Add(s);
+        }
+        return adjacency;
+    }
+
+    // ----- 4. Identify AbstractBus Master Streams -----
+    /// <summary>
+    /// Finds the single "master" stream for each AbstractBus index.
+    /// A master is defined as a stream whose InputSource and OutputDestination are
+    /// both of type AbstractBus and have the same index.
+    /// </summary>
+    protected Dictionary<int, DSP_Stream> GetAbstractBusMasters(ObservableCollection<DSP_Stream> allStreams)
+    {
+        var result = new Dictionary<int, DSP_Stream>();
+        var duplicates = new HashSet<int>();
+
+        foreach (var s in allStreams)
+        {
+            if (s != null && s.InputSource.StreamType == StreamType.AbstractBus &&
+                s.OutputDestination.StreamType == StreamType.AbstractBus &&
+                s.InputSource.Index == s.OutputDestination.Index)
+            {
+                int abIndex = s.InputSource.Index;
+                if (!result.ContainsKey(abIndex))
+                {
+                    result[abIndex] = s;
+                }
+                else
+                {
+                    // Duplicate master found; mark for exclusion.
+                    duplicates.Add(abIndex);
+                }
+            }
+        }
+
+        // Remove duplicate masters.
+        foreach (var dup in duplicates)
+        {
+            result.Remove(dup);
+        }
+
+        return result;
+    }
+
+    // ----- 5. Filter Out Invalid Streams -----
+    /// <summary>
+    /// Filters out streams that are misconfigured.
+    /// For Bus streams, enforce that each Bus is produced only once.
+    /// For AbstractBus usages, if a stream references an AbstractBus (as input or output)
+    /// but is not itself the master, it will later have a master injected.
+    /// Exclude the stream immediately if no master exists for its AbstractBus index.
+    /// </summary>
+    protected List<DSP_Stream> GetValidStreams(ObservableCollection<DSP_Stream> allStreams, Dictionary<int, DSP_Stream> abstractBusMasters)
+    {
+        var valid = new List<DSP_Stream>();
+        var busProduced = new HashSet<int>();
+
+        foreach (var s in allStreams)
+        {
+            if (s == null || s.InputSource == null || s.OutputDestination == null)
+                continue;
+
+            // Check AbstractBus usage (if not a master) that the master exists.
+            bool isMaster = s.InputSource.StreamType == StreamType.AbstractBus &&
+                             s.OutputDestination.StreamType == StreamType.AbstractBus &&
+                             s.InputSource.Index == s.OutputDestination.Index;
+            bool hasAbstractIn = s.InputSource.StreamType == StreamType.AbstractBus;
+            bool hasAbstractOut = s.OutputDestination.StreamType == StreamType.AbstractBus;
+
+            // If the stream references an AbstractBus on only one side, check for a master.
+            if (!isMaster && hasAbstractIn ^ hasAbstractOut)
+            {
+                int abIndex = hasAbstractIn ? s.InputSource.Index : s.OutputDestination.Index;
+                if (!abstractBusMasters.ContainsKey(abIndex))
+                    continue; // Exclude this stream if no master is found.
+            }
+
+            // Enforce that a Bus can be produced only once.
+            if (s.OutputDestination.StreamType == StreamType.Bus)
+            {
+                int busIndex = s.OutputDestination.Index;
+                if (busProduced.Contains(busIndex))
+                    continue; // Already produced by another stream.
+                busProduced.Add(busIndex);
+            }
+            // For AbstractBus masters and usages, multiple productions are allowed.
+
+            valid.Add(s);
+        }
+        return valid;
+    }
+
+    // ----- 6. Build Raw Chains Using DFS -----
+    protected List<List<DSP_Stream>> BuildRawChains(ObservableCollection<DSP_Stream> allStreams)
+    {
+        // Identify AbstractBus masters first.
+        var abMasters = GetAbstractBusMasters(allStreams);
+
+        // Filter out misconfigured streams.
+        var validStreams = GetValidStreams(allStreams, abMasters);
+
+        // Build the adjacency map.
+        var adjacency = BuildAdjacencyMap(validStreams);
+
+        // Find all candidate start streams (those with Channel input).
+        var startStreams = validStreams
+            .Where(s => s.InputSource.StreamType == StreamType.Channel)
+            .ToList();
+
+        var rawChains = new List<List<DSP_Stream>>();
+        foreach (var start in startStreams)
+        {
+            if (start == null)
+                continue;
+            var path = new List<DSP_Stream>();
+            var visited = new HashSet<DSP_Stream>();
+            DFS_Chains(start, adjacency, path, rawChains, visited);
+        }
+        return rawChains;
+    }
+
+    // ----- 7. Post-Process a Raw Chain to Inject Cloned Masters -----
+    /// <summary>
+    /// Walks through a raw chain and, for each stream that uses an AbstractBus on only one side,
+    /// injects a cloned master (using CloneStream) immediately before (if the AbstractBus is on input)
+    /// or after (if on output) the stream. If a master for a given AbstractBus index cannot be found,
+    /// the chain is considered invalid and null is returned.
+    /// </summary>
+    protected List<DSP_Stream>? PostProcessChain(List<DSP_Stream> rawChain, Dictionary<int, DSP_Stream> abMasters)
+    {
+        var finalChain = new List<DSP_Stream>();
+
+        foreach (var stream in rawChain)
+        {
+            // Determine if the stream is the master.
+            bool isMaster = stream.InputSource.StreamType == StreamType.AbstractBus &&
+                            stream.OutputDestination.StreamType == StreamType.AbstractBus &&
+                            stream.InputSource.Index == stream.OutputDestination.Index;
+
+            bool hasAbstractIn = stream.InputSource.StreamType == StreamType.AbstractBus;
+            bool hasAbstractOut = stream.OutputDestination.StreamType == StreamType.AbstractBus;
+
+            // If the stream is not the master and uses an AbstractBus on only one side,
+            // then inject a clone of the master.
+            if (!isMaster && hasAbstractIn ^ hasAbstractOut)
+            {
+                int abIndex = hasAbstractIn ? stream.InputSource.Index : stream.OutputDestination.Index;
+                if (!abMasters.TryGetValue(abIndex, out var master))
+                {
+                    // Master not found: chain is invalid.
+                    return null;
+                }
+                // Clone the master.
+                var clonedMaster = CloneAbstractBusStream(master);
+
+                // If AbstractBus is used as input only, insert the clone before this stream.
+                if (hasAbstractIn)
+                {
+                    finalChain.Add(clonedMaster);
+                    finalChain.Add(stream);
+                }
+                // If used as output only, insert the clone after this stream.
+                else if (hasAbstractOut)
+                {
+                    finalChain.Add(stream);
+                    finalChain.Add(clonedMaster);
+                }
+            }
+            else
+            {
+                // No AbstractBus injection needed.
+                finalChain.Add(stream);
+            }
+        }
+        return finalChain;
+    }
+
+    // ----- 8. Build Final Stream Chains (Raw DFS + Post-Processing) -----
+    protected List<List<DSP_Stream>> BuildStreamChains(ObservableCollection<DSP_Stream> allStreams)
+    {
+        // Identify AbstractBus masters.
+        var abMasters = GetAbstractBusMasters(allStreams);
+
+        // Build raw chains via DFS.
+        var rawChains = BuildRawChains(allStreams);
+
+        // Process each raw chain to inject AbstractBus clones where needed.
+        var finalChains = new List<List<DSP_Stream>>();
+        foreach (var chain in rawChains)
+        {
+            var processed = PostProcessChain(chain, abMasters);
+            if (processed != null)
+                finalChains.Add(processed);
+        }
+        return finalChains;
+    }
+    #endregion
+
     #region DSP Init / Header / Multi-Threading
 
     #region Single Threaded
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     protected void DSP_SingleThreaded()
     {
-        if (this.DSP_ASIO_Data == null) //Nothing to process
-            return;           
+        if (this.DSP_ASIO_Data == null)
+            return;
 
         this.InputBufferConversion_ProcessingTime.Start();
-        //Assumes InputBuffer and OutputBuffer are pre-initialized for performance reasons
-        //Get the ASIO input stream
         this.DSP_ASIO_Data.GetAsJaggedSamples(this.InputBuffer);
         this.InputBufferConversion_ProcessingTime.Stop();
 
-        var DSP_Streams = Program.DSP_Info.Streams;
-        int StreamCount = DSP_Streams.Count;
-        if (StreamCount > 0)
+        var dspStreams = Program.DSP_Info.Streams;
+        if (dspStreams.Count > 0)
         {
             try
             {
-                //Process each channel sequentially (slow version)
-                for (int StreamIndex = 0; StreamIndex < StreamCount; StreamIndex++)
-                    this.DSP_Process_Channel(DSP_Streams[StreamIndex]);
+                var chains = BuildStreamChains(dspStreams);
+                // Process each chain sequentially.
+                for (int i = 0; i < chains.Count; i++)
+                {
+                    for (int j = 0; j < chains[i].Count; j++)
+                    {
+                        DSP_Process_Channel(chains[i][j]);
+                    }
+                }
             }
             catch (Exception ex)
             {
-                //We don't care if these two exceptions occur. It often happens because the user is 
-                //deleting or adding streams while the DSP is on. The remaining audio data will just be muted zeros for this block.
-                //Adding an object lock would just slow things down and prevent multi-threading scalability.
                 if (ex is not IndexOutOfRangeException && ex is not ArgumentOutOfRangeException)
-                    throw; //Throws all the remaining valid errors with stack trace info
-
-                //We can't log these errors, the frequency is too high. Just allow the run-time to hard abort.
+                    throw;
             }
         }
 
         this.OutputBufferConversion_ProcessingTime.Start();
-        //Send OutputBuffer to ASIO Output stream
         this.DSP_ASIO_Data.SetAsJaggedSamples(this.OutputBuffer);
         this.OutputBufferConversion_ProcessingTime.Stop();
     }
@@ -624,50 +902,42 @@ public class ASIO_Engine : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     protected void DSP_MultiThreaded()
     {
-        if (this.DSP_ASIO_Data == null) //Nothing to process
+        if (this.DSP_ASIO_Data == null)
             return;
 
         this.InputBufferConversion_ProcessingTime.Start();
-        //Assumes InputBuffer and OutputBuffer are pre-initialized for performance reasons
-        //Get the ASIO input stream
         this.DSP_ASIO_Data.GetAsJaggedSamples(this.InputBuffer);
         this.InputBufferConversion_ProcessingTime.Stop();
 
-        var DSP_Streams = Program.DSP_Info.Streams;
-        int StreamCount = DSP_Streams.Count;
-        if (StreamCount > 0)
+        var dspStreams = Program.DSP_Info.Streams;
+        if (dspStreams.Count > 0)
         {
             try
             {
-                this.StreamTaskList = new Task[StreamCount];
-                //Use AutoThreading via Task ThreadPool scheduler, one Task per stream
-                for (int StreamIndex = 0; StreamIndex < StreamCount; StreamIndex++)
+                var chains = BuildStreamChains(dspStreams);
+                var tasks = new List<Task>(chains.Count);
+                // Process each chain in parallel.
+                for (int i = 0; i < chains.Count; i++)
                 {
-                    var Stream = DSP_Streams[StreamIndex];
-                    this.StreamTaskList[StreamIndex] = Task.Run(() =>
-                                                        this.DSP_Process_Channel(Stream)
-                                                    );
+                    int chainIndex = i; // Capture the loop variable to avoid closure issues
+                    tasks.Add(Task.Run(() =>
+                    {
+                        for (int j = 0; j < chains[chainIndex].Count; j++)
+                        {
+                            DSP_Process_Channel(chains[chainIndex][j]);
+                        }
+                    }));
                 }
-
-                //Wait for the threads to complete DSPing all channels (up-to a max of 500ms)
-                //Remaining data stream will be muted zeroes if it doesn't complete in time. Rather than freezing the owner thread.
-                if (this.StreamTaskList.Length > 0)
-                    _ = Task.WaitAll(this.StreamTaskList, 500);
+                Task.WaitAll(tasks.ToArray(), 500);
             }
             catch (Exception ex)
             {
-                //We don't care if these two exceptions occur. It often happens because the user is 
-                //deleting or adding streams while the DSP is on. The remaining audio data will just be muted zeros for this block.
-                //Adding an object lock would just slow things down and prevent multi-threading scalability.
                 if (ex is not IndexOutOfRangeException && ex is not ArgumentOutOfRangeException)
-                    throw; //Throws all the remaining valid errors with stack trace info
-
-                //We can't log these errors, the frequency is too high. Just allow the run-time to hard abort.
+                    throw;
             }
         }
 
         this.OutputBufferConversion_ProcessingTime.Start();
-        //Send OutputBuffer to ASIO Output stream
         this.DSP_ASIO_Data.SetAsJaggedSamples(this.OutputBuffer);
         this.OutputBufferConversion_ProcessingTime.Stop();
     }
@@ -712,17 +982,58 @@ public class ASIO_Engine : IDisposable
         if (CurrentStream == null ||
             this.OutputBuffer == null || 
             this.InputBuffer == null ||
-            CurrentStream.OutputChannelIndex < 0 || CurrentStream.InputChannelIndex < 0 ||
-            CurrentStream.OutputChannelIndex >= this.OutputBuffer.Length ||
-            CurrentStream.InputChannelIndex >= this.InputBuffer.Length ||
-            this.OutputBuffer[CurrentStream.OutputChannelIndex] == null ||
-            this.InputBuffer[CurrentStream.InputChannelIndex] == null)
+            CurrentStream.OutputDestination == null ||
+            CurrentStream.InputSource == null ||
+            CurrentStream.OutputDestination.Index < 0 || CurrentStream.InputSource.Index < 0 ||
+            CurrentStream.OutputDestination.Index >= this.OutputBuffer.Length ||
+            CurrentStream.InputSource.Index >= this.InputBuffer.Length)
         {
             return;
         }
 
-        double[] Local_OutputBuffer = this.OutputBuffer[CurrentStream.OutputChannelIndex];
-        double[] Local_InputBuffer = this.InputBuffer[CurrentStream.InputChannelIndex];
+        bool IsNotByPassed = true;
+
+        double[] Local_OutputBuffer;  // Default to Channel
+        switch (CurrentStream.OutputDestination.StreamType)
+        {
+            case StreamType.Bus:
+                var Bus = Program.DSP_Info.Buses[CurrentStream.OutputDestination.Index];
+                if (Bus.Buffer.Length != this.SamplesPerChannel)
+                    Bus.Buffer = new double[this.SamplesPerChannel];
+                Local_OutputBuffer = Bus.Buffer;
+                break;
+            //case StreamType.AbstractBus:
+            //    var AbstractBus = Program.DSP_Info.AbstractBuses[CurrentStream.OutputDestination.Index];
+            //    if (AbstractBus != null && AbstractBus.IsBypassed)
+            //        IsNotByPassed = false;
+            //    //Local_OutputBuffer = AbstractBus.Buffer;
+            //    break;
+            case StreamType.Channel:
+            default:
+                    Local_OutputBuffer = this.OutputBuffer[CurrentStream.OutputDestination.Index];
+                break;
+        }
+
+        double[] Local_InputBuffer; // Default to Channel
+        switch (CurrentStream.InputSource.StreamType)
+        {
+            case StreamType.Bus:
+                var Bus = Program.DSP_Info.Buses[CurrentStream.InputSource.Index];
+                if (Bus.Buffer.Length != this.SamplesPerChannel)
+                    Bus.Buffer = new double[this.SamplesPerChannel];
+                Local_InputBuffer = Bus.Buffer;
+                break;
+            //case StreamType.AbstractBus:
+            //    var AbstractBus = Program.DSP_Info.AbstractBuses[CurrentStream.InputSource.Index];
+            //    if (AbstractBus != null && AbstractBus.IsBypassed)
+            //        IsNotByPassed = false;
+            //    //Local_InputBuffer = AbstractBus.Buffer;
+            //    break;
+            case StreamType.Channel:
+            default:
+                Local_InputBuffer = this.InputBuffer[CurrentStream.InputSource.Index];
+                break;
+        }
 
         #region Init
         int ChannelFilterCount = CurrentStream.Filters.Count;
@@ -742,16 +1053,17 @@ public class ASIO_Engine : IDisposable
 
         try
         {
-            //Apply every DSP filter that exists (if any) in the stream to the samples
-            for (int FilterIndex = 0; FilterIndex < ChannelFilterCount; FilterIndex++)
-            {
-                CurrentFilter = CurrentStream.Filters[FilterIndex];
-                if (CurrentFilter is null || !CurrentFilter.FilterEnabled)
-                    continue;
+            if (IsNotByPassed)
+                //Apply every DSP filter that exists (if any) in the stream to the samples
+                for (int FilterIndex = 0; FilterIndex < ChannelFilterCount; FilterIndex++)
+                {
+                    CurrentFilter = CurrentStream.Filters[FilterIndex];
+                    if (CurrentFilter is null || !CurrentFilter.FilterEnabled)
+                        continue;
 
-                //Processes a whole block of input channel samples
-                Local_OutputBuffer = CurrentFilter.Transform(Local_OutputBuffer, CurrentStream);
-            }
+                    //Processes a whole block of input channel samples
+                    Local_OutputBuffer = CurrentFilter.Transform(Local_OutputBuffer, CurrentStream);
+                }            
         }
         catch (Exception ex)
         {

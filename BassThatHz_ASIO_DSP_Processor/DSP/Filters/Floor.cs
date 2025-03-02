@@ -130,6 +130,11 @@ public class Floor : IFilter
 
     public FilterTypes FilterType { get; } = FilterTypes.Floor;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 
 }

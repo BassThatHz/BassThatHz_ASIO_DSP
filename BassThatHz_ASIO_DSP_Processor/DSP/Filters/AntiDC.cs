@@ -5,6 +5,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 #region Usings
 using System;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 #endregion
 
@@ -206,5 +207,10 @@ public class AntiDC : IFilter
 
     public FilterTypes FilterType { get; } = FilterTypes.Anti_DC;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

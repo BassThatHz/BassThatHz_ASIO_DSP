@@ -80,5 +80,9 @@ public class AuxSet : IFilter
     public FilterTypes FilterType { get; } = FilterTypes.AuxSet;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
 
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

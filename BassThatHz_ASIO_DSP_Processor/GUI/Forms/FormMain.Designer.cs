@@ -257,6 +257,6 @@ namespace BassThatHz_ASIO_DSP_Processor
         protected GUI.Tabs.ctl_StatsPage ctl_StatsPage1;
         protected GUI.Tabs.ctl_MonitorPage ctl_MonitorPage1;
         protected GUI.Tabs.ctl_BusesPage ctl_BusesPage1;
-        private System.Windows.Forms.TabPage BusesPage;
+        protected System.Windows.Forms.TabPage BusesPage;
     }
 }

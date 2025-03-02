@@ -51,7 +51,7 @@
             // timer_Refresh
             // 
             timer_Refresh.Enabled = true;
-            timer_Refresh.Tick += timer_Refresh_Tick;
+            timer_Refresh.Tick += Refresh_Timer_Tick;
             // 
             // splitContainer1
             // 
@@ -120,7 +120,7 @@
             btn_ResetClip.TabIndex = 0;
             btn_ResetClip.Text = "Reset Peak and Clip Indicators";
             btn_ResetClip.UseVisualStyleBackColor = true;
-            btn_ResetClip.Click += btn_ResetClip_Click;
+            btn_ResetClip.Click += ResetClipBTN_Click;
             // 
             // FormMonitoring
             // 

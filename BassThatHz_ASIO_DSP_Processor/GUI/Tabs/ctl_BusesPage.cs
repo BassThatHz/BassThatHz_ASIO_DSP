@@ -2,11 +2,10 @@
 
 namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs;
 
-using BassThatHz_ASIO_DSP_Processor.GUI.Controls;
-using NAudio.Wave.Asio;
-
 #region Usings
+using NAudio.Wave.Asio;
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Forms;
 #endregion
@@ -51,42 +50,14 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //if (Program.DSP_Info.Buses.Count > 0)
-            //    this.SimpleBus_LSB.Items.AddRange(Program.DSP_Info.Buses);
-            //if (Program.DSP_Info.AbstractBuses.Count > 0)
-            //    this.AbstractBus_LSB.Items.AddRange(Program.DSP_Info.AbstractBuses);
+            if (Program.DSP_Info.Buses.Count > 0)
+                foreach (var item in Program.DSP_Info.Buses)
+                    this.SimpleBus_LSB.Items.Add(item);
+            if (Program.DSP_Info.AbstractBuses.Count > 0)
+                foreach (var item in Program.DSP_Info.AbstractBuses)
+                    this.AbstractBus_LSB.Items.Add(item);
 
-            //if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
-            //    return;
-
-            //AsioDriverCapability? Capabilities = null;
-            //try
-            //{
-            //    Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
-            //}
-            //catch (Exception ex)
-            //{
-            //    _ = ex;
-            //    //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
-            //}
-            //if (Capabilities == null)
-            //    return;
-
-            //for (int i = 0; i < Capabilities.Value.InputChannelInfos.Length; i++)
-            //{
-            //    var InputChannel = Capabilities.Value.InputChannelInfos[i];
-            //    this.AbstractBusSource_CBO.Items.Add("(" + InputChannel.channel + ") " + InputChannel.name);
-            //}
-            //if (this.AbstractBusSource_CBO.Items.Count > 0)
-            //    this.AbstractBusSource_CBO.SelectedIndex = 0;
-
-            //for (int i = 0; i < Capabilities.Value.OutputChannelInfos.Length; i++)
-            //{
-            //    var OutputChannel = Capabilities.Value.OutputChannelInfos[i];
-            //    this.AbstractBusDestination_CBO.Items.Add("(" + OutputChannel.channel + ") " + OutputChannel.name);
-            //}
-            //if (this.AbstractBusDestination_CBO.Items.Count > 0)
-            //    this.AbstractBusDestination_CBO.SelectedIndex = 0;
+            this.RefreshAbstractBusComboBoxes();
         }
         catch (Exception ex)
         {
@@ -102,13 +73,15 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //var TempBus = new DSP_Bus();
-            //TempBus.Name = this.SimpleBusName_TXT.Text;
+            var TempBus = new DSP_Bus();
+            TempBus.Name = this.SimpleBusName_TXT.Text;
 
-            //Program.DSP_Info.Buses.Add(TempBus);
-            //this.SimpleBus_LSB.Items.Add(TempBus);
+            Program.DSP_Info.Buses.Add(TempBus);
+            this.SimpleBus_LSB.Items.Add(TempBus);
 
-            //this.SelectListboxIndexIfExists(this.SimpleBus_LSB, this.SimpleBus_LSB.Items.Count - 1);
+            this.SelectListboxIndexIfExists(this.SimpleBus_LSB, this.SimpleBus_LSB.Items.Count - 1);
+            this.RefreshAbstractBusComboBoxes();
+            this.ResetAll_TabPage_Text();
         }
         catch (Exception ex)
         {
@@ -120,15 +93,30 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //var Buses = Program.DSP_Info.Buses;
-            //int SelectedIndex = this.SimpleBus_LSB.SelectedIndex;
-            //if (SelectedIndex < 0 || SelectedIndex >= Buses.Count || SelectedIndex >= SimpleBus_LSB.Items.Count)
-            //    return;            
-            //var TempBus = Buses[SelectedIndex];
+            var Buses = Program.DSP_Info.Buses;
+            int SelectedIndex = this.SimpleBus_LSB.SelectedIndex;
+            if (SelectedIndex < 0 || SelectedIndex >= Buses.Count || SelectedIndex >= SimpleBus_LSB.Items.Count)
+                return;
 
-            //TempBus.Name = this.SimpleBusName_TXT.Text;
+            foreach (var Stream in Program.DSP_Info.Streams)
+            {
+                if (Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == SelectedIndex ||
+                    Stream.OutputDestination.StreamType == StreamType.Bus && Stream.OutputDestination.Index == SelectedIndex)
+                {
+                    MessageBox.Show("Bus in use. It must be unassigned before it can be changed.");
+                    return;
+                }
+            }
 
-            //this.SimpleBus_LSB.Items[SelectedIndex] = TempBus;
+            var TempBus = Buses[SelectedIndex];
+            TempBus.Name = this.SimpleBusName_TXT.Text;
+
+            this.SimpleBus_LSB.Items.RemoveAt(SelectedIndex);
+            this.SimpleBus_LSB.Items.Insert(SelectedIndex, TempBus);
+            this.SimpleBus_LSB.SelectedIndex = SelectedIndex;
+
+            this.RefreshAbstractBusComboBoxes();
+            this.ResetAll_TabPage_Text();
         }
         catch (Exception ex)
         {
@@ -140,12 +128,23 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //int SelectedIndex = this.SimpleBus_LSB.SelectedIndex;
-            //if (SelectedIndex < 0 || SelectedIndex >= Program.DSP_Info.Buses.Count)
-            //    return;
+            int SelectedIndex = this.SimpleBus_LSB.SelectedIndex;
+            if (SelectedIndex < 0 || SelectedIndex >= Program.DSP_Info.Buses.Count)
+                return;
 
-            //Program.DSP_Info.Buses.RemoveAt(SelectedIndex);
-            //this.RemoveSelectedListboxItem(this.SimpleBus_LSB, SelectedIndex);
+            foreach (var Stream in Program.DSP_Info.Streams)
+            {
+                if (Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == SelectedIndex ||
+                    Stream.OutputDestination.StreamType == StreamType.Bus && Stream.OutputDestination.Index == SelectedIndex)
+                {
+                    MessageBox.Show("Bus in use. It must be unassigned before it can be deleted.");
+                    return;
+                }
+            }
+
+            Program.DSP_Info.Buses.RemoveAt(SelectedIndex);
+            this.RemoveSelectedListboxItem(this.SimpleBus_LSB, SelectedIndex);
+            this.RefreshAbstractBusComboBoxes();
         }
         catch (Exception ex)
         {
@@ -167,7 +166,6 @@ public partial class ctl_BusesPage : UserControl
             this.Error(ex);
         }
     }
-
     #endregion
 
     #region Abstract Bus
@@ -175,21 +173,28 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //var Source = string.Empty + this.AbstractBusSource_CBO.SelectedItem?.ToString();
-            //var Destination = string.Empty + this.AbstractBusDestination_CBO.SelectedItem?.ToString();
-            //var AbstractBusName = this.AbstractBusName_TXT.Text;
+            var AbstractBusSource_SelectedItem = this.AbstractBusSource_CBO?.SelectedItem;
+            var AbstractBusDestination_SelectedItem = this.AbstractBusDestination_CBO?.SelectedItem;
 
-            //var TempAbstractBus = new DSP_AbstractBus();
-            //TempAbstractBus.Name = AbstractBusName;
-            //TempAbstractBus.SourceName = Source;
-            //TempAbstractBus.SourceIndex = this.AbstractBusSource_CBO.SelectedIndex;
-            //TempAbstractBus.DestinationName = Destination;
-            //TempAbstractBus.DestinationIndex = this.AbstractBusDestination_CBO.SelectedIndex;
+            if (AbstractBusSource_SelectedItem is not StreamItem Source)
+                return;
 
-            //Program.DSP_Info.AbstractBuses.Add(TempAbstractBus);
-            //this.AbstractBus_LSB.Items.Add(TempAbstractBus);
+            if (AbstractBusDestination_SelectedItem is not StreamItem Destination)
+                return;
 
-            //this.SelectListboxIndexIfExists(this.AbstractBus_LSB, this.AbstractBus_LSB.Items.Count - 1);
+            //Add new item
+            var TempAbstractBus = new DSP_AbstractBus();
+            TempAbstractBus.IsBypassed = this.AbstractBusBypass_CHK.Checked;
+            TempAbstractBus.Name = this.AbstractBusName_TXT.Text;
+            TempAbstractBus.InputSource = Source;
+            TempAbstractBus.OutputDestination = Destination;
+
+            Program.DSP_Info.AbstractBuses.Add(TempAbstractBus);
+            this.AbstractBus_LSB.Items.Add(TempAbstractBus);
+
+            this.SelectListboxIndexIfExists(this.AbstractBus_LSB, this.AbstractBus_LSB.Items.Count - 1);
+            this.RefreshAbstractBusComboBoxes();
+            this.ResetAll_TabPage_Text();
         }
         catch (Exception ex)
         {
@@ -201,23 +206,43 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //var AbstractBuses = Program.DSP_Info.AbstractBuses;
-            //int SelectedIndex = this.AbstractBus_LSB.SelectedIndex;
-            //if (SelectedIndex < 0 || SelectedIndex >= AbstractBuses.Count || SelectedIndex >= this.AbstractBus_LSB.Items.Count)
-            //    return;
-            //var TempAbstractBus = AbstractBuses[SelectedIndex];
+            var AbstractBusSource_SelectedItem = this.AbstractBusSource_CBO?.SelectedItem;
+            var AbstractBusDestination_SelectedItem = this.AbstractBusDestination_CBO?.SelectedItem;
 
-            //var Source = string.Empty + this.AbstractBusSource_CBO.SelectedItem?.ToString();
-            //var Destination = string.Empty + this.AbstractBusDestination_CBO.SelectedItem?.ToString();
-            //var AbstractBusName = this.AbstractBusName_TXT.Text;
+            if (AbstractBusSource_SelectedItem is not StreamItem Source)
+                return;
 
-            //TempAbstractBus.Name = AbstractBusName;
-            //TempAbstractBus.SourceName = Source;
-            //TempAbstractBus.SourceIndex = this.AbstractBusSource_CBO.SelectedIndex;
-            //TempAbstractBus.DestinationName = Destination;
-            //TempAbstractBus.DestinationIndex = this.AbstractBusDestination_CBO.SelectedIndex;
+            if (AbstractBusDestination_SelectedItem is not StreamItem Destination)
+                return;
 
-            //this.AbstractBus_LSB.Items[SelectedIndex] = TempAbstractBus;
+            //Change existing item
+            var AbstractBuses = Program.DSP_Info.AbstractBuses;
+            int SelectedIndex = this.AbstractBus_LSB.SelectedIndex;
+            if (SelectedIndex < 0 || SelectedIndex >= AbstractBuses.Count || SelectedIndex >= this.AbstractBus_LSB.Items.Count)
+                return;
+
+            foreach (var Stream in Program.DSP_Info.Streams)
+            {
+                if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == SelectedIndex ||
+                    Stream.OutputDestination.StreamType == StreamType.AbstractBus && Stream.OutputDestination.Index == SelectedIndex)
+                {
+                    MessageBox.Show("AbstractBus in use. It must be unassigned before it can be changed.");
+                    return;
+                }
+            }
+
+            var TempAbstractBus = AbstractBuses[SelectedIndex];
+            TempAbstractBus.Name = this.AbstractBusName_TXT.Text;
+            TempAbstractBus.IsBypassed = this.AbstractBusBypass_CHK.Checked;
+            TempAbstractBus.InputSource = Source;
+            TempAbstractBus.OutputDestination = Destination;
+
+            this.AbstractBus_LSB.Items.RemoveAt(SelectedIndex);
+            this.AbstractBus_LSB.Items.Insert(SelectedIndex, TempAbstractBus);
+            this.AbstractBus_LSB.SelectedIndex = SelectedIndex;
+
+            this.RefreshAbstractBusComboBoxes();
+            this.ResetAll_TabPage_Text();
         }
         catch (Exception ex)
         {
@@ -229,12 +254,23 @@ public partial class ctl_BusesPage : UserControl
     {
         try
         {
-            //int SelectedIndex = this.AbstractBus_LSB.SelectedIndex;
-            //if (SelectedIndex < 0 || SelectedIndex >= Program.DSP_Info.AbstractBuses.Count)
-            //    return;
+            int SelectedIndex = this.AbstractBus_LSB.SelectedIndex;
+            if (SelectedIndex < 0 || SelectedIndex >= Program.DSP_Info.AbstractBuses.Count)
+                return;
 
-            //Program.DSP_Info.AbstractBuses.RemoveAt(SelectedIndex);
-            //this.RemoveSelectedListboxItem(this.AbstractBus_LSB, SelectedIndex);
+            foreach (var Stream in Program.DSP_Info.Streams)
+            {
+                if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == SelectedIndex ||
+                    Stream.OutputDestination.StreamType == StreamType.AbstractBus && Stream.OutputDestination.Index == SelectedIndex)
+                {
+                    MessageBox.Show("AbstractBus in use. It must be unassigned before it can be deleted.");
+                    return;
+                }
+            }
+
+            Program.DSP_Info.AbstractBuses.RemoveAt(SelectedIndex);
+            this.RemoveSelectedListboxItem(this.AbstractBus_LSB, SelectedIndex);
+            this.RefreshAbstractBusComboBoxes();
         }
         catch (Exception ex)
         {
@@ -249,8 +285,9 @@ public partial class ctl_BusesPage : UserControl
             if (this.AbstractBus_LSB.SelectedItem is DSP_AbstractBus TempAbstractBus)
             {
                 this.AbstractBusName_TXT.Text = TempAbstractBus.Name;
-                this.AbstractBusSource_CBO.SelectedIndex = TempAbstractBus.SourceIndex;
-                this.AbstractBusDestination_CBO.SelectedIndex = TempAbstractBus.DestinationIndex;
+                this.AbstractBusSource_CBO.SelectedIndex = TempAbstractBus.InputSource.Index;
+                this.AbstractBusDestination_CBO.SelectedIndex = TempAbstractBus.OutputDestination.Index;
+                this.AbstractBusBypass_CHK.Checked = TempAbstractBus.IsBypassed;
             }
         }
         catch (Exception ex)
@@ -263,6 +300,13 @@ public partial class ctl_BusesPage : UserControl
     #endregion
 
     #region Protected Functions
+
+    protected void ResetAll_TabPage_Text()
+    {
+        var DSPConfigTab = Program.Form_Main?.Get_DSPConfigPage1;
+        if (DSPConfigTab != null)
+            DSPConfigTab.ResetAll_TabPage_Text();
+    }
     protected void RemoveSelectedListboxItem(ListBox input, int selectedIndex)
     {
         if (selectedIndex >= 0)
@@ -277,6 +321,19 @@ public partial class ctl_BusesPage : UserControl
             input.SelectedIndex = selectedIndex;
         else if (input.Items.Count > 0)
             input.SelectedIndex = 0;
+    }
+
+    protected void RefreshAbstractBusComboBoxes()
+    {
+        this.AbstractBusSource_CBO.Items.Clear();
+        this.AbstractBusDestination_CBO.Items.Clear();
+        CommonFunctions.Set_DropDownChannelLists(this.AbstractBusSource_CBO, this.AbstractBusDestination_CBO);
+
+        if (this.AbstractBusSource_CBO.Items.Count > 0)
+            this.AbstractBusSource_CBO.SelectedIndex = 0;
+
+        if (this.AbstractBusDestination_CBO.Items.Count > 0)
+            this.AbstractBusDestination_CBO.SelectedIndex = 0;
     }
     #endregion
 

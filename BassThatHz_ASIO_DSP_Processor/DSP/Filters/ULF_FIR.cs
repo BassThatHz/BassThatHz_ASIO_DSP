@@ -163,5 +163,10 @@ public class ULF_FIR : IFilter
     public FilterTypes FilterType { get; } = FilterTypes.ULF_FIR;
 
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

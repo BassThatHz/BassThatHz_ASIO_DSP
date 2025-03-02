@@ -507,8 +507,10 @@ public partial class ctl_StatsPage : UserControl
             foreach (var Stream in Program.DSP_Info.Streams)
                 if (Stream != null
                     && Stream.Filters != null
-                    && Stream.InputChannelIndex != -1
-                    && Stream.OutputChannelIndex != -1)
+                    && Stream.InputSource != null 
+                    && Stream.InputSource.Index != -1
+                    && Stream.OutputDestination != null
+                    && Stream.OutputDestination.Index != -1)
                     foreach (var Filter in Stream.Filters)
                         if (Filter != null)
                         {

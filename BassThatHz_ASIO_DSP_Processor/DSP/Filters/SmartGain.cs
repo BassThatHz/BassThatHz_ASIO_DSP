@@ -143,6 +143,11 @@ public class SmartGain : IFilter
 
     public FilterTypes FilterType { get; } = FilterTypes.SmartGain;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 
 }

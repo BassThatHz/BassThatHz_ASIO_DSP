@@ -37,8 +37,8 @@ public partial class BTH_VolumeLevelControl : UserControl
     #region Variables
     public DSP_Stream? Stream;
     protected double Input_StreamVolume = 0;
-    protected int InputChannelIndex = -1;
-    protected int OutputChannelIndex = -1;
+    protected IStreamItem? InputChannel;
+    protected IStreamItem? OutputChannel;
 
     protected double ClipLevel = 1;
 
@@ -118,13 +118,13 @@ public partial class BTH_VolumeLevelControl : UserControl
     {
         try
         {
-            if (this.Stream != null)
-            {
-                var x = new FormRTA();
-                x.Text += "  " + this.Stream.InputChannelName + "-> " + this.Stream.OutputChannelName;
-                x.Init_Channels(this.Stream.InputChannelIndex, this.Stream.OutputChannelIndex);
-                x.Show();
-            }
+            if (this.Stream == null || this.Stream.InputSource == null || this.Stream.OutputDestination == null)
+                return;
+
+            var x = new FormRTA();
+            x.Text += "  " + this.Stream.InputSource.Name + "-> " + this.Stream.OutputDestination.Name;
+            x.Init_Channels(this.Stream.InputSource, this.Stream.OutputDestination);
+            x.Show();
         }
         catch (Exception ex)
         {
@@ -137,13 +137,13 @@ public partial class BTH_VolumeLevelControl : UserControl
     public void Set_StreamInfo(DSP_Stream? input)
     {
         this.Stream = input;
-        if (Stream != null)
-        {
-            this.InputChannelIndex = Stream.InputChannelIndex;
-            this.lbl_InputSource.Text = Stream.InputChannelName;
-            this.OutputChannelIndex = Stream.OutputChannelIndex;
-            this.lbl_OutputSource.Text = Stream.OutputChannelName;
-        }
+        if (Stream == null || Stream.InputSource == null || Stream.OutputDestination == null)
+            return;
+
+        this.InputChannel = Stream.InputSource;
+        this.lbl_InputSource.Text = Stream.InputSource.DisplayMember;
+        this.OutputChannel = Stream.OutputDestination;
+        this.lbl_OutputSource.Text = Stream.OutputDestination.DisplayMember;
     }
 
     public void Reset_ClipIndicator()
@@ -169,66 +169,73 @@ public partial class BTH_VolumeLevelControl : UserControl
 
     #region Protected Functions
 
+    // Helper method that calculates RMS, peak, and decibel values.
+    private void CalculateLevels(double[] audioData, bool isInput)
+    {
+        if (audioData == null || audioData.Length == 0)
+            return;
+
+        double squareSum = 0;
+        double peak = 0;
+        // For input channels, apply the stream volume if available.
+        double volume = isInput && this.Stream != null ? this.Stream.InputVolume : 1.0;
+
+        foreach (var sample in audioData)
+        {
+            // Multiply sample by volume if input
+            double level = sample * volume;
+            double absLevel = Math.Abs(level);
+
+            if (absLevel > peak)
+                peak = absLevel;
+
+            squareSum += Math.Pow(level, 2);
+        }
+
+        double rms = Math.Sqrt(squareSum / audioData.Length);
+        double db = Decibels.LinearToDecibels(rms);
+        double dbPeak = Decibels.LinearToDecibels(peak);
+
+        if (isInput)
+        {
+            this.Input_RMS = rms;
+            this.Input_DB = db;
+            this.Input_DB_Peak = dbPeak;
+            this.Input_Peak = peak;
+        }
+        else
+        {
+            this.Output_RMS = rms;
+            this.Output_DB = db;
+            this.Output_DB_Peak = dbPeak;
+            this.Output_Peak = peak;
+        }
+    }
+
     protected void CalculateInputLevels()
     {
-        if (this.InputChannelIndex > -1)
+        if (this.InputChannel != null && this.InputChannel.Index > -1)
         {
-            var InputData = Program.ASIO.GetInputAudioData(this.InputChannelIndex);
-            if (InputData != null)
+            double[] inputData = CommonFunctions.GetStreamInputDataByStreamItem(this.InputChannel);
+            // Only calculate if inputData is not null.
+            if (inputData != null)
             {
-                if (this.Stream != null)
-                    this.Input_StreamVolume = this.Stream.InputVolume;
-
-                double Length = InputData.Length;
-                double SquareSum = 0;
-
-                foreach (var Sample in InputData)
-                {
-                    var Level = Sample * this.Input_StreamVolume;
-                    var Abs_Level = Math.Abs(Level);
-                    if (Abs_Level > this.Input_Peak)
-                        this.Input_Peak = Abs_Level;
-
-                    //Calculate RMS Value
-                    SquareSum += Math.Pow(Level, 2);
-                }
-
-                //Calculate RMS Value
-                if (Length > 0)
-                    this.Input_RMS = Math.Sqrt(SquareSum / Length);
-
-                this.Input_DB = Decibels.LinearToDecibels(this.Input_RMS);
-                this.Input_DB_Peak = Decibels.LinearToDecibels(this.Input_Peak);
+                // For input, pass 'true' to apply stream volume.
+                CalculateLevels(inputData, true);
             }
         }
     }
 
     protected void CalculateOutputLevels()
     {
-        if (this.OutputChannelIndex > -1)
+        if (this.OutputChannel != null && this.OutputChannel.Index > -1)
         {
-            var OutputData = Program.ASIO.GetOutputAudioData(this.OutputChannelIndex);
-            if (OutputData != null)
+            double[] outputData = CommonFunctions.GetStreamOutputDataByStreamItem(this.OutputChannel);
+            // Only calculate if outputData is not null.
+            if (outputData != null)
             {
-                double Length = OutputData.Length;
-                double SquareSum = 0;
-
-                foreach (var Sample in OutputData)
-                {
-                    var Abs_Level = Math.Abs(Sample);
-                    if (Abs_Level > this.Output_Peak)
-                        this.Output_Peak = Abs_Level;
-
-                    //Calculate RMS Value
-                    SquareSum += Math.Pow(Sample, 2);
-                }
-
-                //Calculate RMS Value
-                if (Length > 0)
-                    this.Output_RMS = Math.Sqrt(SquareSum / Length);
-
-                this.Output_DB = Decibels.LinearToDecibels(this.Output_RMS);
-                this.Output_DB_Peak = Decibels.LinearToDecibels(this.Output_Peak);
+                // For output, pass 'false' so that no volume multiplier is applied.
+                CalculateLevels(outputData, false);
             }
         }
     }

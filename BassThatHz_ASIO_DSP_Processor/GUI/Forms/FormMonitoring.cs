@@ -37,7 +37,7 @@ using System.Windows.Forms;
 public partial class FormMonitoring : Form
 {
     #region Variables
-    List<BTH_VolumeLevelControl> VolControlList = new();
+    protected List<BTH_VolumeLevelControl> VolControlList = [];
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -88,7 +88,7 @@ public partial class FormMonitoring : Form
     #endregion
 
     #region Timer
-    protected void timer_Refresh_Tick(object? sender, EventArgs e)
+    protected void Refresh_Timer_Tick(object? sender, EventArgs e)
     {
         try
         {
@@ -130,7 +130,7 @@ public partial class FormMonitoring : Form
     #endregion
 
     #region Reset
-    protected void btn_ResetClip_Click(object? sender, EventArgs e)
+    protected void ResetClipBTN_Click(object? sender, EventArgs e)
     {
         try
         {
@@ -173,7 +173,7 @@ public partial class FormMonitoring : Form
                 this.VolControlList.Add(VolControl);
                 VolControl.Get_btn_View.Text = "[" + (this.VolControlList.IndexOf(VolControl) + 1).ToString() + "] View";
                 VolControl.Set_StreamInfo(stream);
-                this.PlaceControl(this.VolControlList.Count() - 1, VolControl);
+                this.PlaceControl(this.VolControlList.Count - 1, VolControl);
                 this.pnl_Main.Controls.Add(VolControl);
             }
             catch (Exception ex)

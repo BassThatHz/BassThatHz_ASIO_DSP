@@ -116,22 +116,22 @@
             // 
             // timer_PlotWaveforms
             // 
-            timer_PlotWaveforms.Tick += timer_PlotWaveforms_Tick;
+            timer_PlotWaveforms.Tick += PlotWaveforms_Timer_Tick;
             // 
             // timer_Plot_Top_FFTs
             // 
             timer_Plot_Top_FFTs.Interval = 1;
-            timer_Plot_Top_FFTs.Tick += timer_PlotTopFFTs_Tick;
+            timer_Plot_Top_FFTs.Tick += PlotTopFFTs_Timer_Tick;
             // 
             // timer_ResetWaveform
             // 
             timer_ResetWaveform.Interval = 5000;
-            timer_ResetWaveform.Tick += timer_ResetWaveform_Tick;
+            timer_ResetWaveform.Tick += ResetWaveform_Timer_Tick;
             // 
             // timer_Plot_ULF_FFT
             // 
             timer_Plot_ULF_FFT.Interval = 1;
-            timer_Plot_ULF_FFT.Tick += timer_Plot_ULF_FFT_Tick;
+            timer_Plot_ULF_FFT.Tick += Plot_ULF_FFT_Timer_Tick;
             // 
             // splitContainer1
             // 

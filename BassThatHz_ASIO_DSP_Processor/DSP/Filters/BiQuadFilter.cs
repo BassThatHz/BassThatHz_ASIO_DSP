@@ -609,6 +609,11 @@ namespace NAudio.Dsp
         {
             //Non Applicable
         }
+
+        public IFilter DeepClone()
+        {
+            return CommonFunctions.DeepClone(this);
+        }
         #endregion
     }
 }

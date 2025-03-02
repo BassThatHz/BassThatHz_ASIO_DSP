@@ -52,13 +52,13 @@ public class Mixer : IFilter
                 {
                     for (int j = 0; j < input.Length; j++)
                     {
-                        input[j] = input[j] 
-                                   * 
-                                   Decibels.DecibelsToLinear(MixerItem.StreamAttenuation)
-                                   +
-                                   Program.ASIO.InputBuffer[MixerItem.ChannelIndex][j] 
-                                   * 
-                                   Decibels.DecibelsToLinear(MixerItem.Attenuation);
+                        input[j] = input[j]
+                               *
+                               Decibels.DecibelsToLinear(MixerItem.StreamAttenuation)
+                               +
+                               Program.ASIO.InputBuffer[MixerItem.ChannelIndex][j]
+                               *
+                               Decibels.DecibelsToLinear(MixerItem.Attenuation);
                     }
                 }
             }
@@ -89,6 +89,11 @@ public class Mixer : IFilter
 
     public FilterTypes FilterType { get; } = FilterTypes.Mixer;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }
 

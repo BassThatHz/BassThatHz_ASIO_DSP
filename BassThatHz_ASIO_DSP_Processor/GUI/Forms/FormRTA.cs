@@ -44,15 +44,19 @@ public partial class FormRTA : Form
     #region Multi-Threading and Closing State
     protected bool IsClosing = false;
     protected List<Task> ULF_FFT_Tasks = new();
-    protected List<Task> Top_FFT_Tasks = new();
+    protected List<Task> Top_FFT_Tasks = [];
     protected List<Task<ChartUpdateData>> Waveform_Tasks = new();
     #endregion
 
     #region Default Values
     protected int Default_ULF_FFTSize = 2048;
     protected int Default_Top_FFTSize = 2048;
-    protected int Input_ChannelIndex = -1;
-    protected int Output_ChannelIndex = -1;
+
+    protected IStreamItem? Input_Channel;
+    protected IStreamItem? Output_Channel;
+    protected double[]? InputBuffer;
+    protected double[]? OutputBuffer;
+
     protected int ULF_FFT_OverLapPercentage = 90;
     protected int Top_FFT_OverLapPercentage = 10;
     protected double Top_FFT_WindowScaleFactor = 1;
@@ -127,10 +131,10 @@ public partial class FormRTA : Form
     #region Public Functions
 
     #region Init
-    public void Init_Channels(int input_ChannelIndex, int output_ChannelIndex)
+    public void Init_Channels(IStreamItem input_Channel, IStreamItem output_Channel)
     {
-        this.Input_ChannelIndex = input_ChannelIndex;
-        this.Output_ChannelIndex = output_ChannelIndex;
+        this.Input_Channel = input_Channel;
+        this.Output_Channel = output_Channel;
     }
     #endregion
 
@@ -195,7 +199,7 @@ public partial class FormRTA : Form
     #endregion
 
     #region FFT Comboboxes
-    protected void cbo_ULF_FFT_Window_Type_SelectedIndexChanged(object? sender, EventArgs e)
+    protected void ULF_FFT_Window_Type_CBO_SelectedIndexChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -207,7 +211,7 @@ public partial class FormRTA : Form
         }
     }
 
-    protected void cbo_Top_FFT_Window_Type_SelectedIndexChanged(object? sender, EventArgs e)
+    protected void Top_FFT_Window_Type_CBO_SelectedIndexChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -219,7 +223,7 @@ public partial class FormRTA : Form
         }
     }
 
-    protected void cbo_Top_FFT_Size_SelectedIndexChanged(object? sender, EventArgs e)
+    protected void Top_FFT_Size_CBO_SelectedIndexChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -236,7 +240,7 @@ public partial class FormRTA : Form
         }
     }
 
-    protected void cbo_ULF_FFT_Overlap_SelectedIndexChanged(object? sender, EventArgs e)
+    protected void ULF_FFT_Overlap_CBO_SelectedIndexChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -271,7 +275,7 @@ public partial class FormRTA : Form
         }
     }
 
-    protected void cbo_Top_FFT_Overlap_SelectedIndexChanged(object? sender, EventArgs e)
+    protected void Top_FFT_Overlap_CBO_SelectedIndexChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -318,15 +322,15 @@ public partial class FormRTA : Form
     {
         try
         {
-            if (this.Output_ChannelIndex > -1 && Program.ASIO.OutputBuffer != null)
-            {
-                var LocalBuffer = Program.ASIO.OutputBuffer[this.Output_ChannelIndex];
-                if (this.chart_Output_ULF_FFT.Visible)
-                    _ = this.RTA_OutputULFBuffer.Write(LocalBuffer, 0, LocalBuffer.Length);
+            if (this.Output_Channel ==  null)
+                return;
+            this.OutputBuffer = CommonFunctions.GetStreamOutputDataByStreamItem(this.Output_Channel).ToArray();
+           
+            if (this.chart_Output_ULF_FFT.Visible)
+                _ = this.RTA_OutputULFBuffer.Write(this.OutputBuffer, 0, this.OutputBuffer.Length);
 
-                if (this.chart_Output_Top_FFT.Visible)
-                    _ = this.RTA_OutputTopBuffer.Write(LocalBuffer, 0, LocalBuffer.Length);
-            }
+            if (this.chart_Output_Top_FFT.Visible)
+                _ = this.RTA_OutputTopBuffer.Write(this.OutputBuffer, 0, this.OutputBuffer.Length);            
         }
         catch (Exception ex)
         {
@@ -339,15 +343,15 @@ public partial class FormRTA : Form
     {
         try
         {
-            if (this.Input_ChannelIndex > -1 && Program.ASIO.InputBuffer != null)
-            {
-                var LocalBuffer = Program.ASIO.InputBuffer[this.Input_ChannelIndex];
-                if (this.chart_Input_ULF_FFT.Visible)
-                    _ = this.RTA_InputULFBuffer.Write(LocalBuffer, 0, LocalBuffer.Length);
+            if (this.Input_Channel == null)
+                return;
+            this.InputBuffer = CommonFunctions.GetStreamInputDataByStreamItem(this.Input_Channel).ToArray();
 
-                if (this.chart_Input_Top_FFT.Visible)
-                    _ = this.RTA_InputTopBuffer.Write(LocalBuffer, 0, LocalBuffer.Length);
-            }
+            if (this.chart_Input_ULF_FFT.Visible)
+                _ = this.RTA_InputULFBuffer.Write(this.InputBuffer, 0, this.InputBuffer.Length);
+
+            if (this.chart_Input_Top_FFT.Visible)
+                _ = this.RTA_InputTopBuffer.Write(this.InputBuffer, 0, this.InputBuffer.Length);           
         }
         catch (Exception ex)
         {
@@ -358,7 +362,7 @@ public partial class FormRTA : Form
 
     #region Waveform Plot Timers
     [SupportedOSPlatform("windows")]
-    protected void timer_ResetWaveform_Tick(object sender, EventArgs e)
+    protected void ResetWaveform_Timer_Tick(object sender, EventArgs e)
     {
         this.timer_ResetWaveform.Enabled = false;
         this.chart_InputWaveform_ResetAutoRange = true;
@@ -367,7 +371,7 @@ public partial class FormRTA : Form
     }
 
     [SupportedOSPlatform("windows")]
-    protected async void timer_PlotWaveforms_Tick(object sender, EventArgs e)
+    protected async void PlotWaveforms_Timer_Tick(object sender, EventArgs e)
     {
         // Disable the timer while processing.
         this.timer_PlotWaveforms.Enabled = false;
@@ -376,11 +380,11 @@ public partial class FormRTA : Form
             this.Waveform_Tasks.Clear();
 
             // Process input waveform if conditions are met.
-            if (this.Input_ChannelIndex > -1 &&
+            if (this.Input_Channel != null && this.Input_Channel.Index > -1 &&
                 this.chart_InputWaveform.Visible &&
-                Program.ASIO.InputBuffer != null)
+                this.InputBuffer != null && this.InputBuffer.Length > 0)
             {
-                double[] yDataInput = Program.ASIO.InputBuffer[this.Input_ChannelIndex];
+                double[] yDataInput = this.InputBuffer;
                 double scaleYAxis = 1.5;
                 bool resetAutoRange = this.chart_InputWaveform_ResetAutoRange;
 
@@ -397,11 +401,11 @@ public partial class FormRTA : Form
             }
 
             // Process output waveform if conditions are met.
-            if (this.Output_ChannelIndex > -1 &&
+            if (this.Output_Channel != null && this.Output_Channel.Index > -1 &&
                 this.chart_OutputWaveform.Visible &&
-                Program.ASIO.OutputBuffer != null)
+                this.OutputBuffer != null && this.OutputBuffer.Length > 0)
             {
-                double[] yDataOutput = Program.ASIO.OutputBuffer[this.Output_ChannelIndex];
+                double[] yDataOutput = this.OutputBuffer;
                 double scaleYAxis = 1.5;
                 bool resetAutoRange = this.chart_OutputWaveform_ResetAutoRange;
 
@@ -451,7 +455,7 @@ public partial class FormRTA : Form
 
     #region FFT Plot Timers
     [SupportedOSPlatform("windows")]
-    protected async void timer_Plot_ULF_FFT_Tick(object sender, EventArgs e)
+    protected async void Plot_ULF_FFT_Timer_Tick(object sender, EventArgs e)
     {
         this.timer_Plot_ULF_FFT.Enabled = false;
         try
@@ -524,7 +528,7 @@ public partial class FormRTA : Form
     }
 
     [SupportedOSPlatform("windows")]
-    protected async void timer_PlotTopFFTs_Tick(object sender, EventArgs e)
+    protected async void PlotTopFFTs_Timer_Tick(object sender, EventArgs e)
     {
         this.timer_Plot_Top_FFTs.Enabled = false;
         try
@@ -662,7 +666,7 @@ public partial class FormRTA : Form
     {
         try
         {
-            if (!(sender is Chart chart) || chart.ChartAreas.Count < 1 || chart.Titles.Count < 6)
+            if (sender is not Chart chart || chart.ChartAreas.Count < 1 || chart.Titles.Count < 6)
                 return;
 
             ChartArea ca = chart.ChartAreas[0];
@@ -787,8 +791,8 @@ public partial class FormRTA : Form
 
     protected void Init_Comboboxes()
     {
-        this.cbo_ULF_FFT_Window_Type.DataSource = Enum.GetNames(typeof(DSP.Window.Type));
-        this.cbo_Top_FFT_Window_Type.DataSource = Enum.GetNames(typeof(DSP.Window.Type));
+        this.cbo_ULF_FFT_Window_Type.DataSource = Enum.GetNames<DSP.Window.Type>();
+        this.cbo_Top_FFT_Window_Type.DataSource = Enum.GetNames<DSP.Window.Type>();
     }
 
     protected void Init_SetDefault_Combobox_Options()
@@ -818,11 +822,11 @@ public partial class FormRTA : Form
         this.msb_WaveForm_RefreshInterval.TextChanged += Msb_WaveForm_RefreshInterval_TextChanged;
         this.msb_ULF_FFT_RefreshInterval.TextChanged += Msb_ULF_FFT_RefreshInterval_TextChanged;
 
-        this.cbo_ULF_FFT_Window_Type.SelectedIndexChanged += cbo_ULF_FFT_Window_Type_SelectedIndexChanged;
-        this.cbo_Top_FFT_Window_Type.SelectedIndexChanged += cbo_Top_FFT_Window_Type_SelectedIndexChanged;
-        this.cbo_Top_FFT_Size.SelectedIndexChanged += cbo_Top_FFT_Size_SelectedIndexChanged;
-        this.cbo_ULF_FFT_Overlap.SelectedIndexChanged += cbo_ULF_FFT_Overlap_SelectedIndexChanged;
-        this.cbo_Top_FFT_Overlap.SelectedIndexChanged += cbo_Top_FFT_Overlap_SelectedIndexChanged;
+        this.cbo_ULF_FFT_Window_Type.SelectedIndexChanged += ULF_FFT_Window_Type_CBO_SelectedIndexChanged;
+        this.cbo_Top_FFT_Window_Type.SelectedIndexChanged += Top_FFT_Window_Type_CBO_SelectedIndexChanged;
+        this.cbo_Top_FFT_Size.SelectedIndexChanged += Top_FFT_Size_CBO_SelectedIndexChanged;
+        this.cbo_ULF_FFT_Overlap.SelectedIndexChanged += ULF_FFT_Overlap_CBO_SelectedIndexChanged;
+        this.cbo_Top_FFT_Overlap.SelectedIndexChanged += Top_FFT_Overlap_CBO_SelectedIndexChanged;
 
         Program.ASIO.InputDataAvailable += this.ASIO_InputDataAvailable;
         Program.ASIO.OutputDataAvailable += this.ASIO_OutputDataAvailable;
@@ -942,7 +946,7 @@ public partial class FormRTA : Form
         var SelectedItem = this.cbo_Top_FFT_Window_Type.SelectedItem?.ToString();
         if (!string.IsNullOrEmpty(SelectedItem))
         {
-            var WindowType = (DSP.Window.Type)Enum.Parse(typeof(DSP.Window.Type), SelectedItem);
+            var WindowType = Enum.Parse<DSP.Window.Type>(SelectedItem);
             this.Top_FFT_WindowCoefficients = DSP.Window.Coefficients(WindowType, this.Default_Top_FFTSize);
             this.Top_FFT_WindowScaleFactor = DSP.Window.ScaleFactor.Signal(this.Top_FFT_WindowCoefficients);
         }
@@ -964,7 +968,7 @@ public partial class FormRTA : Form
         var SelectedItem = this.cbo_ULF_FFT_Window_Type.SelectedItem?.ToString();
         if (!string.IsNullOrEmpty(SelectedItem))
         {
-            var WindowType = (DSP.Window.Type)Enum.Parse(typeof(DSP.Window.Type), SelectedItem);
+            var WindowType = Enum.Parse<DSP.Window.Type>(SelectedItem);
             this.ULF_FFT_WindowCoefficients = DSP.Window.Coefficients(WindowType, this.Default_ULF_FFTSize);
             this.ULF_FFT_WindowScaleFactor = DSP.Window.ScaleFactor.Signal(this.ULF_FFT_WindowCoefficients);
         }
@@ -1176,8 +1180,8 @@ public partial class FormRTA : Form
     // Data container for all the computed data needed for a chart update.
     protected class WaveformPlotData
     {
-        public double[] XData { get; set; } = Array.Empty<double>();
-        public decimal[] YDataDec { get; set; } = Array.Empty<decimal>();
+        public double[] XData { get; set; } = [];
+        public decimal[] YDataDec { get; set; } = [];
         public double XMinimum { get; set; }
         public double XMaximum { get; set; }
         public double XInterval { get; set; }

@@ -2,23 +2,219 @@
 
 namespace BassThatHz_ASIO_DSP_Processor;
 
+using BassThatHz_ASIO_DSP_Processor.GUI.Controls;
+
+using NAudio.Wave.Asio;
+
 #region Usings
 using System;
+using System.Text.Json;
+using System.Windows.Forms;
 using System.Xml.Linq;
+using Windows.Devices.WiFiDirect.Services;
 #endregion
 
 public static class CommonFunctions
 {
+    public static double[] GetStreamInputDataByStreamItem(IStreamItem source)
+    {
+        double[] inputData = new double[Program.ASIO.SamplesPerChannel];
+        switch (source.StreamType)
+        {
+            case StreamType.Bus:
+                inputData = Program.DSP_Info.Buses[source.Index].Buffer;
+                break;
+            case StreamType.AbstractBus:
+                //inputData = Program.DSP_Info.AbstractBuses[source.Index].Buffer;
+                break;
+            case StreamType.Channel:
+            default:
+                var Data = Program.ASIO.GetInputAudioData(source.Index);
+                if (Data != null)
+                    inputData = Data;
+                break;
+        }
+
+        return inputData;
+    }
+
+    public static double[] GetStreamOutputDataByStreamItem(IStreamItem destination)
+    {
+        double[] outputData = new double[Program.ASIO.SamplesPerChannel];
+        switch (destination.StreamType)
+        {
+            case StreamType.Bus:
+                outputData = Program.DSP_Info.Buses[destination.Index].Buffer;
+                break;
+            case StreamType.AbstractBus:
+                //outputData = Program.DSP_Info.AbstractBuses[destination.Index].Buffer;
+                break;
+            case StreamType.Channel:
+            default:
+                var Data =Program.ASIO.GetOutputAudioData(destination.Index);
+                if (Data != null)
+                    outputData = Data;
+                break;
+        }
+        return outputData;
+    }
+
+    public static T DeepClone<T>(T source) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var options = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            WriteIndented = false
+        };
+
+        string json = JsonSerializer.Serialize(source, options);
+        return JsonSerializer.Deserialize<T>(json, options) ?? throw new InvalidOperationException("Deserialization failed.");
+    }
+
+    public static void Set_DropDownChannelLists(ComboBox inputs, ComboBox outputs)
+    {
+        if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
+            return;
+
+        AsioDriverCapability? Capabilities = null;
+        try
+        {
+            Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
+        }
+        catch (Exception ex)
+        {
+            _ = ex;
+            //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
+        }
+        if (Capabilities == null)
+            return;
+
+        for (int i = 0; i < Capabilities.Value.InputChannelInfos.Length; i++)
+        {
+            var InputChannel = Capabilities.Value.InputChannelInfos[i];
+            _ = inputs.Items.Add(new StreamItem()
+            {
+                Name = InputChannel.name
+                ,
+                Index = InputChannel.channel
+                ,
+                StreamType = StreamType.Channel
+                ,
+                DisplayMember = "(" + InputChannel.channel + ") " + InputChannel.name
+            });
+        }
+
+        for (int i = 0; i < Capabilities.Value.OutputChannelInfos.Length; i++)
+        {
+            var OutputChannel = Capabilities.Value.OutputChannelInfos[i];
+            _ = outputs.Items.Add(new StreamItem()
+            {
+                Name = OutputChannel.name
+                ,
+                Index = OutputChannel.channel
+                ,
+                StreamType = StreamType.Channel
+                ,
+                DisplayMember = "(" + OutputChannel.channel + ") " + OutputChannel.name
+            });
+        }
+
+        for (int i = 0; i < Program.DSP_Info.Buses.Count; i++)
+        {
+            var Bus = Program.DSP_Info.Buses[i];
+            _ = inputs.Items.Add(new StreamItem()
+            {
+                Name = Bus.Name
+                ,
+                Index = i
+                ,
+                StreamType = StreamType.Bus
+                ,
+                DisplayMember = "Bus(" + i + ") In " + Bus.Name
+            });
+            _ = outputs.Items.Add(new StreamItem()
+            {
+                Name = Bus.Name
+                ,
+                Index = i
+                ,
+                StreamType = StreamType.Bus
+                ,
+                DisplayMember = "Bus(" + i + ") Out " + Bus.Name
+            });
+        }
+
+        for (int i = 0; i < Program.DSP_Info.AbstractBuses.Count; i++)
+        {
+            var AbstractBus = Program.DSP_Info.AbstractBuses[i];
+            _ = inputs.Items.Add(new StreamItem()
+            {
+                Name = AbstractBus.Name
+                ,
+                Index = i
+                ,
+                StreamType = StreamType.AbstractBus
+                ,
+                DisplayMember = "AbstractBus(" + i + ") In " + AbstractBus.Name
+            });
+            _ = outputs.Items.Add(new StreamItem()
+            {
+                Name = AbstractBus.Name
+                ,
+                Index = i
+                ,
+                StreamType = StreamType.AbstractBus
+                ,
+                DisplayMember = "AbstractBus(" + i + ") Out " + AbstractBus.Name
+            });
+        }
+    }
+
+    public static void FixLegacyChannelIndexMappings()
+    {
+        //Fixes Legacy Channel Index Mappings for backwards support
+        var Streams = Program.DSP_Info.Streams;
+        for (int i = 0; i < Streams.Count; i++)
+        {
+            if (Streams[i] == null)
+                continue;
+
+            if (Streams[i].InputChannelIndex > -1)
+            {
+                Streams[i].InputSource = new StreamItem()
+                {
+                    Index = Streams[i].InputChannelIndex
+                };
+            }
+
+            if (Streams[i].OutputChannelIndex > -1)
+            {
+                Streams[i].OutputDestination = new StreamItem()
+                {
+                    Index = Streams[i].OutputChannelIndex
+                };
+            }
+        }
+    }
+
     public static string RemoveDeprecatedXMLTags(string input)
     {
         XDocument doc = XDocument.Parse(input);
 
-        // Iterate through each Limiter element
         foreach (XElement limiter in doc.Descendants("Limiter"))
         {
-            // Remove PeakHoldDecayEnabled and PeakHoldDecay elements if they exist
+            // Remove elements if they exist
             limiter.Element("PeakHoldDecayEnabled")?.Remove();
             limiter.Element("PeakHoldDecay")?.Remove();
+        }
+
+        foreach (XElement stream in doc.Descendants("DSP_Stream"))
+        {
+            // Remove elements if they exist
+            stream.Element("InputChannelIndex")?.Remove();
+            stream.Element("OutputChannelIndex")?.Remove();
         }
 
         return doc.ToString();

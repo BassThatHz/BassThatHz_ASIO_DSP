@@ -75,10 +75,10 @@ public class DSP_Info
     #endregion
 
     #region Buses
-    //public ObservableCollection<DSP_Bus> Buses { get; set; } = new();
+    public ObservableCollection<DSP_Bus> Buses { get; set; } = new();
     #endregion
 
     #region AbstractBuses
-    //public ObservableCollection<DSP_AbstractBus> AbstractBuses { get; set; } = new();
+    public ObservableCollection<DSP_AbstractBus> AbstractBuses { get; set; } = new();
     #endregion
 }

@@ -5,7 +5,9 @@ namespace BassThatHz_ASIO_DSP_Processor.DSP.Filters;
 #region Usings
 using NAudio.Utils;
 using System;
+using System.CodeDom;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 #endregion
 
 /// <summary>
@@ -89,5 +91,9 @@ public class AuxGet : IFilter
     public FilterTypes FilterType { get; } = FilterTypes.AuxGet;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
 
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

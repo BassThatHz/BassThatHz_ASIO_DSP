@@ -8,6 +8,7 @@ using NAudio.Wave.Asio;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -55,29 +56,46 @@ public partial class ctl_DSPConfigPage : UserControl
         this.ResetTabPagesAndStreamControls();
         foreach (var DSP_Stream in Program.DSP_Info.Streams)
         {
-            if (DSP_Stream != null)
+            if (DSP_Stream == null || DSP_Stream.InputSource == null || DSP_Stream.OutputDestination == null)
+                continue;
+
+            var StreamControl = this.AddStreamControl(DSP_Stream);
+            StreamControl.Get_In_Volume.Volume = DSP_Stream.InputVolume;
+            StreamControl.Get_Out_Volume.Volume = DSP_Stream.OutputVolume;
+
+            var cboInputStreamIndex = StreamControl.Get_cboInputStream.Items.IndexOf(DSP_Stream.InputSource);
+            StreamControl.Get_cboInputStream.SelectedIndex = cboInputStreamIndex;
+
+            var cboOutputStreamIndex = StreamControl.Get_cboOutputStream.Items.IndexOf(DSP_Stream.OutputDestination);
+            StreamControl.Get_cboOutputStream.SelectedIndex = cboOutputStreamIndex;
+
+            foreach (var Filter in DSP_Stream.Filters)
             {
-                var StreamControl = this.AddStreamControl(DSP_Stream);
-                StreamControl.Get_In_Volume.Volume = DSP_Stream.InputVolume;
-                StreamControl.Get_Out_Volume.Volume = DSP_Stream.OutputVolume;
+                if (Filter == null)
+                    continue;
 
-                if (StreamControl.Get_cboInputStream.Items.Count > DSP_Stream.InputChannelIndex)
-                    StreamControl.Get_cboInputStream.SelectedIndex = DSP_Stream.InputChannelIndex;
-
-                if (StreamControl.Get_cboOutputStream.Items.Count > DSP_Stream.OutputChannelIndex)
-                    StreamControl.Get_cboOutputStream.SelectedIndex = DSP_Stream.OutputChannelIndex;
-
-                foreach (var Filter in DSP_Stream.Filters)
-                {
-                    if (Filter != null)
-                    {
-                        StreamControl.btnAdd_Click(this, EventArgs.Empty);
-                        var LastIndex = StreamControl.FilterControls.Count - 1;
-                        var FilterControl = StreamControl.FilterControls[LastIndex];
-                        FilterControl.LoadConfigRefresh(Filter);
-                    }
-                }
+                StreamControl.btnAdd_Click(this, EventArgs.Empty);
+                var LastIndex = StreamControl.FilterControls.Count - 1;
+                var FilterControl = StreamControl.FilterControls[LastIndex];
+                FilterControl.LoadConfigRefresh(Filter);
             }
+        }
+    }
+    #endregion
+
+    #region Public Functions
+    public void ResetAll_TabPage_Text()
+    {
+        int i = -1;
+        foreach (var StreamControl in StreamControls)
+        {
+            i++;
+            if (StreamControl == null)
+                continue;
+
+            var TabPage = this.tabControl1.TabPages[i];
+            if (TabPage != null)
+                TabPage.Text = this.GenerateTabText(StreamControl, TabPage);
         }
     }
     #endregion
@@ -138,7 +156,7 @@ public partial class ctl_DSPConfigPage : UserControl
 
             _ = this.AddStreamControl(DSP_Stream, Index);
 
-            this.ResetAll_TabPage_IndexText();
+            this.ResetAll_TabPage_Text();
         }
         catch (Exception ex)
         {
@@ -207,71 +225,26 @@ public partial class ctl_DSPConfigPage : UserControl
         tabPage.Text = DisplayableTabIndex + "null -> null";
     }
 
-    protected void ResetAll_TabPage_IndexText()
-    {
-        for (int TabIndex = 0; TabIndex < this.tabControl1.TabPages.Count; TabIndex++)
-        {
-            var TabPage = this.tabControl1.TabPages[TabIndex];
-            int closingBracketIndex = TabPage.Text.IndexOf("] ");
-            string remainingText = TabPage.Text.Substring(closingBracketIndex + 2);
+    //protected void ResetAll_TabPage_IndexText()
+    //{
+    //    for (int TabIndex = 0; TabIndex < this.tabControl1.TabPages.Count; TabIndex++)
+    //    {
+    //        var TabPage = this.tabControl1.TabPages[TabIndex];
+    //        int closingBracketIndex = TabPage.Text.IndexOf("] ");
+    //        string remainingText = TabPage.Text.Substring(closingBracketIndex + 2);
 
-            var DisplayableTabIndex = $"[{TabIndex + 1}] ";
-            TabPage.Text = DisplayableTabIndex + remainingText;
-        }
-    }
+    //        var DisplayableTabIndex = $"[{TabIndex + 1}] ";
+    //        TabPage.Text = DisplayableTabIndex + remainingText;
+    //    }
+    //}
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void Display_Input_Output_Channels(StreamControl streamControl)
     {
-        if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
+        if (streamControl == null || streamControl.Get_cboInputStream == null || streamControl.Get_cboOutputStream == null)
             return;
 
-        AsioDriverCapability? Capabilities = null;
-        try
-        {
-            Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
-        }
-        catch (Exception ex)
-        {
-            _ = ex;
-            //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
-        }
-        if (Capabilities == null)
-            return;
-
-        int InputIndex = -1;
-        int OutputIndex = -1;
-        for (int i = 0; i < Capabilities.Value.InputChannelInfos.Length; i++)
-        {
-            InputIndex++;
-            var InputChannel = Capabilities.Value.InputChannelInfos[i];
-            _ = streamControl.Get_cboInputStream.Items.Add("(" + InputChannel.channel + ") " + InputChannel.name);
-        }
-
-        for (int i = 0; i < Capabilities.Value.OutputChannelInfos.Length; i++)
-        {
-            OutputIndex++;
-            var OutputChannel = Capabilities.Value.OutputChannelInfos[i];
-            _ = streamControl.Get_cboOutputStream.Items.Add("(" + OutputChannel.channel + ") " + OutputChannel.name);
-        }
-
-        //for (int i = 0; i < Program.DSP_Info.Buses.Count; i++)
-        //{
-        //    InputIndex++;
-        //    OutputIndex++;
-        //    var Bus = Program.DSP_Info.Buses[i];
-        //    _ = streamControl.Get_cboInputStream.Items.Add("(" + InputIndex + ") Input " + Bus.Name);            
-        //    _ = streamControl.Get_cboOutputStream.Items.Add("(" + OutputIndex + ") Output " + Bus.Name);
-        //}
-
-        //for (int i = 0; i < Program.DSP_Info.AbstractBuses.Count; i++)
-        //{
-        //    InputIndex++;
-        //    OutputIndex++;
-        //    var AbstractBus = Program.DSP_Info.AbstractBuses[i];
-        //    _ = streamControl.Get_cboInputStream.Items.Add("(" + InputIndex + ") Input " + AbstractBus.Name);
-        //    _ = streamControl.Get_cboOutputStream.Items.Add("(" + OutputIndex + ") Output " + AbstractBus.Name);
-        //}
+        CommonFunctions.Set_DropDownChannelLists(streamControl.Get_cboInputStream, streamControl.Get_cboOutputStream);
     }
 
     protected void Set_HScrollbar(int streamControlCount)
@@ -460,26 +433,36 @@ public partial class ctl_DSPConfigPage : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void RefreshTabPageText(StreamControl stream, TabPage tabPage)
     {
-        var InputText = stream.Get_cboInputStream.SelectedItem != null ?
-            stream.Get_cboInputStream.SelectedItem.ToString()
+        tabPage.Text = this.GenerateTabText(stream, tabPage);
+    }
+
+    protected string GenerateTabText(StreamControl stream, TabPage tabPage)
+    {
+        var InputText = stream.Get_cboInputStream.SelectedItem is StreamItem inputItem
+           ? inputItem.DisplayMember
+           : "null";
+
+        var OutputText = stream.Get_cboOutputStream.SelectedItem is StreamItem outputItem
+            ? outputItem.DisplayMember
             : "null";
-        var OutputText = stream.Get_cboOutputStream.SelectedItem != null ?
-            stream.Get_cboOutputStream.SelectedItem.ToString()
-            : "null";
-        var TabIndex = "[" + (this.tabControl1.TabPages.IndexOf(tabPage) + 1).ToString() + "] ";
-        tabPage.Text = TabIndex + InputText + " -> " + OutputText;
+
+        var TabIndex = "[" + (this.tabControl1.TabPages.IndexOf(tabPage) + 1) + "] ";
+        var ReturnValue = TabIndex + InputText + " -> " + OutputText;
+        return ReturnValue;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void InputStream_SelectedIndexChanged(StreamControl stream, TabPage tabPage, DSP_Stream dsp_Stream)
     {
-        String? InputChannelName = stream?.Get_cboInputStream?.SelectedItem?.ToString();
-        if (stream != null && !String.IsNullOrEmpty(InputChannelName))
+        var SelectedItem = stream?.Get_cboInputStream?.SelectedItem;
+        if (stream == null || tabPage == null || dsp_Stream == null || SelectedItem == null)
+            return;
+
+        //Change the DSP Streams InputChannelIndex to that of what the user has selected
+        //Default is -1
+        if (SelectedItem is StreamItem StreamItem)
         {
-            //Change the DSP Streams InputChannelIndex to that of what the user has selected
-            //Default is -1
-            dsp_Stream.InputChannelIndex = stream.Get_cboInputStream.SelectedIndex;
-            dsp_Stream.InputChannelName = InputChannelName;
+            dsp_Stream.InputSource = StreamItem;
 
             Program.Form_Monitoring?.RefreshStreamInfo(dsp_Stream);
 
@@ -491,17 +474,15 @@ public partial class ctl_DSPConfigPage : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void OutputStream_SelectedIndexChanged(StreamControl stream, TabPage tabPage, DSP_Stream dsp_Stream)
     {
-        String? OutputChannelName = stream?.Get_cboOutputStream?.SelectedItem?.ToString();
-        if (stream != null && !String.IsNullOrEmpty(OutputChannelName))
-        {
-            //Change the DSP Streams OutputChannelIndex to that of what the user has selected
-            //Default is -1
+        var SelectedItem = stream?.Get_cboOutputStream?.SelectedItem;
+        if (stream == null || tabPage == null || dsp_Stream == null || SelectedItem == null)
+            return;
 
-            //Clears\mutes the audio data from the now abandoned output channel
-            Program.ASIO.RequestClearedOutputBuffer(dsp_Stream.OutputChannelIndex);
-            //Set the new Output Channel Index for this stream
-            dsp_Stream.OutputChannelIndex = stream.Get_cboOutputStream.SelectedIndex;
-            dsp_Stream.OutputChannelName = OutputChannelName;
+        //Change the DSP Streams OutputChannelIndex to that of what the user has selected
+        //Default is -1
+        if (SelectedItem is StreamItem StreamItem)
+        {
+            dsp_Stream.OutputDestination = StreamItem;
 
             Program.Form_Monitoring?.RefreshStreamInfo(dsp_Stream);
 
@@ -513,16 +494,40 @@ public partial class ctl_DSPConfigPage : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void DeleteStream(StreamControl stream, TabPage tabPage, DSP_Stream dsp_Stream)
     {
-        var OutputChannelIndex = dsp_Stream.OutputChannelIndex;
+        var OutputChannelIndex = dsp_Stream.OutputDestination.Index;
+
+        switch (dsp_Stream.OutputDestination.StreamType)
+        {
+            case StreamType.Bus:
+                foreach (var Stream in Program.DSP_Info.Streams)
+                {
+                    if (Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == OutputChannelIndex)
+                    {
+                        MessageBox.Show("Bus in use. It must be unassigned before the source stream can be deleted.");
+                        return;
+                    }
+                }
+                break;
+            case StreamType.AbstractBus:
+                foreach (var Stream in Program.DSP_Info.Streams)
+                {
+                    if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == OutputChannelIndex)
+                    {
+                        MessageBox.Show("AbstractBus in use. It must be unassigned before the source stream can be deleted.");
+                        return;
+                    }
+                }
+                break;
+        }
+
         //Remove the stream from the internal control list, UI, and DSP engine
         _ = Program.DSP_Info.Streams.Remove(dsp_Stream);
 
         //Use Task Run's to speed up the delete
-
-        _ = Task.Run(() => this.SafeInvoke(() =>
-           //Clear the abandoned audio stream from the output buffer
-           Program.ASIO.RequestClearedOutputBuffer(OutputChannelIndex)
-        ));
+        _ = Task.Run(() =>
+            //Clear the abandoned audio stream from the output buffer
+            Program.ASIO.RequestClearedOutputBuffer(OutputChannelIndex)
+        );
 
         _ = Task.Run(() => this.SafeInvoke(() =>
         {
@@ -535,7 +540,7 @@ public partial class ctl_DSPConfigPage : UserControl
 
             this.Set_HScrollbar(this.StreamControls.Count);
 
-            this.ResetAll_TabPage_IndexText();
+            this.ResetAll_TabPage_Text();
 
             //Try to set Tab Index so that it doesn't change or goes to the end of the list
             if (CurrentTabControl1SelectedIndex <= this.tabControl1.TabCount - 1)
@@ -558,20 +563,20 @@ public partial class ctl_DSPConfigPage : UserControl
         this.SafeInvoke(() =>
         {
             var StreamControlCurrentIndex = this.StreamControls.IndexOf(stream);
-            if (StreamControlCurrentIndex >= 0 && 
+            if (StreamControlCurrentIndex >= 0 &&
                 MoveToIndex >= 0 && MoveToIndex < this.StreamControls.Count)
             {
                 this.StreamControls.Move(StreamControlCurrentIndex, MoveToIndex);
             }
 
             var TabControlCurrentIndex = this.tabControl1.TabPages.IndexOf(tabPage);
-            if (TabControlCurrentIndex >= 0 && 
+            if (TabControlCurrentIndex >= 0 &&
                 MoveToIndex >= 0 && MoveToIndex < this.tabControl1.TabPages.Count)
             {
                 var movingTab = this.tabControl1.TabPages[TabControlCurrentIndex];
                 this.tabControl1.TabPages.RemoveAt(TabControlCurrentIndex);
                 this.tabControl1.TabPages.Insert(MoveToIndex, movingTab);
-                this.ResetAll_TabPage_IndexText();
+                this.ResetAll_TabPage_Text();
                 this.tabControl1.SelectedIndex = MoveToIndex;
             }
 

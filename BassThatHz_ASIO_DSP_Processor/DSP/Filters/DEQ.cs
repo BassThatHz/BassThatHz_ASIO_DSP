@@ -585,5 +585,10 @@ public class DEQ : IFilter
     public FilterTypes FilterType { get; } = FilterTypes.DEQ;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
 
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
+
     #endregion
 }

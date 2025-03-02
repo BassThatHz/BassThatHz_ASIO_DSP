@@ -2,10 +2,7 @@
 
 namespace BassThatHz_ASIO_DSP_Processor;
 
-#region Usings
 using System;
-using System.Xml.Serialization;
-#endregion
 
 /// <summary>
 ///  BassThatHz ASIO DSP Processor Engine
@@ -29,32 +26,64 @@ using System.Xml.Serialization;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 
-public interface IBus
+public interface IStreamItem
 {
     #region Properties
     string Name { get; set; }
-
-    double[] Buffer { get; set; }
-
-    string DisplayMember { get; }
-
+    string DisplayMember { get; set; }
+    int Index { get; set; }
+    StreamType StreamType { get; set; }
+    IStreamItem DeepClone();
     #endregion
 }
 
-[Serializable]
-public class DSP_Bus : IBus
+public enum StreamType
 {
-    #region IBus
+    Channel,
+    Bus,
+    AbstractBus 
+}
 
+public class StreamItem : IStreamItem
+{
+    #region IStreamItem
     public string Name { get; set; } = string.Empty;
+    public string DisplayMember { get; set; } = string.Empty;
+    public int Index { get; set; } = -1;
+    public StreamType StreamType { get; set; } = StreamType.Channel;
 
-    [XmlIgnoreAttribute]
-    public double[] Buffer { get; set; } = Array.Empty<double>();
-
-    [XmlIgnoreAttribute]
-    public string DisplayMember => this.Name;
-
+    public IStreamItem DeepClone()
+    {
+        return new StreamItem
+        {
+            Name = this.Name,
+            DisplayMember = this.DisplayMember,
+            Index = this.Index,
+            StreamType = this.StreamType
+        };
+    }
     #endregion
 
-    public override string ToString() => this.DisplayMember;
+    public override bool Equals(object? obj)
+    {
+        // Quick reference check
+        if (ReferenceEquals(this, obj))
+            return true;
+
+        // Null or different type => not equal
+        if (obj is not StreamItem other)
+            return false;
+
+        // Compare only StreamType + Index
+        // If you also want to factor in Name, you can do so here.
+        return this.StreamType == other.StreamType &&
+               this.Index == other.Index;
+    }
+
+    public override int GetHashCode()
+    {
+        // Combine StreamType and Index in a hash
+        // For example:
+        return HashCode.Combine(this.StreamType, this.Index);
+    }
 }

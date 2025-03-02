@@ -6,6 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 using System;
 using System.Collections.Generic;
 using System.Xml.Serialization;
+using Windows.Foundation.Metadata;
 #endregion
 
 /// <summary>
@@ -30,20 +31,32 @@ using System.Xml.Serialization;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 [Serializable]
-public class DSP_Stream
+public class DSP_Stream 
 {
     [XmlIgnoreAttribute]
     public double[][]? AuxBuffer;
     [XmlIgnoreAttribute]
     public readonly int NumberOfAuxBuffers = 256;
 
+    #region Legacy - Remove these eventually
     [XmlIgnoreAttribute]
+    [Deprecated("Use InputSource", DeprecationType.Deprecate, 0)]
     public string InputChannelName = string.Empty;
+
     [XmlIgnoreAttribute]
+    [Deprecated("Use OutputDestination", DeprecationType.Deprecate, 0)]
     public string OutputChannelName = string.Empty;
 
+    [Deprecated("Use InputSource", DeprecationType.Deprecate, 0)]
     public int InputChannelIndex = -1;
+
+    [Deprecated("Use OutputDestination", DeprecationType.Deprecate, 0)]
     public int OutputChannelIndex = -1;
+    #endregion
+
+    public IStreamItem InputSource = new StreamItem();
+    public IStreamItem OutputDestination = new StreamItem();
+
     public double InputVolume = 1;
     public double OutputVolume = 1;
 

@@ -36,6 +36,7 @@
             label1 = new System.Windows.Forms.Label();
             SimpleBusName_TXT = new System.Windows.Forms.TextBox();
             groupBox2 = new System.Windows.Forms.GroupBox();
+            AbstractBusBypass_CHK = new System.Windows.Forms.CheckBox();
             ChangeAbstractBus_BTN = new System.Windows.Forms.Button();
             DeleteAbstractBus_BTN = new System.Windows.Forms.Button();
             label4 = new System.Windows.Forms.Label();
@@ -88,10 +89,10 @@
             // SimpleBus_LSB
             // 
             SimpleBus_LSB.FormattingEnabled = true;
-            SimpleBus_LSB.Location = new System.Drawing.Point(6, 75);
+            SimpleBus_LSB.Location = new System.Drawing.Point(6, 105);
             SimpleBus_LSB.Name = "SimpleBus_LSB";
             SimpleBus_LSB.ScrollAlwaysVisible = true;
-            SimpleBus_LSB.Size = new System.Drawing.Size(251, 394);
+            SimpleBus_LSB.Size = new System.Drawing.Size(251, 364);
             SimpleBus_LSB.TabIndex = 6;
             SimpleBus_LSB.SelectedIndexChanged += SimpleBus_LSB_SelectedIndexChanged;
             // 
@@ -123,6 +124,7 @@
             // 
             // groupBox2
             // 
+            groupBox2.Controls.Add(AbstractBusBypass_CHK);
             groupBox2.Controls.Add(ChangeAbstractBus_BTN);
             groupBox2.Controls.Add(DeleteAbstractBus_BTN);
             groupBox2.Controls.Add(label4);
@@ -133,12 +135,22 @@
             groupBox2.Controls.Add(AddAbstractBus_BTN);
             groupBox2.Controls.Add(label2);
             groupBox2.Controls.Add(AbstractBusName_TXT);
-            groupBox2.Location = new System.Drawing.Point(366, 12);
+            groupBox2.Location = new System.Drawing.Point(375, 12);
             groupBox2.Name = "groupBox2";
             groupBox2.Size = new System.Drawing.Size(714, 477);
             groupBox2.TabIndex = 4;
             groupBox2.TabStop = false;
             groupBox2.Text = "Abstract Bus:";
+            // 
+            // AbstractBusBypass_CHK
+            // 
+            AbstractBusBypass_CHK.AutoSize = true;
+            AbstractBusBypass_CHK.Location = new System.Drawing.Point(8, 80);
+            AbstractBusBypass_CHK.Name = "AbstractBusBypass_CHK";
+            AbstractBusBypass_CHK.Size = new System.Drawing.Size(62, 19);
+            AbstractBusBypass_CHK.TabIndex = 17;
+            AbstractBusBypass_CHK.Text = "Bypass";
+            AbstractBusBypass_CHK.UseVisualStyleBackColor = true;
             // 
             // ChangeAbstractBus_BTN
             // 
@@ -180,6 +192,8 @@
             // 
             // AbstractBusDestination_CBO
             // 
+            AbstractBusDestination_CBO.DisplayMember = "DisplayMember";
+            AbstractBusDestination_CBO.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             AbstractBusDestination_CBO.FormattingEnabled = true;
             AbstractBusDestination_CBO.Location = new System.Drawing.Point(355, 46);
             AbstractBusDestination_CBO.Name = "AbstractBusDestination_CBO";
@@ -188,6 +202,8 @@
             // 
             // AbstractBusSource_CBO
             // 
+            AbstractBusSource_CBO.DisplayMember = "DisplayMember";
+            AbstractBusSource_CBO.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             AbstractBusSource_CBO.FormattingEnabled = true;
             AbstractBusSource_CBO.Location = new System.Drawing.Point(171, 46);
             AbstractBusSource_CBO.Name = "AbstractBusSource_CBO";
@@ -198,10 +214,10 @@
             // 
             AbstractBus_LSB.DisplayMember = "DisplayMember";
             AbstractBus_LSB.FormattingEnabled = true;
-            AbstractBus_LSB.Location = new System.Drawing.Point(6, 75);
+            AbstractBus_LSB.Location = new System.Drawing.Point(6, 105);
             AbstractBus_LSB.Name = "AbstractBus_LSB";
             AbstractBus_LSB.ScrollAlwaysVisible = true;
-            AbstractBus_LSB.Size = new System.Drawing.Size(614, 394);
+            AbstractBus_LSB.Size = new System.Drawing.Size(614, 364);
             AbstractBus_LSB.TabIndex = 10;
             AbstractBus_LSB.SelectedIndexChanged += AbstractBus_LSB_SelectedIndexChanged;
             // 
@@ -238,9 +254,8 @@
             AutoScroll = true;
             Controls.Add(groupBox2);
             Controls.Add(groupBox1);
-            Enabled = false;
             Name = "ctl_BusesPage";
-            Size = new System.Drawing.Size(1111, 515);
+            Size = new System.Drawing.Size(1120, 515);
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
             groupBox2.ResumeLayout(false);
@@ -268,5 +283,6 @@
         private System.Windows.Forms.Button DeleteAbstractBus_BTN;
         private System.Windows.Forms.Button ChangeBus_BTN;
         private System.Windows.Forms.Button ChangeAbstractBus_BTN;
+        private System.Windows.Forms.CheckBox AbstractBusBypass_CHK;
     }
 }

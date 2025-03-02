@@ -88,5 +88,10 @@ public class GPEQ : IFilter
 
     public FilterTypes FilterType { get; } = FilterTypes.GPEQ;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

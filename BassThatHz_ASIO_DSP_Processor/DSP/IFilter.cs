@@ -45,6 +45,8 @@ public interface IFilter : IApplySettings
 
     //Notification of Settings changes needing to be applied
     new void ApplySettings();
+
+    IFilter DeepClone();
     #endregion
 }
 

@@ -78,6 +78,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             // 
             // cboInputStream
             // 
+            cboInputStream.DisplayMember = "DisplayMember";
             cboInputStream.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cboInputStream.FormattingEnabled = true;
             cboInputStream.Location = new System.Drawing.Point(5, 36);
@@ -108,6 +109,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             // 
             // cboOutputStream
             // 
+            cboOutputStream.DisplayMember = "DisplayMember";
             cboOutputStream.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cboOutputStream.FormattingEnabled = true;
             cboOutputStream.Location = new System.Drawing.Point(5, 79);
@@ -264,6 +266,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             In_Volume.Name = "In_Volume";
             In_Volume.Size = new System.Drawing.Size(891, 20);
             In_Volume.TabIndex = 139;
+            In_Volume.Volume = 6.3095734448019239E-20D;
             // 
             // Out_Volume
             // 
@@ -272,6 +275,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls
             Out_Volume.Name = "Out_Volume";
             Out_Volume.Size = new System.Drawing.Size(891, 20);
             Out_Volume.TabIndex = 141;
+            Out_Volume.Volume = 6.3095734448019239E-20D;
             // 
             // btnDelete
             // 

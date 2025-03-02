@@ -412,6 +412,10 @@ public class Basic_HPF_LPF : IFilter
     public FilterTypes FilterType => FilterTypes.Basic_HPF_LPF;
     public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
     public IFilter GetFilter => this;
-    
+
+    public IFilter DeepClone()
+    {
+        return CommonFunctions.DeepClone(this);
+    }
     #endregion
 }

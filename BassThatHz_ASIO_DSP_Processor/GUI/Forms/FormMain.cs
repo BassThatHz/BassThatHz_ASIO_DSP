@@ -2,6 +2,8 @@
 
 namespace BassThatHz_ASIO_DSP_Processor;
 
+using BassThatHz_ASIO_DSP_Processor.GUI.Tabs;
+
 #region Usings
 using NAudio.Wave.Asio;
 using System;
@@ -44,6 +46,7 @@ public partial class FormMain : Form
 
     #region Public Properties
     public TabControl Get_tabControl1 => this.tabControl1;
+    public ctl_DSPConfigPage Get_DSPConfigPage1 => this.ctl_DSPConfigPage1;
     #endregion
 
     #region Public Functions
@@ -55,6 +58,10 @@ public partial class FormMain : Form
             this.SafeInvoke(() =>
             {
                 Program.DSP_Info = new ExtendedXmlSerialization.ExtendedXmlSerializer().Deserialize<DSP_Info>(xml);
+
+                //Fixes Legacy Channel Index Mappings for backwards support
+                CommonFunctions.FixLegacyChannelIndexMappings();
+
                 Application.DoEvents();
                 this.LoadConfigRefresh();
             });
