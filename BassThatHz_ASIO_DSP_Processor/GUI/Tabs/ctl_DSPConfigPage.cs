@@ -64,11 +64,25 @@ public partial class ctl_DSPConfigPage : UserControl
             StreamControl.Get_In_Volume.Volume = DSP_Stream.InputVolume;
             StreamControl.Get_Out_Volume.Volume = DSP_Stream.OutputVolume;
 
-            var cboInputStreamIndex = StreamControl.Get_cboInputStream.Items.IndexOf(DSP_Stream.InputSource);
-            StreamControl.Get_cboInputStream.SelectedIndex = cboInputStreamIndex;
+            var inputValue = DSP_Stream.InputSource;
+            if (inputValue != null)
+            {
+                var matchingInputItem = StreamControl.Get_cboInputStream.Items.Cast<object>()
+                    .FirstOrDefault(item => item.Equals(inputValue));
+                StreamControl.Get_cboInputStream.SelectedIndex = matchingInputItem != null
+                    ? StreamControl.Get_cboInputStream.Items.IndexOf(matchingInputItem)
+                    : -1;
+            }
 
-            var cboOutputStreamIndex = StreamControl.Get_cboOutputStream.Items.IndexOf(DSP_Stream.OutputDestination);
-            StreamControl.Get_cboOutputStream.SelectedIndex = cboOutputStreamIndex;
+            var outputValue = DSP_Stream.OutputDestination;
+            if (outputValue != null)
+            {
+                var matchingOutputItem = StreamControl.Get_cboOutputStream.Items.Cast<object>()
+                    .FirstOrDefault(item => item.Equals(outputValue));
+                StreamControl.Get_cboOutputStream.SelectedIndex = matchingOutputItem != null
+                    ? StreamControl.Get_cboOutputStream.Items.IndexOf(matchingOutputItem)
+                    : -1;
+            }
 
             foreach (var Filter in DSP_Stream.Filters)
             {

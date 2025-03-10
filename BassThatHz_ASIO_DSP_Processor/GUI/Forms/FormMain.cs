@@ -95,7 +95,7 @@ public partial class FormMain : Form
             if (File.Exists(FilePath))
             {
                 var XML = File.ReadAllText(FilePath);
-                XML = CommonFunctions.RemoveDeprecatedXMLTags(XML);
+                XML = CommonFunctions.RemoveDeprecatedXMLInputTags(XML);
                 var temp = new ExtendedXmlSerialization.ExtendedXmlSerializer().Deserialize<DSP_Info>(XML);
                 //Perform StartUp Delay (this gives the ASIO driver time to load for auto-startup appliances)
                 if (temp.StartUpDelay > 0)

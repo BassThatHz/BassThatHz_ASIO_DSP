@@ -238,7 +238,21 @@ public static class CommonFunctions
         }
     }
 
-    public static string RemoveDeprecatedXMLTags(string input)
+    public static string RemoveDeprecatedXMLInputTags(string input)
+    {
+        XDocument doc = XDocument.Parse(input);
+
+        foreach (XElement limiter in doc.Descendants("Limiter"))
+        {
+            // Remove elements if they exist
+            limiter.Element("PeakHoldDecayEnabled")?.Remove();
+            limiter.Element("PeakHoldDecay")?.Remove();
+        }
+
+        return doc.ToString();
+    }
+
+    public static string RemoveDeprecatedXMLOutputTags(string input)
     {
         XDocument doc = XDocument.Parse(input);
 

@@ -140,7 +140,7 @@ public partial class ctl_GeneralConfigPage : UserControl
             if (this.saveFileDialog1.ShowDialog(this) == DialogResult.OK)
             {
                 var xml = new ExtendedXmlSerializer().Serialize(Program.DSP_Info);
-                xml = CommonFunctions.RemoveDeprecatedXMLTags(xml);
+                xml = CommonFunctions.RemoveDeprecatedXMLOutputTags(xml);
                 File.WriteAllText(this.saveFileDialog1.FileName, xml);
             }
         }
@@ -159,7 +159,7 @@ public partial class ctl_GeneralConfigPage : UserControl
             {
                 Program.ASIO.Stop();
                 var XML = File.ReadAllText(this.openFileDialog1.FileName);
-                XML = CommonFunctions.RemoveDeprecatedXMLTags(XML);
+                XML = CommonFunctions.RemoveDeprecatedXMLInputTags(XML);
                 Program.Form_Main?.ApplyXMLConfig(XML);
 
                 //Place filename into the General Config tab text
@@ -277,7 +277,7 @@ public partial class ctl_GeneralConfigPage : UserControl
             var ParseResult = CommonFunctions.TryParseXml(data);
             if (ParseResult == "Success") //If successfully parsed as XML Document
             {
-                var XML = CommonFunctions.RemoveDeprecatedXMLTags(data);
+                var XML = CommonFunctions.RemoveDeprecatedXMLOutputTags(data);
 
                 //Try Deserializing the XML string, this will throw an error if it fails
                 //A Try Deserialize XML if you will
