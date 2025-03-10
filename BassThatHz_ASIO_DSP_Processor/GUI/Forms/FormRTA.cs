@@ -178,11 +178,15 @@ public partial class FormRTA : Form
         try
         {
             this.IsClosing = true;
+
             this.timer_PlotWaveforms.Enabled = false;
             this.timer_Plot_Top_FFTs.Enabled = false;
             this.timer_Plot_ULF_FFT.Enabled = false;
             this.timer_ResetWaveform.Enabled = false;
             this.Pause_CHK.Checked = true;
+
+            this.Load -= RTA_Load;
+            this.Shown -= RTA_Shown;
 
             Program.ASIO.InputDataAvailable -= ASIO_InputDataAvailable;
             Program.ASIO.OutputDataAvailable -= ASIO_OutputDataAvailable;

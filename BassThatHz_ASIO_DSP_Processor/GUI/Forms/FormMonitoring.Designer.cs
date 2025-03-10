@@ -50,7 +50,7 @@
             // 
             // timer_Refresh
             // 
-            timer_Refresh.Enabled = true;
+            timer_Refresh.Enabled = false;
             timer_Refresh.Tick += Refresh_Timer_Tick;
             // 
             // splitContainer1

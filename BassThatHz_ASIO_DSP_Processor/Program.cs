@@ -78,19 +78,26 @@ public static class ExtensionMethods
     {
         try
         {
-            if (control == null || control.IsDisposed) //|| !control.IsHandleCreated
+            if (control == null || control.IsDisposed || control.Disposing) //|| !control.IsHandleCreated
                 return;
             if (control.InvokeRequired)
                 control.Invoke(action);
             else
                 action();
         }
-        catch (ObjectDisposedException)
+        catch (ThreadAbortException ex)
         {
+            _ = ex;
+            // Handle thread termination gracefully
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _ = ex;
             // The control was disposed between the check and the invoke call.
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            _ = ex;
             // Handle other potential exceptions, e.g., if the handle is lost.
         }
     }

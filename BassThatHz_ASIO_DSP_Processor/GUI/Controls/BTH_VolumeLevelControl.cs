@@ -157,11 +157,18 @@ public partial class BTH_VolumeLevelControl : UserControl
 
     public void ComputeLevels()
     {
+        if (this.Disposing || this.IsDisposed)
+            return;
         this.SafeInvoke(() =>
         {
+            if (this.Disposing || this.IsDisposed)
+                return;
             this.CalculateInputLevels();
+            if (this.Disposing || this.IsDisposed)
+                return;
             this.CalculateOutputLevels();
-
+            if (this.Disposing || this.IsDisposed)
+                return;
             this.Set_VolAndClipIndicators();
         });
     }

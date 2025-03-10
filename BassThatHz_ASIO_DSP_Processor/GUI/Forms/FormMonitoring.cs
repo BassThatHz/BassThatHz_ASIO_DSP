@@ -38,6 +38,7 @@ public partial class FormMonitoring : Form
 {
     #region Variables
     protected List<BTH_VolumeLevelControl> VolControlList = [];
+    protected bool IsClosing = false;
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -54,10 +55,36 @@ public partial class FormMonitoring : Form
         this.msb_RefreshInterval.TextChanged += Msb_RefreshInterval_TextChanged;
         this.msb_RefreshInterval.KeyPress += Msb_RefreshInterval_KeyPress;
         this.Shown += FormMonitoring_Shown;
+        this.FormClosing += FormMonitoring_FormClosing;
     }
+
     #endregion
 
     #region Event Handlers
+
+    #region Closing
+    protected void FormMonitoring_FormClosing(object? sender, FormClosingEventArgs e)
+    {
+        try
+        {
+            this.IsClosing = true;
+            //Gracefully stop
+            this.Resize -= Resize_Handler;
+            this.Shown -= FormMonitoring_Shown;
+            this.FormClosing -= FormMonitoring_FormClosing;
+            this.msb_RefreshInterval.TextChanged -= Msb_RefreshInterval_TextChanged;
+            this.msb_RefreshInterval.KeyPress -= Msb_RefreshInterval_KeyPress;
+            this.timer_Refresh.Stop();
+            this.timer_Refresh.Enabled = false;
+
+            this.Set_Pause_States();
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+    #endregion
 
     #region Shown
     protected void FormMonitoring_Shown(object? sender, EventArgs e)
@@ -92,9 +119,15 @@ public partial class FormMonitoring : Form
     {
         try
         {
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
             this.timer_Refresh.Enabled = false;
+
             //Refresh all of the Volume Level controls
             this.RefreshVolumeLevels();
+
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
             this.timer_Refresh.Enabled = true;
         }
         catch (Exception ex)
@@ -135,7 +168,13 @@ public partial class FormMonitoring : Form
         try
         {
             foreach (var item in this.VolControlList)
+            {
+                if (this.Disposing || this.IsDisposed || this.IsClosing)
+                    return;
                 item.Reset_ClipIndicator();
+            }
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
             this.timer_Refresh.Enabled = true;
         }
         catch (Exception ex)
@@ -150,7 +189,11 @@ public partial class FormMonitoring : Form
     {
         try
         {
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
             this.RelocateControls();
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
             this.timer_Refresh.Enabled = true;
         }
         catch (Exception ex)
@@ -169,6 +212,8 @@ public partial class FormMonitoring : Form
         {
             try
             {
+                if (this.Disposing || this.IsDisposed || this.IsClosing)
+                    return;
                 var VolControl = new BTH_VolumeLevelControl();
                 this.VolControlList.Add(VolControl);
                 VolControl.Get_btn_View.Text = "[" + (this.VolControlList.IndexOf(VolControl) + 1).ToString() + "] View";
@@ -189,16 +234,14 @@ public partial class FormMonitoring : Form
         {
             try
             {
-                BTH_VolumeLevelControl? FoundControl = null;
-                foreach (var item in this.VolControlList)
-                    if (item.Stream == stream)
-                    {
-                        FoundControl = item;
-                        break;
-                    }
+                if (this.Disposing || this.IsDisposed || this.IsClosing)
+                    return;
 
+                var FoundControl = this.VolControlList.FirstOrDefault(item => item.Stream == stream);
                 if (FoundControl != null)
                 {
+                    if (this.Disposing || this.IsDisposed || this.IsClosing)
+                        return;
                     this.pnl_Main.Controls.Remove(FoundControl);
                     _ = this.VolControlList.Remove(FoundControl);
                 }
@@ -219,6 +262,8 @@ public partial class FormMonitoring : Form
                 foreach (var item in this.VolControlList)
                     if (item.Stream == stream)
                     {
+                        if (this.Disposing || this.IsDisposed || this.IsClosing)
+                            return;
                         item.Set_StreamInfo(stream);
                         break;
                     }
@@ -236,23 +281,38 @@ public partial class FormMonitoring : Form
     protected void Set_Pause_States()
     {
         this.timer_Refresh.Enabled = !this.Pause_CHK.Checked;
-        foreach (var item in this.VolControlList)
-            item.Get_timer_Refresh.Enabled = !this.Pause_CHK.Checked;
+        for (var i = 0; i < this.VolControlList.Count; i++)
+        {
+            if (this.IsDisposed)
+                return;
+            this.VolControlList[i].Get_timer_Refresh.Enabled = !this.Pause_CHK.Checked;
+        }
     }
     protected void RelocateControls()
     {
         for (var i = 0; i < this.VolControlList.Count; i++)
+        {
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
             this.PlaceControl(i, this.VolControlList[i]);
+        }
     }
 
     protected void RefreshVolumeLevels()
     {
-        foreach (var item in this.VolControlList)
-            item.ComputeLevels();
+        for (var i = 0; i < this.VolControlList.Count; i++)
+        {
+            if (this.Disposing || this.IsDisposed || this.IsClosing)
+                return;
+            this.VolControlList[i].ComputeLevels();
+        }
     }
 
     protected void PlaceControl(int controlIndex, Control input)
     {
+        if (this.Disposing || this.IsDisposed || this.IsClosing)
+            return;
+
         var ElementsPerWidth = (int)Math.Max(1, Math.Floor((double)this.Width / input.Width));
         var x = input.Width * (controlIndex % ElementsPerWidth);
         var y = controlIndex / ElementsPerWidth * (input.Height + 1);
