@@ -1,12 +1,6 @@
 ﻿#nullable enable
 
 namespace BassThatHz_ASIO_DSP_Processor;
-
-#region Usings
-using System;
-using System.Xml.Serialization;
-#endregion
-
 /// <summary>
 ///  BassThatHz ASIO DSP Processor Engine
 ///  Copyright (c) 2025 BassThatHz
@@ -28,35 +22,7 @@ using System.Xml.Serialization;
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
-
-public interface IBus
+public interface IHasFocus
 {
-    #region Properties
-    string Name { get; set; }
-
-    double[] Buffer { get; set; }
-
-    string DisplayMember { get; }
-
-    bool IsBypassed { get; set; }
-    #endregion
-}
-
-[Serializable]
-public class DSP_Bus : IBus
-{
-    #region IBus
-
-    public string Name { get; set; } = string.Empty;
-
-    [XmlIgnoreAttribute]
-    public double[] Buffer { get; set; } = Array.Empty<double>();
-
-    [XmlIgnoreAttribute]
-    public string DisplayMember => this.Name + " | " + this.IsBypassed;
-
-    public bool IsBypassed { get; set; } = false;
-    #endregion
-
-    public override string ToString() => this.DisplayMember;
+    void HasFocus();
 }

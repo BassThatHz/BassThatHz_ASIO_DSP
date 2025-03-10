@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 
 #region Usings
 using System;
+using System.Collections.Generic;
 using System.Xml.Serialization;
 #endregion
 
@@ -29,13 +30,16 @@ using System.Xml.Serialization;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 
-public interface IAbstractBus : IBus
+public interface IAbstractBus
 {
     #region Properties
-    StreamItem InputSource { get; set; }
-    StreamItem OutputDestination { get; set; }
-
     bool IsBypassed { get; set; }
+
+    string Name { get; set; }
+
+    string DisplayMember { get; }
+
+    List<IAbstractBusMappings> Mappings { get; set; }
     #endregion
 }
 
@@ -43,23 +47,78 @@ public interface IAbstractBus : IBus
 public class DSP_AbstractBus : IAbstractBus
 {
     #region IAbstractBus
+    public bool IsBypassed { get; set; } = false;
+
     public string Name { get; set; } = string.Empty;
 
     [XmlIgnoreAttribute]
-    public double[] Buffer { get; set; } = Array.Empty<double>();
+    public string DisplayMember => this.Name + " | " + this.IsBypassed;
 
+    public List<IAbstractBusMappings> Mappings { get; set; } = new();
+    #endregion
+
+    public override string ToString() => this.DisplayMember;
+
+    public override bool Equals(object? obj)
+    {
+        if (ReferenceEquals(this, obj))
+            return true;
+
+        if (obj is not DSP_AbstractBus other)
+            return false;
+
+        return this.Name.Equals(other.Name);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(this.Name);
+    }
+}
+
+public interface IAbstractBusMappings
+{
+    #region Properties
+    bool IsBypassed { get; set; }
+
+    StreamItem InputSource { get; set; }
+    StreamItem OutputDestination { get; set; }
+
+    string DisplayMember { get; }   
+    #endregion
+}
+
+public class DSP_AbstractBusMappings : IAbstractBusMappings
+{
     public bool IsBypassed { get; set; } = false;
-
-    [XmlIgnoreAttribute]
-    public string DisplayMember => this.Name + " | " + 
-                                    this.InputSource.DisplayMember + " | " + 
-                                    this.OutputDestination.DisplayMember;
 
     public StreamItem InputSource { get; set; } = new();
 
     public StreamItem OutputDestination { get; set; } = new();
 
-    #endregion
+    [XmlIgnoreAttribute]
+    public string DisplayMember => this.InputSource.DisplayMember + " | " +
+                                this.OutputDestination.DisplayMember + " | " + this.IsBypassed;
 
-    public override string ToString() => this.DisplayMember;   
+    [XmlIgnoreAttribute]
+    public double[] Buffer { get; set; } = Array.Empty<double>();
+
+    public override string ToString() => this.DisplayMember;
+
+    public override bool Equals(object? obj)
+    {
+        if (ReferenceEquals(this, obj))
+            return true;
+
+        if (obj is not DSP_AbstractBusMappings other)
+            return false;
+
+        return this.InputSource.Equals(other.InputSource) &&
+               this.OutputDestination.Equals(other.OutputDestination);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(this.InputSource, this.OutputDestination);
+    }
 }

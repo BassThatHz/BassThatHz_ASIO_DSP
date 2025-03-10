@@ -40,6 +40,7 @@ public interface IStreamItem
 public enum StreamType
 {
     Channel,
+    Stream,
     Bus,
     AbstractBus 
 }

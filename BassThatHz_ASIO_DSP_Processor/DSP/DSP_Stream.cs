@@ -34,6 +34,8 @@ using Windows.Foundation.Metadata;
 public class DSP_Stream 
 {
     [XmlIgnoreAttribute]
+    public double[]? AbstractBusBuffer;
+    [XmlIgnoreAttribute]
     public double[][]? AuxBuffer;
     [XmlIgnoreAttribute]
     public readonly int NumberOfAuxBuffers = 256;
@@ -54,11 +56,33 @@ public class DSP_Stream
     public int OutputChannelIndex = -1;
     #endregion
 
-    public IStreamItem InputSource = new StreamItem();
-    public IStreamItem OutputDestination = new StreamItem();
+    protected IStreamItem _inputSource = new StreamItem();
+    public IStreamItem InputSource
+    {
+        get => _inputSource;
+        set
+        {
+            if (value.StreamType == StreamType.Stream)
+                throw new InvalidOperationException("Stream type is not allowed as a Stream InputSource.");
+            _inputSource = value;
+        }
+    }
 
-    public double InputVolume = 1;
-    public double OutputVolume = 1;
+    protected IStreamItem _outputDestination = new StreamItem();
+    public IStreamItem OutputDestination
+    {
+        get => _outputDestination;
+        set
+        {
+            if (value.StreamType == StreamType.Stream)
+                throw new InvalidOperationException("Stream type is not allowed as a Stream OutputDestination.");
+            _outputDestination = value;
+        }
+    }
+
+
+    public double InputVolume = 0;
+    public double OutputVolume = 0;
 
     public List<IFilter> Filters = new();
 }

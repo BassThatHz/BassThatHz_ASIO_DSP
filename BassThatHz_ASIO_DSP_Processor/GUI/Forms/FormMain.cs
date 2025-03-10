@@ -41,6 +41,18 @@ public partial class FormMain : Form
         InitializeComponent();
 
         this.Shown += FormMain_Shown;
+
+        this.tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
+    }
+
+    protected void TabControl1_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        var SelectedTab = this.tabControl1.SelectedTab;
+        if (SelectedTab != null && SelectedTab.Controls.Count > 0 &&
+            SelectedTab.Controls[0] is IHasFocus FocusItem)
+        {
+            FocusItem.HasFocus();
+        }
     }
     #endregion
 

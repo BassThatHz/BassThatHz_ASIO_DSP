@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -96,6 +97,46 @@ public partial class ctl_DSPConfigPage : UserControl
             var TabPage = this.tabControl1.TabPages[i];
             if (TabPage != null)
                 TabPage.Text = this.GenerateTabText(StreamControl, TabPage);
+        }
+    }
+
+    public void ResetAll_StreamDropDownLists()
+    {
+        for (int i = 0; i < StreamControls.Count; i++)
+        {
+            var StreamControl = StreamControls[i];
+            if (StreamControl?.Get_cboInputStream == null || StreamControl.Get_cboOutputStream == null)
+                continue;
+
+            // Store selected values instead of objects
+            var inputValue = StreamControl.Get_cboInputStream.SelectedItem;
+            var outputValue = StreamControl.Get_cboOutputStream.SelectedItem;
+
+            // Clear dropdowns
+            StreamControl.Get_cboInputStream.Items.Clear();
+            StreamControl.Get_cboOutputStream.Items.Clear();
+
+            // Repopulate dropdowns
+            CommonFunctions.Set_DropDownTargetLists(StreamControl.Get_cboInputStream, StreamControl.Get_cboOutputStream, false);
+
+            // Restore selected index based on matching item (if still present)
+            if (inputValue != null)
+            {
+                var matchingInputItem = StreamControl.Get_cboInputStream.Items.Cast<object>()
+                    .FirstOrDefault(item => item.Equals(inputValue));
+                StreamControl.Get_cboInputStream.SelectedIndex = matchingInputItem != null
+                    ? StreamControl.Get_cboInputStream.Items.IndexOf(matchingInputItem)
+                    : -1;
+            }
+
+            if (outputValue != null)
+            {
+                var matchingOutputItem = StreamControl.Get_cboOutputStream.Items.Cast<object>()
+                    .FirstOrDefault(item => item.Equals(outputValue));
+                StreamControl.Get_cboOutputStream.SelectedIndex = matchingOutputItem != null
+                    ? StreamControl.Get_cboOutputStream.Items.IndexOf(matchingOutputItem)
+                    : -1;
+            }
         }
     }
     #endregion
@@ -244,7 +285,9 @@ public partial class ctl_DSPConfigPage : UserControl
         if (streamControl == null || streamControl.Get_cboInputStream == null || streamControl.Get_cboOutputStream == null)
             return;
 
-        CommonFunctions.Set_DropDownChannelLists(streamControl.Get_cboInputStream, streamControl.Get_cboOutputStream);
+        streamControl.Get_cboInputStream.Items.Clear();
+        streamControl.Get_cboOutputStream.Items.Clear();
+        CommonFunctions.Set_DropDownTargetLists(streamControl.Get_cboInputStream, streamControl.Get_cboOutputStream, false);
     }
 
     protected void Set_HScrollbar(int streamControlCount)
@@ -501,7 +544,8 @@ public partial class ctl_DSPConfigPage : UserControl
             case StreamType.Bus:
                 foreach (var Stream in Program.DSP_Info.Streams)
                 {
-                    if (Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == OutputChannelIndex)
+                    if (dsp_Stream != Stream && 
+                        Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == OutputChannelIndex)
                     {
                         MessageBox.Show("Bus in use. It must be unassigned before the source stream can be deleted.");
                         return;
@@ -511,7 +555,8 @@ public partial class ctl_DSPConfigPage : UserControl
             case StreamType.AbstractBus:
                 foreach (var Stream in Program.DSP_Info.Streams)
                 {
-                    if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == OutputChannelIndex)
+                    if (dsp_Stream != Stream && 
+                        Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == OutputChannelIndex)
                     {
                         MessageBox.Show("AbstractBus in use. It must be unassigned before the source stream can be deleted.");
                         return;
