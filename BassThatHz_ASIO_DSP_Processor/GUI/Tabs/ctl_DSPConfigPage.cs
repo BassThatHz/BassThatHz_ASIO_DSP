@@ -190,6 +190,16 @@ public partial class ctl_DSPConfigPage : UserControl
     {
         try
         {
+            var HasAbstractBus = Program.DSP_Info.Streams.Any(
+                    s => s.InputSource.StreamType == StreamType.AbstractBus || s.OutputDestination.StreamType == StreamType.AbstractBus);
+            if (HasAbstractBus)
+            {
+                var Result = MessageBox.Show("AbstractBus Streams detected. Are you sure this add is safe?",
+                                             "Warning", MessageBoxButtons.YesNo);
+                if (Result == DialogResult.No)
+                    return;
+            }
+
             //Add a new instance of DSP_Stream (this is used by the ASIO Engine directly)
             var DSP_Stream = new DSP_Stream();
             var Streams = Program.DSP_Info.Streams;
@@ -438,6 +448,22 @@ public partial class ctl_DSPConfigPage : UserControl
         {
             try
             {
+                if (dsp_Stream.InputSource.StreamType == StreamType.AbstractBus || dsp_Stream.OutputDestination.StreamType == StreamType.AbstractBus)
+                {
+                    MessageBox.Show("Cannot move an AbstractBus Stream.");
+                    return;
+                }
+
+                var HasAbstractBus = Program.DSP_Info.Streams.Any(
+                    s => s.InputSource.StreamType == StreamType.AbstractBus || s.OutputDestination.StreamType == StreamType.AbstractBus);
+                if (HasAbstractBus)
+                {
+                    var Result = MessageBox.Show("AbstractBus Streams detected. Are you sure the move is safe?", 
+                                                 "Warning", MessageBoxButtons.YesNo);
+                    if (Result == DialogResult.No)
+                        return;
+                }
+
                 int Index = int.Parse(streamControl.Get_txtMoveToIndex.Text);
                 Index--;
                 if (Index < 0)
