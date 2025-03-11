@@ -55,6 +55,15 @@ public class ASIO_Engine : IDisposable
     protected AsioAudioAvailableEventArgs? DSP_ASIO_Data;
     #endregion
 
+    #region States
+    // Persists the DSP Processing chains across calls.
+    protected List<List<DSP_Stream>> ChainCache = new();
+    // This cache will prevent AbstractBus master re-cloning if the upstream chain path hasn’t changed.
+    protected Dictionary<(int abIndex, string chainSignature), DSP_Stream> AbstractBusCloneCache = new();
+    //Uniquely identifies active AbstractBus clones
+    protected HashSet<(int abIndex, string signature)> UsedCloneKeys = new HashSet<(int, string)>();
+    #endregion
+
     #region Buffers
     //An jagged array of ASIO sample data from DSP_ASIO_Data as processed by NAudio
     public double[][] InputBuffer = [];
@@ -449,6 +458,7 @@ public class ASIO_Engine : IDisposable
         this.NumberOf_Output_Channels = numberOf_Output_Channels;
         this.DeviceName = asio_Device_Name;
         this.CleanUp_ASIO();
+        this.CleanUp_StreamCaches();
 
         // Create or Re-create ASIO device as necessary
         if (this.ASIO == null)
@@ -586,31 +596,7 @@ public class ASIO_Engine : IDisposable
     protected DSP_Stream CloneAbstractBusStream(DSP_Stream original)
     {
         DSP_Stream clone = CommonFunctions.DeepClone<DSP_Stream>(original);
-
         clone.AbstractBusBuffer = new double[this.SamplesPerChannel];
-        //DSP_Stream clone = new();
-
-        //// Clone auxiliary buffer if needed
-        //if (original.AuxBuffer != null)
-        //{
-        //    clone.AuxBuffer = original.AuxBuffer.Select(buffer => (double[])buffer.Clone()).ToArray();
-        //}
-
-        //// Clone the stream items (assuming they provide a clone method)
-        //clone.InputSource = original.InputSource.DeepClone();
-        //clone.OutputDestination = original.OutputDestination.DeepClone();
-
-        //// Copy volumes
-        //clone.InputVolume = original.InputVolume;
-        //clone.OutputVolume = original.OutputVolume;
-
-        //// Deep clone each filter
-        //clone.Filters = new List<IFilter>(original.Filters.Count);
-        //for (int i = 0; i < original.Filters.Count; i++)
-        //{
-        //    clone.Filters.Add(original.Filters[i].DeepClone());
-        //}
-
         return clone;
     }
 
@@ -732,7 +718,7 @@ public class ASIO_Engine : IDisposable
         var abMasters = this.GetAbstractBusMasters(allStreams);
 
         // 2. Filter out misconfigured streams.
-        var validStreams = GetValidStreams(allStreams, abMasters);
+        var validStreams = this.GetValidStreams(allStreams, abMasters);
 
         // 3. Candidate endpoints: streams whose OutputDestination is a Channel.
         var endStreams = validStreams
@@ -849,15 +835,9 @@ public class ASIO_Engine : IDisposable
             // Only add the chain if it is valid
             if (chainIsValid && chain.Count > 0)
             {
-                //var LastChain = chain.Last();
-                ////Starts with Input channel or Input Bus Feeder
-                //if (LastChain.InputSource.StreamType == StreamType.Channel || 
-                //    LastChain.InputSource.StreamType == StreamType.Bus)
-                //{
-                    // Reverse the chain so it runs from start to endpoint.
+                // Reverse the chain so it runs from start to endpoint.
                 chain.Reverse();
                 rawChains.Add(chain);
-                //}
             }
         }
 
@@ -908,19 +888,19 @@ public class ASIO_Engine : IDisposable
                 finalChain.Add(stream);
 
                 // Compute a signature of the chain so far (upstream path).
-                string signature = ComputeChainSignature(finalChain, finalChain.Count);
+                string signature = this.ComputeChainSignature(finalChain, finalChain.Count);
 
                 // Attempt to reuse a previously cloned master if the chain is unchanged.
-                if (_abstractBusCloneCache.TryGetValue((abIndex, signature), out var cachedClone))
+                if (this.AbstractBusCloneCache.TryGetValue((abIndex, signature), out var cachedClone))
                 {
                     finalChain.Add(cachedClone);
-                    _usedCloneKeys.Add((abIndex, signature));
+                    this.UsedCloneKeys.Add((abIndex, signature));
                 }
                 else
                 {
-                    var clonedMaster = CloneAbstractBusStream(master);
-                    _abstractBusCloneCache[(abIndex, signature)] = clonedMaster;
-                    _usedCloneKeys.Add((abIndex, signature));
+                    var clonedMaster = this.CloneAbstractBusStream(master);
+                    this.AbstractBusCloneCache[(abIndex, signature)] = clonedMaster;
+                    this.UsedCloneKeys.Add((abIndex, signature));
                     finalChain.Add(clonedMaster);
                 }
             }
@@ -955,10 +935,6 @@ public class ASIO_Engine : IDisposable
         var last = chain[chain.Count - 1];
         if (last.OutputDestination == null || last.OutputDestination.StreamType != StreamType.Channel)
             return false;
-
-        //var first = chain[0];
-        //if (first.InputSource == null || first.InputSource.StreamType != StreamType.Channel)
-        //    return false;
 
         if (hasAbstractBus)
         {
@@ -1028,31 +1004,23 @@ public class ASIO_Engine : IDisposable
         return true;
     }
 
-    // ----- Class-level Chain Cache -----
-    // This will persist the chains across calls.
-    protected List<List<DSP_Stream>> _chainCache = new();
-    // ----- Cache for AbstractBus Master Clones -----
-    // This cache will prevent re-cloning if the upstream chain path hasn’t changed.
-    protected Dictionary<(int abIndex, string chainSignature), DSP_Stream> _abstractBusCloneCache = new();
-    protected HashSet<(int abIndex, string signature)> _usedCloneKeys = new HashSet<(int, string)>();
-
     // ----- Build Final Stream Chains + Caching -----
     protected List<List<DSP_Stream>> BuildStreamChains(ObservableCollection<DSP_Stream> allStreams)
     {
         // Identify AbstractBus masters.
-        var abMasters = GetAbstractBusMasters(allStreams);
+        var abMasters = this.GetAbstractBusMasters(allStreams);
 
         // Build raw chains using reverse chaining.
-        var rawChains = BuildRawChains_Reversed(allStreams);
+        var rawChains = this.BuildRawChains_Reversed(allStreams);
 
         var finalChains = new List<List<DSP_Stream>>();
         for (int i = 0; i < rawChains.Count; i++)
         {
             var chain = rawChains[i];
-            if (!IsValidChain(chain))
+            if (!this.IsValidChain(chain))
                 continue;
 
-            var processed = PostProcessChain(chain, abMasters);
+            var processed = this.PostProcessChain(chain, abMasters);
             if (processed == null || processed.Count == 0)
                 continue;
 
@@ -1060,23 +1028,23 @@ public class ASIO_Engine : IDisposable
         }
 
         // Only update the persistent cache if changes are detected.
-        if (!AreChainsEqual(_chainCache, finalChains))
+        if (!this.AreChainsEqual(this.ChainCache, finalChains))
         {
-            _chainCache = finalChains;
+            this.ChainCache = finalChains;
         }
 
         // Remove unused cache entries.
-        var keysToRemove = _abstractBusCloneCache.Keys
-                              .Where(key => !_usedCloneKeys.Contains(key))
+        var keysToRemove = this.AbstractBusCloneCache.Keys
+                              .Where(key => !this.UsedCloneKeys.Contains(key))
                               .ToList();
         for (int i = 0; i < keysToRemove.Count; i++)
         {
-            _abstractBusCloneCache.Remove(keysToRemove[i]);
+            this.AbstractBusCloneCache.Remove(keysToRemove[i]);
         }
         // Reset tracking for the next update.
-        _usedCloneKeys.Clear();
+        this.UsedCloneKeys.Clear();
 
-        return _chainCache;
+        return this.ChainCache;
     }
 
     #endregion
@@ -1388,6 +1356,13 @@ public class ASIO_Engine : IDisposable
             this.ASIO.Dispose();
             this.ASIO = null;
         }
+    }
+
+    protected void CleanUp_StreamCaches()
+    {
+        this.ChainCache.Clear();
+        this.AbstractBusCloneCache.Clear();
+        this.UsedCloneKeys.Clear();
     }
     #endregion
 
