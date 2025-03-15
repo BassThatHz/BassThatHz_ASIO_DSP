@@ -1174,15 +1174,13 @@ public class ASIO_Engine : IDisposable
     {
         //Function must be thread-safe
 
-        //Make sure the Stream and Buffers and Channel Index are legit, otherwise return (i.e. output buffer is muted zeroes)
+        //Make sure the Stream and Buffers and Channel Index are legit, otherwise return (i.e. output buffer is unchanged)
         if (currentStream == null ||
             this.OutputBuffer == null ||
             this.InputBuffer == null ||
             currentStream.OutputDestination == null ||
             currentStream.InputSource == null ||
-            currentStream.OutputDestination.Index < 0 || currentStream.InputSource.Index < 0 ||
-            currentStream.OutputDestination.Index >= this.OutputBuffer.Length ||
-            currentStream.InputSource.Index >= this.InputBuffer.Length)
+            currentStream.OutputDestination.Index < 0 || currentStream.InputSource.Index < 0)
         {
             return;
         }
@@ -1221,6 +1219,8 @@ public class ASIO_Engine : IDisposable
                 break;
             case StreamType.Channel: //ASIO channel
             default:
+                if (currentStream.OutputDestination.Index >= this.OutputBuffer.Length)
+                    return;
                 Local_OutputBuffer = this.OutputBuffer[currentStream.OutputDestination.Index];
                 break;
         }
@@ -1267,6 +1267,8 @@ public class ASIO_Engine : IDisposable
                 break;
             case StreamType.Channel: //ASIO channel
             default:
+                if (currentStream.InputSource.Index >= this.InputBuffer.Length)
+                    return;
                 Local_InputBuffer = this.InputBuffer[currentStream.InputSource.Index];
                 break;
         }
