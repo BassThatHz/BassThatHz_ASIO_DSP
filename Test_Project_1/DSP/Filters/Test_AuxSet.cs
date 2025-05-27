@@ -42,6 +42,49 @@ public class Test_AuxSet
     }
 
     [TestMethod]
+    public void AuxSet_DefaultValues_AreCorrect()
+    {
+        var filter = new AuxSet();
+        Assert.IsFalse(filter.MuteAfter);
+        Assert.AreEqual(0, filter.AuxSetIndex);
+        Assert.IsFalse(filter.FilterEnabled);
+        Assert.AreEqual(FilterTypes.AuxSet, filter.FilterType);
+        Assert.AreEqual(FilterProcessingTypes.WholeBlock, filter.FilterProcessingType);
+        Assert.IsNotNull(filter.GetFilter);
+    }
+
+    [TestMethod]
+    public void AuxSet_Transform_MutesAfter()
+    {
+        var filter = new AuxSet { MuteAfter = true };
+        var stream = new DSP_Stream();
+        var input = new double[] { 1, 2, 3 };
+        var output = filter.Transform(input, stream);
+        Assert.IsTrue(Array.TrueForAll(output, v => v == 0));
+    }
+
+    [TestMethod]
+    public void AuxSet_Transform_CopiesToAuxBuffer()
+    {
+        var filter = new AuxSet { MuteAfter = false };
+        var stream = new DSP_Stream();
+        var input = new double[] { 1, 2, 3 };
+        var output = filter.Transform(input, stream);
+        Assert.IsNotNull(stream.AuxBuffer);
+        Assert.AreEqual(input.Length, stream.AuxBuffer[filter.AuxSetIndex].Length);
+        Assert.AreEqual(input[0], stream.AuxBuffer[filter.AuxSetIndex][0]);
+    }
+
+    [TestMethod]
+    public void AuxSet_DeepClone_ReturnsClone()
+    {
+        var filter = new AuxSet();
+        var clone = filter.DeepClone();
+        Assert.IsNotNull(clone);
+        Assert.IsInstanceOfType(clone, typeof(AuxSet));
+    }
+
+    [TestMethod]
     public void TestMethod1()
     {
         throw new NotImplementedException();

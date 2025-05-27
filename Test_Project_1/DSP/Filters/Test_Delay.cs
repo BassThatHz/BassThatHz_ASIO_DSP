@@ -41,6 +41,61 @@ public class Test_Delay
     }
 
     [TestMethod]
+    public void Delay_DefaultValues_AreCorrect()
+    {
+        var filter = new Delay();
+        Assert.IsFalse(filter.FilterEnabled);
+        Assert.AreEqual(FilterTypes.Delay, filter.FilterType);
+        Assert.AreEqual(FilterProcessingTypes.WholeBlock, filter.FilterProcessingType);
+        Assert.IsNotNull(filter.GetFilter);
+    }
+
+    [TestMethod]
+    public void Delay_Transform_WorksWithNoBuffer()
+    {
+        var filter = new Delay();
+        var stream = new DSP_Stream();
+        var input = new double[] { 1, 2, 3 };
+        var output = filter.Transform(input, stream);
+        Assert.AreEqual(input.Length, output.Length);
+    }
+
+    [TestMethod]
+    public void Delay_Initialize_SetsUpBuffer()
+    {
+        var filter = new Delay();
+        filter.Initialize(10, 5, 1000);
+        // Use reflection to check DelayBuffer
+        var buffer = (double[])typeof(Delay).GetField("DelayBuffer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(filter)!;
+        Assert.IsNotNull(buffer);
+        Assert.IsTrue(buffer.Length > 0);
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentOutOfRangeException))]
+    public void Delay_Throws_OnNegativeDelay()
+    {
+        var filter = new Delay();
+        filter.DelayInMS = -1;
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentOutOfRangeException))]
+    public void Delay_Throws_OnNegativeSampleRate()
+    {
+        var filter = new Delay();
+        filter.ResetSampleRate(-1);
+    }
+
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentOutOfRangeException))]
+    public void Delay_Throws_OnNegativeBufferSize()
+    {
+        var filter = new Delay();
+        filter.ResetBufferSize(-1);
+    }
+
+    [TestMethod]
     public void TestMethod1()
     {
         throw new NotImplementedException();

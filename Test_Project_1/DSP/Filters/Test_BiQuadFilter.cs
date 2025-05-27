@@ -46,4 +46,45 @@ public class Test_BiQuadFilter
     {
         throw new NotImplementedException();
     }
+
+    [TestMethod]
+    public void BiQuadFilter_DefaultValues_AreCorrect()
+    {
+        var filter = new BiQuadFilter();
+        Assert.IsFalse(filter.FilterEnabled);
+        Assert.IsNotNull(filter.GetFilter);
+        Assert.AreEqual(FilterProcessingTypes.WholeBlock, filter.FilterProcessingType);
+    }
+
+    [TestMethod]
+    public void BiQuadFilter_Transform_Works()
+    {
+        var filter = new BiQuadFilter();
+        filter.SetCoefficients(1, 0, 0, 1, 0, 0);
+        var input = new double[] { 1, 2, 3 };
+        var output = filter.Transform(input, new DSP_Stream());
+        Assert.AreEqual(input.Length, output.Length);
+    }
+
+    [TestMethod]
+    public void BiQuadFilter_DeepClone_ReturnsClone()
+    {
+        var filter = new BiQuadFilter();
+        var clone = filter.DeepClone();
+        Assert.IsNotNull(clone);
+        Assert.IsInstanceOfType(clone, typeof(BiQuadFilter));
+    }
+
+    [TestMethod]
+    public void BiQuadFilter_SetCoefficients_SetsValues()
+    {
+        var filter = new BiQuadFilter();
+        filter.SetCoefficients(2, 3, 4, 5, 6, 7);
+        Assert.AreEqual(2, filter.aa0);
+        Assert.AreEqual(3, filter.aa1);
+        Assert.AreEqual(4, filter.aa2);
+        Assert.AreEqual(5, filter.b0);
+        Assert.AreEqual(6, filter.b1);
+        Assert.AreEqual(7, filter.b2);
+    }
 }

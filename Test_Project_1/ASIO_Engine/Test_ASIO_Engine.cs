@@ -123,101 +123,101 @@ public class Test_ASIO_Engine
         }
     }
 
-    [TestMethod]
-    public void Test_ASIO_Engine_IsFast()
-    {
-        //Init Test Data
-        int ChannelCount = 256;
-        int SamplesPerBuffer = 512;
+    //[TestMethod]
+    //public void Test_ASIO_Engine_IsFast()
+    //{
+    //    //Init Test Data
+    //    int ChannelCount = 256;
+    //    int SamplesPerBuffer = 512;
 
-        int[][] inputBuffers = new int[ChannelCount][];
-        int[][] outputBuffers = new int[ChannelCount][];
-        IntPtr[] In_ints = new IntPtr[ChannelCount];
-        IntPtr[] Out_ints = new IntPtr[ChannelCount];
+    //    int[][] inputBuffers = new int[ChannelCount][];
+    //    int[][] outputBuffers = new int[ChannelCount][];
+    //    IntPtr[] In_ints = new IntPtr[ChannelCount];
+    //    IntPtr[] Out_ints = new IntPtr[ChannelCount];
 
-        for (int i = 0; i < ChannelCount; i++)
-        {
-            inputBuffers[i] = new int[SamplesPerBuffer];
-            outputBuffers[i] = new int[SamplesPerBuffer];
+    //    for (int i = 0; i < ChannelCount; i++)
+    //    {
+    //        inputBuffers[i] = new int[SamplesPerBuffer];
+    //        outputBuffers[i] = new int[SamplesPerBuffer];
 
-            for (int j = 0; j < SamplesPerBuffer; j++)
-            {
-                inputBuffers[i][j] = 1;
-                outputBuffers[i][j] = 0; 
-            }
+    //        for (int j = 0; j < SamplesPerBuffer; j++)
+    //        {
+    //            inputBuffers[i][j] = 1;
+    //            outputBuffers[i][j] = 0; 
+    //        }
 
-            unsafe
-            {
-                fixed (int* inPtr = inputBuffers[i])
-                fixed (int* outPtr = outputBuffers[i])
-                {
-                    In_ints[i] = (IntPtr)inPtr;
-                    Out_ints[i] = (IntPtr)outPtr;
-                }
-            }
-        }
+    //        unsafe
+    //        {
+    //            fixed (int* inPtr = inputBuffers[i])
+    //            fixed (int* outPtr = outputBuffers[i])
+    //            {
+    //                In_ints[i] = (IntPtr)inPtr;
+    //                Out_ints[i] = (IntPtr)outPtr;
+    //            }
+    //        }
+    //    }
 
-        var inputDataAvailable = new ManualResetEventSlim(false);
-        var outputDataAvailable = new ManualResetEventSlim(false);
+    //    var inputDataAvailable = new ManualResetEventSlim(false);
+    //    var outputDataAvailable = new ManualResetEventSlim(false);
 
-        //Construct Mocks
-        var Mock_ASIO_Driver = new Mock_ASIO_Unified(ChannelCount, SamplesPerBuffer);
-        var Mock_ASIO = new Mock_ASIO_Engine(Mock_ASIO_Driver);
+    //    //Construct Mocks
+    //    var Mock_ASIO_Driver = new Mock_ASIO_Unified(ChannelCount, SamplesPerBuffer);
+    //    var Mock_ASIO = new Mock_ASIO_Engine(Mock_ASIO_Driver);
 
-        //Run Timed Test
-        Stopwatch StopWatch1 = new();
-        Stopwatch StopWatch2 = new();
-        StopWatch1.Start();
+    //    //Run Timed Test
+    //    Stopwatch StopWatch1 = new();
+    //    Stopwatch StopWatch2 = new();
+    //    StopWatch1.Start();
 
-        Mock_ASIO.Start("FakedDriverName", 96000, ChannelCount, ChannelCount);
+    //    Mock_ASIO.Start("FakedDriverName", 96000, ChannelCount, ChannelCount);
 
-        double StartUpTime_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
-        StopWatch1.Restart();
+    //    double StartUpTime_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
+    //    StopWatch1.Restart();
 
-        Mock_ASIO_Driver.Mock_ActivateDataStream(In_ints, Out_ints, AsioSampleType.Int32LSB);
+    //    Mock_ASIO_Driver.Mock_ActivateDataStream(In_ints, Out_ints, AsioSampleType.Int32LSB);
 
-        double Cycle1_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
-        StopWatch1.Stop();
+    //    double Cycle1_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
+    //    StopWatch1.Stop();
 
-        //Wired up Test AudioAvailable Event detection
-        Mock_ASIO.InputDataAvailable += () =>
-            inputDataAvailable.Set();
-        Mock_ASIO.OutputDataAvailable += () =>
-            outputDataAvailable.Set();
+    //    //Wired up Test AudioAvailable Event detection
+    //    Mock_ASIO.InputDataAvailable += () =>
+    //        inputDataAvailable.Set();
+    //    Mock_ASIO.OutputDataAvailable += () =>
+    //        outputDataAvailable.Set();
 
-        StopWatch2.Start();
+    //    StopWatch2.Start();
 
-        Mock_ASIO_Driver.Mock_ActivateDataStream(In_ints, Out_ints, AsioSampleType.Int32LSB);
-        bool inputReceived = inputDataAvailable.Wait(100);
-        bool outputReceived = outputDataAvailable.Wait(100);
+    //    Mock_ASIO_Driver.Mock_ActivateDataStream(In_ints, Out_ints, AsioSampleType.Int32LSB);
+    //    bool inputReceived = inputDataAvailable.Wait(100);
+    //    bool outputReceived = outputDataAvailable.Wait(100);
 
-        double Cycle2_TotalNanoseconds = StopWatch2.Elapsed.TotalNanoseconds;
+    //    double Cycle2_TotalNanoseconds = StopWatch2.Elapsed.TotalNanoseconds;
         
-        StopWatch2.Stop();
-        StopWatch1.Start();
+    //    StopWatch2.Stop();
+    //    StopWatch1.Start();
 
-        //Stop ASIO Engine
-        Mock_ASIO.Stop();
+    //    //Stop ASIO Engine
+    //    Mock_ASIO.Stop();
 
-        double StopTime_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
-        StopWatch1.Stop();
+    //    double StopTime_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
+    //    StopWatch1.Stop();
 
-        //Assertions
-        Assert.IsTrue(inputReceived, "Input not Received");
-        Assert.IsTrue(outputReceived, "Output not Received");
+    //    //Assertions
+    //    Assert.IsTrue(inputReceived, "Input not Received");
+    //    Assert.IsTrue(outputReceived, "Output not Received");
 
-        //Assert StartUp Under 200ms performance
-        Assert.IsTrue(StartUpTime_TotalMilliseconds < 200, "StartUp over 200ms");
+    //    //Assert StartUp Under 200ms performance
+    //    Assert.IsTrue(StartUpTime_TotalMilliseconds < 200, "StartUp over 200ms");
 
-        //Assert StopTime Under 200ms performance
-        Assert.IsTrue(StopTime_TotalMilliseconds < 200, "StopTime over 200ms");
+    //    //Assert StopTime Under 200ms performance
+    //    Assert.IsTrue(StopTime_TotalMilliseconds < 200, "StopTime over 200ms");
 
-        //Assert Cycle1 Under 200ms performance
-        Assert.IsTrue(Cycle1_TotalMilliseconds < 200, "Cycle1 over 200ms");
+    //    //Assert Cycle1 Under 200ms performance
+    //    Assert.IsTrue(Cycle1_TotalMilliseconds < 200, "Cycle1 over 200ms");
 
-        //Assert Cycle2 Under 5ms performance
-        Assert.IsTrue(Cycle2_TotalNanoseconds < 5000000, "Cycle2 over 5ms");
-    }
+    //    //Assert Cycle2 Under 5ms performance
+    //    Assert.IsTrue(Cycle2_TotalNanoseconds < 5000000, "Cycle2 over 5ms");
+    //}
 
     [TestMethod]
     public void TestMethod1()

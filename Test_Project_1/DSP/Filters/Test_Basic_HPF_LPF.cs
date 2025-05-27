@@ -3,6 +3,8 @@ namespace Test_Project_1;
 using BassThatHz_ASIO_DSP_Processor;
 using NAudio.Dsp;
 using System.Diagnostics;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
 
 [TestClass]
 public class Test_Basic_HPF_LPF
@@ -45,5 +47,55 @@ public class Test_Basic_HPF_LPF
     public void TestMethod1()
     {
         throw new NotImplementedException();
+    }
+
+    [TestMethod]
+    public void Basic_HPF_LPF_DefaultValues_AreCorrect()
+    {
+        var filter = new Basic_HPF_LPF();
+        Assert.AreEqual(1, filter.HPFFreq);
+        Assert.AreEqual(Basic_HPF_LPF.FilterOrder.LR_12db, filter.HPFFilter);
+        Assert.AreEqual(20000, filter.LPFFreq);
+        Assert.AreEqual(Basic_HPF_LPF.FilterOrder.LR_12db, filter.LPFFilter);
+        Assert.IsNotNull(filter.Q_Array_HPF);
+        Assert.IsNotNull(filter.Q_Array_LPF);
+        Assert.IsNotNull(filter.BiQuads);
+        Assert.IsFalse(filter.FilterEnabled);
+        Assert.AreEqual(FilterTypes.Basic_HPF_LPF, filter.FilterType);
+        Assert.AreEqual(FilterProcessingTypes.WholeBlock, filter.FilterProcessingType);
+        Assert.IsNotNull(filter.GetFilter);
+    }
+
+    [TestMethod]
+    public void Basic_HPF_LPF_ApplySettings_InitializesBiQuads()
+    {
+        var filter = new Basic_HPF_LPF();
+        filter.HPFFilter = Basic_HPF_LPF.FilterOrder.LR_12db;
+        filter.LPFFilter = Basic_HPF_LPF.FilterOrder.LR_12db;
+        filter.ApplySettings();
+        Assert.IsNotNull(filter.BiQuads[0]);
+        Assert.IsNotNull(filter.BiQuads[1]);
+        Assert.IsNotNull(filter.BiQuads[4]);
+        Assert.IsNotNull(filter.BiQuads[5]);
+    }
+
+    [TestMethod]
+    public void Basic_HPF_LPF_Transform_ReturnsInput_WhenNoFilters()
+    {
+        var filter = new Basic_HPF_LPF();
+        filter.HPFFilter = Basic_HPF_LPF.FilterOrder.None;
+        filter.LPFFilter = Basic_HPF_LPF.FilterOrder.None;
+        var input = new double[] { 1, 2, 3 };
+        var output = filter.Transform(input, new DSP_Stream());
+        Assert.AreSame(input, output);
+    }
+
+    [TestMethod]
+    public void Basic_HPF_LPF_DeepClone_ReturnsClone()
+    {
+        var filter = new Basic_HPF_LPF();
+        var clone = filter.DeepClone();
+        Assert.IsNotNull(clone);
+        Assert.IsInstanceOfType(clone, typeof(Basic_HPF_LPF));
     }
 }
