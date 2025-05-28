@@ -109,10 +109,4 @@ public class Test_AntiDC
         var output = filter.Transform(input, stream);
         Assert.AreSame(input, output);
     }
-
-    [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
 }

@@ -4,6 +4,7 @@ using BassThatHz_ASIO_DSP_Processor.REW_API;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace Test_Project_1;
 
@@ -66,5 +67,19 @@ public class Test_REW_API
         var api = new REW_API();
         Assert.AreEqual("L-R2", api.FilterOrderToREW(BassThatHz_ASIO_DSP_Processor.Basic_HPF_LPF.FilterOrder.LR_12db));
         Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.Basic_HPF_LPF.FilterOrder.LR_12db, api.REW_To_FilterOrder("L-R2"));
+    }
+
+    [TestMethod]
+    public void FilterType_AllCases_And_Default()
+    {
+        var api = new REW_API();
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.High_Shelf, api.REW_To_FilterType("HS"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.Low_Shelf, api.REW_To_FilterType("LS 12dB"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.Adv_High_Pass, api.REW_To_FilterType("HP Q"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.Adv_Low_Pass, api.REW_To_FilterType("Low pass"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.All_Pass, api.REW_To_FilterType("All pass"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.Notch, api.REW_To_FilterType("Notch Q"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.PEQ, api.REW_To_FilterType("PK"));
+        Assert.AreEqual(BassThatHz_ASIO_DSP_Processor.FilterTypes.PEQ, api.REW_To_FilterType("unknown")); // default
     }
 }

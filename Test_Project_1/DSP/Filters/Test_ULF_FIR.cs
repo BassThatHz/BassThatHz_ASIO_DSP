@@ -15,34 +15,49 @@ public class Test_ULF_FIR
     }
 
     [TestMethod]
-    public void Test_ULF_FIRFilter_IsFast()
+    public void ULF_FIR_Transform_IsFast()
     {
-        //Init Test structures
         DSP_Stream DSPStream = new();
-        ULF_FIR PolarityFilter = new();
-
-        var InputAudioData = new double[512];
-        var OutputAudioData = new double[512];
-        IFilter Filter = PolarityFilter;
-
-        //Init Test Data
-        this.InitData(InputAudioData);
-
-        //Run Timed Test
-        Stopwatch StopWatch1 = new();
-        StopWatch1.Start();
-
-        OutputAudioData = Filter.Transform(InputAudioData, DSPStream);
-
-        StopWatch1.Stop();
-
-        //Assert Under 5ms performance
-        Assert.IsTrue(StopWatch1.Elapsed.TotalNanoseconds < 5000000, "Over 5ms");
+        ULF_FIR filter = new();
+        var input = new double[512];
+        InitData(input);
+        var sw = new Stopwatch();
+        sw.Start();
+        var output = filter.Transform(input, DSPStream);
+        sw.Stop();
+        Assert.IsTrue(sw.Elapsed.TotalMilliseconds < 5, "Over 5ms");
     }
 
     [TestMethod]
-    public void TestMethod1()
+    public void ULF_FIR_Properties_Defaults()
     {
-        throw new NotImplementedException();
+        var filter = new ULF_FIR();
+        Assert.AreEqual(8192, filter.FFTSize);
+        Assert.AreEqual(1, filter.TapsSampleRateIndex);
+        Assert.AreEqual(960, filter.TapsSampleRate);
+        Assert.IsNull(filter.Taps);
+        Assert.IsFalse(filter.FilterEnabled);
+        Assert.AreEqual(FilterTypes.ULF_FIR, filter.FilterType);
+        Assert.AreEqual(FilterProcessingTypes.WholeBlock, filter.FilterProcessingType);
+    }
+
+    [TestMethod]
+    public void ULF_FIR_SetTaps_UpdatesTaps()
+    {
+        var filter = new ULF_FIR();
+        var taps = new double[] { 1.1, 2.2, 3.3 };
+        filter.SetTaps(taps);
+        Assert.IsNotNull(filter.Taps);
+        Assert.AreEqual(3, filter.Taps.Length);
+        Assert.AreEqual(2.2, filter.Taps[1]);
+    }
+
+    [TestMethod]
+    public void ULF_FIR_DeepClone_ReturnsClone()
+    {
+        var filter = new ULF_FIR();
+        var clone = filter.DeepClone();
+        Assert.IsNotNull(clone);
+        Assert.IsInstanceOfType(clone, typeof(ULF_FIR));
     }
 }

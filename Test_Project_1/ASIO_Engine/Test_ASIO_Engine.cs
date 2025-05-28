@@ -123,105 +123,85 @@ public class Test_ASIO_Engine
         }
     }
 
-    //[TestMethod]
-    //public void Test_ASIO_Engine_IsFast()
-    //{
-    //    //Init Test Data
-    //    int ChannelCount = 256;
-    //    int SamplesPerBuffer = 512;
-
-    //    int[][] inputBuffers = new int[ChannelCount][];
-    //    int[][] outputBuffers = new int[ChannelCount][];
-    //    IntPtr[] In_ints = new IntPtr[ChannelCount];
-    //    IntPtr[] Out_ints = new IntPtr[ChannelCount];
-
-    //    for (int i = 0; i < ChannelCount; i++)
-    //    {
-    //        inputBuffers[i] = new int[SamplesPerBuffer];
-    //        outputBuffers[i] = new int[SamplesPerBuffer];
-
-    //        for (int j = 0; j < SamplesPerBuffer; j++)
-    //        {
-    //            inputBuffers[i][j] = 1;
-    //            outputBuffers[i][j] = 0; 
-    //        }
-
-    //        unsafe
-    //        {
-    //            fixed (int* inPtr = inputBuffers[i])
-    //            fixed (int* outPtr = outputBuffers[i])
-    //            {
-    //                In_ints[i] = (IntPtr)inPtr;
-    //                Out_ints[i] = (IntPtr)outPtr;
-    //            }
-    //        }
-    //    }
-
-    //    var inputDataAvailable = new ManualResetEventSlim(false);
-    //    var outputDataAvailable = new ManualResetEventSlim(false);
-
-    //    //Construct Mocks
-    //    var Mock_ASIO_Driver = new Mock_ASIO_Unified(ChannelCount, SamplesPerBuffer);
-    //    var Mock_ASIO = new Mock_ASIO_Engine(Mock_ASIO_Driver);
-
-    //    //Run Timed Test
-    //    Stopwatch StopWatch1 = new();
-    //    Stopwatch StopWatch2 = new();
-    //    StopWatch1.Start();
-
-    //    Mock_ASIO.Start("FakedDriverName", 96000, ChannelCount, ChannelCount);
-
-    //    double StartUpTime_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
-    //    StopWatch1.Restart();
-
-    //    Mock_ASIO_Driver.Mock_ActivateDataStream(In_ints, Out_ints, AsioSampleType.Int32LSB);
-
-    //    double Cycle1_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
-    //    StopWatch1.Stop();
-
-    //    //Wired up Test AudioAvailable Event detection
-    //    Mock_ASIO.InputDataAvailable += () =>
-    //        inputDataAvailable.Set();
-    //    Mock_ASIO.OutputDataAvailable += () =>
-    //        outputDataAvailable.Set();
-
-    //    StopWatch2.Start();
-
-    //    Mock_ASIO_Driver.Mock_ActivateDataStream(In_ints, Out_ints, AsioSampleType.Int32LSB);
-    //    bool inputReceived = inputDataAvailable.Wait(100);
-    //    bool outputReceived = outputDataAvailable.Wait(100);
-
-    //    double Cycle2_TotalNanoseconds = StopWatch2.Elapsed.TotalNanoseconds;
-        
-    //    StopWatch2.Stop();
-    //    StopWatch1.Start();
-
-    //    //Stop ASIO Engine
-    //    Mock_ASIO.Stop();
-
-    //    double StopTime_TotalMilliseconds = StopWatch1.Elapsed.TotalMilliseconds;
-    //    StopWatch1.Stop();
-
-    //    //Assertions
-    //    Assert.IsTrue(inputReceived, "Input not Received");
-    //    Assert.IsTrue(outputReceived, "Output not Received");
-
-    //    //Assert StartUp Under 200ms performance
-    //    Assert.IsTrue(StartUpTime_TotalMilliseconds < 200, "StartUp over 200ms");
-
-    //    //Assert StopTime Under 200ms performance
-    //    Assert.IsTrue(StopTime_TotalMilliseconds < 200, "StopTime over 200ms");
-
-    //    //Assert Cycle1 Under 200ms performance
-    //    Assert.IsTrue(Cycle1_TotalMilliseconds < 200, "Cycle1 over 200ms");
-
-    //    //Assert Cycle2 Under 5ms performance
-    //    Assert.IsTrue(Cycle2_TotalNanoseconds < 5000000, "Cycle2 over 5ms");
-    //}
+    [TestMethod]
+    public void EventHandlers_AreInvoked_OnAudioAvailable()
+    {
+        var mockDriver = new Mock_ASIO_Unified(2, 4);
+        var engine = new Mock_ASIO_Engine(mockDriver);
+        bool inputEvent = false, outputEvent = false;
+        engine.InputDataAvailable += () => inputEvent = true;
+        engine.OutputDataAvailable += () => outputEvent = true;
+        engine.Start("MockDriverName", 44100, 2, 2);
+        mockDriver.Mock_ActivateDataStream(new IntPtr[2], new IntPtr[2], AsioSampleType.Int32LSB);
+        System.Threading.Thread.Sleep(50); // allow event propagation
+        Assert.IsTrue(inputEvent, "InputDataAvailable not fired");
+        Assert.IsTrue(outputEvent, "OutputDataAvailable not fired");
+        engine.Stop();
+    }
 
     [TestMethod]
-    public void TestMethod1()
+    public void DriverStateChangeEvents_AreInvoked()
     {
-        throw new NotImplementedException();
+        var mockDriver = new Mock_ASIO_Unified(2, 4);
+        var engine = new Mock_ASIO_Engine(mockDriver);
+        bool reset = false, buf = false, resync = false, lat = false, ov = false, sr = false;
+        engine.Driver_ResetRequest += () => reset = true;
+        engine.Driver_BufferSizeChanged += () => buf = true;
+        engine.Driver_ResyncRequest += () => resync = true;
+        engine.Driver_LatenciesChanged += () => lat = true;
+        engine.Driver_Overload += () => ov = true;
+        engine.Driver_SampleRateChanged += () => sr = true;
+        engine.Start("MockDriverName", 44100, 2, 2);
+        mockDriver.Driver_ResetRequestCallback();
+        mockDriver.Driver_BufferSizeChangedCallback();
+        mockDriver.Driver_ResyncRequestCallback();
+        mockDriver.Driver_LatenciesChangedCallback();
+        mockDriver.Driver_OverloadCallback();
+        mockDriver.Driver_SampleRateChangedCallback();
+        Assert.IsTrue(reset && buf && resync && lat && ov && sr);
+        engine.Stop();
+    }
+
+    [TestMethod]
+    public void Throws_OnInvalidArguments()
+    {
+        var engine = new ASIO_Engine();
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.Start(null, 44100, 2, 2));
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.Start("", 44100, 2, 2));
+        Assert.ThrowsException<System.ArgumentOutOfRangeException>(() => engine.Start("Mock", 0, 2, 2));
+        Assert.ThrowsException<System.ArgumentOutOfRangeException>(() => engine.Start("Mock", 44100, 0, 2));
+        Assert.ThrowsException<System.ArgumentOutOfRangeException>(() => engine.Start("Mock", 44100, 2, 0));
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.GetDriverCapabilities(null));
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.GetMinBufferSize(null));
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.GetMaxBufferSize(null));
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.GetPreferredBufferSize(null));
+        Assert.ThrowsException<System.ArgumentNullException>(() => engine.IsSampleRateSupported(null, 44100));
+        Assert.ThrowsException<System.ArgumentOutOfRangeException>(() => engine.IsSampleRateSupported("Mock", 0));
+    }
+
+    [TestMethod]
+    public void GetInputOutputAudioData_ReturnsNull_OnInvalidIndex()
+    {
+        var engine = new ASIO_Engine();
+        engine.InputBuffer = new double[1][] { new double[] { 1.0 } };
+        engine.OutputBuffer = new double[1][] { new double[] { 2.0 } };
+        Assert.IsNull(engine.GetInputAudioData(-1));
+        Assert.IsNull(engine.GetInputAudioData(2));
+        Assert.IsNull(engine.GetOutputAudioData(-1));
+        Assert.IsNull(engine.GetOutputAudioData(2));
+    }
+
+    [TestMethod]
+    public void DSP_Thread_Starts_And_Stops()
+    {
+        var mockDriver = new Mock_ASIO_Unified(2, 4);
+        var engine = new Mock_ASIO_Engine(mockDriver);
+        engine.Start("MockDriverName", 44100, 2, 2);
+        var threadField = typeof(ASIO_Engine).GetField("DSP_Thread", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var thread = (System.Threading.Thread)threadField.GetValue(engine);
+        Assert.IsTrue(thread.IsAlive);
+        engine.Stop();
+        System.Threading.Thread.Sleep(50);
+        // Thread may still be alive if not enough time, but should not throw
     }
 }

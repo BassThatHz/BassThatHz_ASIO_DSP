@@ -1,11 +1,15 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using BassThatHz_ASIO_DSP_Processor.GUI.Forms;
+
 namespace Test_Project_1;
 
 [TestClass]
 public class Test_RTA
 {
     [TestMethod]
-    public void TestMethod1()
+    public void CanInstantiate_FormRTA()
     {
-        throw new NotImplementedException();
+        var form = new FormRTA();
+        Assert.IsNotNull(form);
     }
 }
