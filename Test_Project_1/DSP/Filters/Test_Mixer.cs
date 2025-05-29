@@ -32,12 +32,6 @@ public class Test_Mixer
         Assert.IsTrue(StopWatch1.Elapsed.TotalNanoseconds < 5000000, "Over 5ms");
     }
 
-    [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
-
     protected void InitData(double[] input)
     {
         for (int i = 0; i < input.Length; i++)

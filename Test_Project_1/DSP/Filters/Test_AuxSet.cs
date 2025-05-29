@@ -83,10 +83,4 @@ public class Test_AuxSet
         Assert.IsNotNull(clone);
         Assert.IsInstanceOfType(clone, typeof(AuxSet));
     }
-
-    [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
 }

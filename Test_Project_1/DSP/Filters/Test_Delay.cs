@@ -94,10 +94,4 @@ public class Test_Delay
         var filter = new Delay();
         filter.ResetBufferSize(-1);
     }
-
-    [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
 }

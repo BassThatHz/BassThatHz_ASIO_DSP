@@ -128,14 +128,49 @@ public class Test_ASIO_Engine
     {
         var mockDriver = new Mock_ASIO_Unified(2, 4);
         var engine = new Mock_ASIO_Engine(mockDriver);
-        bool inputEvent = false, outputEvent = false;
-        engine.InputDataAvailable += () => inputEvent = true;
-        engine.OutputDataAvailable += () => outputEvent = true;
+        using var inputEvent = new System.Threading.ManualResetEventSlim(false);
+        using var outputEvent = new System.Threading.ManualResetEventSlim(false);
+        engine.InputDataAvailable += () => inputEvent.Set();
+        engine.OutputDataAvailable += () => outputEvent.Set();
         engine.Start("MockDriverName", 44100, 2, 2);
-        mockDriver.Mock_ActivateDataStream(new IntPtr[2], new IntPtr[2], AsioSampleType.Int32LSB);
-        System.Threading.Thread.Sleep(50); // allow event propagation
-        Assert.IsTrue(inputEvent, "InputDataAvailable not fired");
-        Assert.IsTrue(outputEvent, "OutputDataAvailable not fired");
+
+        // Allocate unmanaged memory for each channel and fill with dummy data
+        var inputPtrs = new IntPtr[2];
+        var outputPtrs = new IntPtr[2];
+        int sampleSize = sizeof(int); // For Int32LSB
+        int bufferSize = 4 * sampleSize; // 4 samples per buffer
+        for (int ch = 0; ch < 2; ch++)
+        {
+            inputPtrs[ch] = System.Runtime.InteropServices.Marshal.AllocHGlobal(bufferSize);
+            outputPtrs[ch] = System.Runtime.InteropServices.Marshal.AllocHGlobal(bufferSize);
+            unsafe
+            {
+                int* inBuf = (int*)inputPtrs[ch];
+                int* outBuf = (int*)outputPtrs[ch];
+                for (int n = 0; n < 4; n++)
+                {
+                    inBuf[n] = 0; // or any dummy value
+                    outBuf[n] = 0;
+                }
+            }
+        }
+        try
+        {
+            mockDriver.Mock_ActivateDataStream(inputPtrs, outputPtrs, AsioSampleType.Int32LSB);
+            // Wait for both events to be set, with a timeout to avoid hanging
+            bool inputFired = inputEvent.Wait(1000);
+            bool outputFired = outputEvent.Wait(1000);
+            Assert.IsTrue(inputFired, "InputDataAvailable not fired");
+            Assert.IsTrue(outputFired, "OutputDataAvailable not fired");
+        }
+        finally
+        {
+            for (int ch = 0; ch < 2; ch++)
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(inputPtrs[ch]);
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(outputPtrs[ch]);
+            }
+        }
         engine.Stop();
     }
 

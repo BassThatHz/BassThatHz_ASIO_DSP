@@ -39,10 +39,4 @@ public class Test_DEQ
         //Assert Under 5ms performance
         Assert.IsTrue(StopWatch1.Elapsed.TotalNanoseconds < 5000000, "Over 5ms");
     }
-
-    [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
 }

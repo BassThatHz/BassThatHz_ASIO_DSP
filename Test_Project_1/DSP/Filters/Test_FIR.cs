@@ -41,9 +41,4 @@ public class Test_FIR
         Assert.IsTrue(StopWatch1.Elapsed.TotalNanoseconds < 5000000, "Over 5ms");
     }
 
-    [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
 }

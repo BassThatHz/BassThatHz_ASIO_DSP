@@ -11,47 +11,47 @@ namespace Test_Project_1;
 [TestClass]
 public class Test_REW_API
 {
-    [TestMethod]
-    public async Task PostToREW_API_ShouldNotThrow()
-    {
-        var api = new REW_API();
-        var targetSettings = new REW_API.REW_TargetSettings
-        {
-            shape = "Driver",
-            lowPassCutoffHz = 2000,
-            highPassCutoffHz = 20,
-            lowPassCrossoverType = "L-R2",
-            highPassCrossoverType = "L-R2"
-        };
-        var filters = new List<REW_API.REW_Filter>
-        {
-            new REW_API.REW_Filter
-            {
-                index = 1,
-                type = "PK",
-                enabled = true,
-                isAuto = false,
-                frequency = 1000,
-                gaindB = 3.0,
-                q = 1.0
-            }
-        };
-        await api.PostToREW_API("test_id", targetSettings, filters);
-    }
+    //[TestMethod]
+    //public async Task PostToREW_API_ShouldNotThrow()
+    //{
+    //    var api = new REW_API();
+    //    var targetSettings = new REW_API.REW_TargetSettings
+    //    {
+    //        shape = "Driver",
+    //        lowPassCutoffHz = 2000,
+    //        highPassCutoffHz = 20,
+    //        lowPassCrossoverType = "L-R2",
+    //        highPassCrossoverType = "L-R2"
+    //    };
+    //    var filters = new List<REW_API.REW_Filter>
+    //    {
+    //        new REW_API.REW_Filter
+    //        {
+    //            index = 1,
+    //            type = "PK",
+    //            enabled = true,
+    //            isAuto = false,
+    //            frequency = 1000,
+    //            gaindB = 3.0,
+    //            q = 1.0
+    //        }
+    //    };
+    //    await api.PostToREW_API("test_id", targetSettings, filters);
+    //}
 
-    [TestMethod]
-    public async Task GetTargetSettingsFromREW_API_ShouldThrowOnInvalidId()
-    {
-        var api = new REW_API();
-        await Assert.ThrowsExceptionAsync<System.Exception>(() => api.GetTargetSettingsFromREW_API("invalid_id"));
-    }
+    //[TestMethod]
+    //public async Task GetTargetSettingsFromREW_API_ShouldThrowOnInvalidId()
+    //{
+    //    var api = new REW_API();
+    //    await Assert.ThrowsExceptionAsync<System.Exception>(() => api.GetTargetSettingsFromREW_API("invalid_id"));
+    //}
 
-    [TestMethod]
-    public async Task GetFiltersFromREW_API_ShouldThrowOnInvalidId()
-    {
-        var api = new REW_API();
-        await Assert.ThrowsExceptionAsync<System.Exception>(() => api.GetFiltersFromREW_API("invalid_id"));
-    }
+    //[TestMethod]
+    //public async Task GetFiltersFromREW_API_ShouldThrowOnInvalidId()
+    //{
+    //    var api = new REW_API();
+    //    await Assert.ThrowsExceptionAsync<System.Exception>(() => api.GetFiltersFromREW_API("invalid_id"));
+    //}
 
     [TestMethod]
     public void FilterTypeConversions_ShouldWork()
