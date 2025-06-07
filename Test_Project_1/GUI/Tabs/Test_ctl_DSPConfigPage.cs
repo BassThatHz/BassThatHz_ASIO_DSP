@@ -18,6 +18,12 @@ public class Test_ctl_DSPConfigPage
     [TestMethod]
     public void LoadConfigRefresh_DoesNotThrow()
     {
+        // Ensure Program.DSP_Info.Streams is initialized and not empty to avoid IndexOutOfRangeException
+        BassThatHz_ASIO_DSP_Processor.Program.DSP_Info = new BassThatHz_ASIO_DSP_Processor.DSP_Info();
+        if (BassThatHz_ASIO_DSP_Processor.Program.DSP_Info.Streams.Count == 0)
+        {
+            BassThatHz_ASIO_DSP_Processor.Program.DSP_Info.Streams.Add(new BassThatHz_ASIO_DSP_Processor.DSP_Stream());
+        }
         var control = new ctl_DSPConfigPage();
         control.LoadConfigRefresh();
         Assert.IsTrue(true);

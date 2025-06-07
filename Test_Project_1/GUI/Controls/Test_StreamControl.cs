@@ -122,10 +122,11 @@ public class Test_StreamControl
         addMethod.Invoke(streamControl, null);
         addMethod.Invoke(streamControl, null);
 
-        // Disable them first
+        // Disable them first and ensure they are enabled
         foreach (var filter in streamControl.FilterControls)
         {
             filter.Get_chkEnabled.Checked = false;
+            filter.Get_chkEnabled.Enabled = true; // Ensure enabled so btnEnableAll_Click can set Checked
         }
 
         // Use reflection to invoke protected method
@@ -143,10 +144,11 @@ public class Test_StreamControl
         addMethod.Invoke(streamControl, null);
         addMethod.Invoke(streamControl, null);
 
-        // Enable them first
+        // Enable them first and ensure they are enabled
         foreach (var filter in streamControl.FilterControls)
         {
             filter.Get_chkEnabled.Checked = true;
+            filter.Get_chkEnabled.Enabled = true; // Ensure enabled so btnDisableAll_Click can set Checked
         }
 
         // Use reflection to invoke protected method

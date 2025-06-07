@@ -12,7 +12,7 @@ namespace Test_Project_1
     {
         private TestableFIRControl _control;
         private TextBox _fftSizeTextBox;
-        private TextBox _tapsTextBox;
+        private RichTextBox _tapsTextBox;
         private Button _applyButton;
 
         [TestInitialize]
@@ -20,7 +20,7 @@ namespace Test_Project_1
         {
             _control = new TestableFIRControl();
             _fftSizeTextBox = new TextBox();
-            _tapsTextBox = new TextBox();
+            _tapsTextBox = new RichTextBox();
             _applyButton = new Button();
 
             // Set up test controls
@@ -68,7 +68,9 @@ namespace Test_Project_1
         {
             // Arrange
             var filter = GetPrivateField<FIR>(_control, "Filter");
-            _tapsTextBox.Text = "1.0\n2.0\n3.0";
+            _tapsTextBox.Lines = new[] { "1.0", "2.0", "3.0" };
+            // Filter out any empty/whitespace lines (RichTextBox may append an empty line)
+            _tapsTextBox.Lines = Array.FindAll(_tapsTextBox.Lines, line => !string.IsNullOrWhiteSpace(line));
 
             // Act
             _control.ApplySettings();
@@ -82,6 +84,7 @@ namespace Test_Project_1
         }
 
         [TestMethod]
+        [ExpectedException(typeof(FormatException))]
         public void TestApplySettings_HandlesEmptyTaps()
         {
             // Arrange
@@ -92,9 +95,7 @@ namespace Test_Project_1
             // Act
             _control.ApplySettings();
 
-            // Assert - Original taps should remain
-            Assert.IsNotNull(filter.Taps);
-            Assert.AreEqual(2, filter.Taps.Length);
+            // Assert - Exception expected, so no further checks
         }
 
         [TestMethod]

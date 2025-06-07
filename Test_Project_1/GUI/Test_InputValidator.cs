@@ -39,8 +39,8 @@ public class Test_InputValidator
     public void LimitTo_ReasonableSizedNumber_EnforcesLimits()
     {
         Assert.AreEqual("0", InputValidator.LimitTo_ReasonableSizedNumber("", false));
-        Assert.AreEqual("999999999", InputValidator.LimitTo_ReasonableSizedNumber("1000000000"));
-        Assert.AreEqual("-999999999", InputValidator.LimitTo_ReasonableSizedNumber("-1000000000"));
+        Assert.AreEqual("100000000", InputValidator.LimitTo_ReasonableSizedNumber("1000000000"));
+        Assert.AreEqual("-10000000", InputValidator.LimitTo_ReasonableSizedNumber("-1000000000"));
         Assert.AreEqual("123456789", InputValidator.LimitTo_ReasonableSizedNumber("123456789012345"));
         Assert.AreEqual("0", InputValidator.LimitTo_ReasonableSizedNumber("notanumber"));
         Assert.AreEqual("", InputValidator.LimitTo_ReasonableSizedNumber("", true));

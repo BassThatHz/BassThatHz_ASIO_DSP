@@ -42,12 +42,6 @@ public class Test_BiQuadFilter
     }
 
     [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
-
-    [TestMethod]
     public void BiQuadFilter_DefaultValues_AreCorrect()
     {
         var filter = new BiQuadFilter();

@@ -44,12 +44,6 @@ public class Test_Basic_HPF_LPF
     }
 
     [TestMethod]
-    public void TestMethod1()
-    {
-        throw new NotImplementedException();
-    }
-
-    [TestMethod]
     public void Basic_HPF_LPF_DefaultValues_AreCorrect()
     {
         var filter = new Basic_HPF_LPF();

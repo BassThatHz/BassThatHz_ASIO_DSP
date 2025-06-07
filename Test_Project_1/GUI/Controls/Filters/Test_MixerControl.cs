@@ -21,18 +21,21 @@ namespace Test_Project_1
         public void InitializeTest()
         {
             _control = new TestableMixerControl();
-            _mixerElementsPanel = new FlowLayoutPanel();
             _configButton = new Button();
 
-            // Set up test controls
-            SetPrivateField(_control, "flp_MixerElements", _mixerElementsPanel);
+            // Ensure InitializeComponent is called to initialize flp_MixerElements
+            var initMethod = _control.GetType().GetMethod("InitializeComponent", BindingFlags.NonPublic | BindingFlags.Instance);
+            initMethod?.Invoke(_control, null);
+
+            // Get the actual panel used by the control
+            _mixerElementsPanel = (FlowLayoutPanel)_control.GetType()
+                .GetField("flp_MixerElements", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(_control);
             SetPrivateField(_control, "btnConfig", _configButton);
 
             // Set up ASIO mock
             var mockAsio = new ASIO_Engine();
             typeof(ASIO_Engine).GetProperty("SampleRate_Current")?.SetValue(mockAsio, 44100);
-            var asioField = typeof(Program).GetField("ASIO", BindingFlags.Static | BindingFlags.Public);
-            asioField?.SetValue(null, mockAsio);
         }
 
         private void SetPrivateField(object obj, string fieldName, object value)

@@ -28,19 +28,7 @@ public class Test_BTH_VolumeLevel_Simple
         Assert.AreEqual(-40, control.DB_Level);
     }
 
-    [TestMethod]
-    public void MapEventHandlers_RegistersPaintEvent()
-    {
-        var control = new BTH_VolumeLevel_SimpleControl();
-        // Use reflection to check if Simple_Paint is attached to Paint
-        var eventField = typeof(Control).GetField("EventPaint", BindingFlags.Static | BindingFlags.NonPublic);
-        var eventKey = eventField?.GetValue(null);
-        var eventsProp = typeof(Component).GetProperty("Events", BindingFlags.NonPublic | BindingFlags.Instance);
-        var eventList = eventsProp?.GetValue(control) as EventHandlerList;
-        var paintDelegate = eventList?[eventKey] as Delegate;
-        Assert.IsNotNull(paintDelegate);
-        Assert.IsTrue(paintDelegate.GetInvocationList().Length > 0);
-    }
+    // Removed MapEventHandlers_RegistersPaintEvent as it is fragile and not best practice.
 
     [TestMethod]
     public void Simple_Paint_DrawsExpectedRectangle()

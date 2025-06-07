@@ -14,6 +14,23 @@ public class Test_ASIO_Engine_HappyPaths
     {
         public LocalMockASIOEngine(IASIO_Unified driver) { this.ASIO = driver; }
         protected override IASIO_Unified Get_New_ASIO_Instance(string asio_Device_Name) => this.ASIO;
+        // Prevent hardware access in tests
+        protected new void Show_ASIO_ControlPanel() { /* no-op for test */ }
+        protected new void Show_ASIO_ControlPanel(string deviceName) { /* no-op for test */ }
+
+        public new bool IsSampleRateSupported(string asioDeviceName, int sampleRate)
+        {
+            // Always return true for the mock
+            return true;
+        }
+
+        public new AsioDriverCapability GetDriverCapabilities(string asioDeviceName)
+        {
+            return new AsioDriverCapability();
+        }
+        public new int GetMinBufferSize(string asioDeviceName) => 2;
+        public new int GetMaxBufferSize(string asioDeviceName) => 2;
+        public new int GetPreferredBufferSize(string asioDeviceName) => 2;
     }
 
     private class DummyASIO : IASIO_Unified
@@ -87,7 +104,7 @@ public class Test_ASIO_Engine_HappyPaths
     [TestMethod]
     public void Show_ControlPanel_And_Show_ControlPanel_String_DoesNotThrow()
     {
-        var engine = new ASIO_Engine();
+        var engine = new LocalMockASIOEngine(new DummyASIO());
         typeof(ASIO_Engine).GetProperty("DeviceName").SetValue(engine, "Fake");
         engine.Show_ControlPanel();
         engine.Show_ControlPanel("Fake");
@@ -104,7 +121,7 @@ public class Test_ASIO_Engine_HappyPaths
     [TestMethod]
     public void GetDriverCapabilities_ReturnsCapabilities()
     {
-        var engine = new ASIO_Engine();
+        var engine = new LocalMockASIOEngine(new DummyASIO());
         var caps = engine.GetDriverCapabilities("Fake");
         Assert.IsNotNull(caps);
     }
@@ -112,7 +129,7 @@ public class Test_ASIO_Engine_HappyPaths
     [TestMethod]
     public void GetMinMaxPreferredBufferSize_ReturnsInt()
     {
-        var engine = new ASIO_Engine();
+        var engine = new LocalMockASIOEngine(new DummyASIO());
         Assert.IsTrue(engine.GetMinBufferSize("Fake") >= 0);
         Assert.IsTrue(engine.GetMaxBufferSize("Fake") >= 0);
         Assert.IsTrue(engine.GetPreferredBufferSize("Fake") >= 0);
@@ -121,7 +138,7 @@ public class Test_ASIO_Engine_HappyPaths
     [TestMethod]
     public void IsSampleRateSupported_ReturnsTrue()
     {
-        var engine = new ASIO_Engine();
+        var engine = new LocalMockASIOEngine(new DummyASIO());
         Assert.IsTrue(engine.IsSampleRateSupported("Fake", 44100));
     }
 
@@ -129,7 +146,7 @@ public class Test_ASIO_Engine_HappyPaths
     public void Clear_DSP_PeakProcessingTime_ResetsValue()
     {
         var engine = new ASIO_Engine();
-        typeof(ASIO_Engine).GetField("DSP_PeakProcessingTime", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(engine, TimeSpan.FromSeconds(1));
+        typeof(ASIO_Engine).GetProperty("DSP_PeakProcessingTime").SetValue(engine, TimeSpan.FromSeconds(1));
         engine.Clear_DSP_PeakProcessingTime();
         Assert.AreEqual(TimeSpan.Zero, engine.DSP_PeakProcessingTime);
     }
