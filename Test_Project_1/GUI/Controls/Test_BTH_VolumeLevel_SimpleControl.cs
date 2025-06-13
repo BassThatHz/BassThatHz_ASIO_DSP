@@ -32,11 +32,14 @@ public class Test_BTH_VolumeLevel_SimpleControl
     public void MapEventHandlers_RegistersPaintEvent()
     {
         var control = new BTH_VolumeLevel_SimpleControl();
+        control.MapEventHandlers(); // Ensure the method is called to register the event
+
         var eventField = typeof(Control).GetField("EventPaint", BindingFlags.Static | BindingFlags.NonPublic);
         var eventKey = eventField?.GetValue(null);
         var eventsProp = typeof(Component).GetProperty("Events", BindingFlags.NonPublic | BindingFlags.Instance);
         var eventList = eventsProp?.GetValue(control) as EventHandlerList;
         var paintDelegate = eventList?[eventKey] as Delegate;
+
         Assert.IsNotNull(paintDelegate);
         Assert.IsTrue(paintDelegate.GetInvocationList().Length > 0);
     }

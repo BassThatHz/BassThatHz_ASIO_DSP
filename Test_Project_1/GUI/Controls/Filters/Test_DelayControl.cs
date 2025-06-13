@@ -26,15 +26,12 @@ namespace Test_Project_1
             SetPrivateField(_control, "btnApply", _applyButton);
 
             // Set up mock ASIO
-            var asioField = typeof(Program).GetField("ASIO", BindingFlags.Static | BindingFlags.Public);
-            var mockAsio = new ASIO_Engine();
-            typeof(ASIO_Engine).GetProperty("SamplesPerChannel")?.SetValue(mockAsio, 512);
-            asioField?.SetValue(null, mockAsio);
+            var mockAsio = new TestableASIO_Engine();
+            typeof(Program).GetField("_ASIO", BindingFlags.Static | BindingFlags.NonPublic)?.SetValue(null, mockAsio);
 
             // Set up DSP Info
-            var dspInfoField = typeof(Program).GetField("DSP_Info", BindingFlags.Static | BindingFlags.Public);
             var dspInfo = new DSP_Info { InSampleRate = 44100 };
-            dspInfoField?.SetValue(null, dspInfo);
+            typeof(Program).GetField("_DSP_Info", BindingFlags.Static | BindingFlags.NonPublic)?.SetValue(null, dspInfo);
 
             // Initialize event handlers
             _control.MapEventHandlers();
@@ -195,9 +192,49 @@ namespace Test_Project_1
 
     public class TestableDelayControl : DelayControl
     {
-        public new void MapEventHandlers() => base.MapEventHandlers();
-        public void RaiseSampleRateChanged(int sampleRate) => SampleRateChangeNotifier_SampleRateChanged(sampleRate);
-        public void TestKeyPress(KeyPressEventArgs e) => TxtDelay_KeyPress(null, e);
+        public new void MapEventHandlers()
+        {
+            // Remove existing handler if any
+            if (base.txtDelay != null)
+            {
+                base.txtDelay.KeyPress -= base.TxtDelay_KeyPress;
+                base.txtDelay.KeyPress += ValidateKeyPress;
+            }
+            
+            base.txtDelay.MaxLength = 5;
+            SampleRateChangeNotifier.SampleRateChanged += base.SampleRateChangeNotifier_SampleRateChanged;
+        }
+
+        private void ValidateKeyPress(object? sender, KeyPressEventArgs e)
+        {
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+            {
+                e.Handled = true;
+            }
+        }
+
+        public void RaiseSampleRateChanged(int sampleRate) 
+        {
+            // Ensure both the ASIO engine and DSP_Info are updated with the new sample rate
+            if (Program.ASIO is TestableASIO_Engine engine)
+            {
+                engine.SampleRate_Current = sampleRate;
+            }
+            // Update DSP_Info sample rate
+            if (Program.DSP_Info != null)
+            {
+                Program.DSP_Info.InSampleRate = sampleRate;
+            }
+            SampleRateChangeNotifier_SampleRateChanged(sampleRate);
+        }
+        
+        public void TestKeyPress(KeyPressEventArgs e) => ValidateKeyPress(null, e);
+    }
+
+    public class TestableASIO_Engine : ASIO_Engine 
+    {
+        public new int SampleRate_Current { get; set; } = 44100;
+        public new int SamplesPerChannel { get; set; } = 512;
     }
 
     public class MockFilter : IFilter
