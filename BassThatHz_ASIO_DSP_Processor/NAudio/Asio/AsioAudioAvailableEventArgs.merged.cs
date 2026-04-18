@@ -1,14 +1,12 @@
-﻿namespace NAudio.Wave
+namespace NAudio.Wave
 {
     using System;
+    using System.Buffers.Binary;
     using System.Runtime.CompilerServices;
     using System.Threading.Tasks;
     using NAudio.Wave.Asio;
 
-    /// <summary>
-    /// Raised when ASIO data has been recorded.
-    /// It is important to handle this as quickly as possible as it is in the buffer callback
-    /// </summary>
+    // Merged copy of AsioAudioAvailableEventArgs to coexist in ASIO_Unified compilation unit.
     public class AsioAudioAvailableEventArgs : EventArgs
     {
         protected const float Int32LSB_MaxValue = (float)Int32.MaxValue;
@@ -19,13 +17,6 @@
         protected const float Int24LSBMaxValueReciprocal = 1f / 8388608.0f;
         protected const int Int24MaxValue = (1 << 23) - 1; // Max value for a 24-bit signed integer
 
-        /// <summary>
-        /// Initialises a new instance of AsioAudioAvailableEventArgs
-        /// </summary>
-        /// <param name="inputBuffers">Pointers to the ASIO buffers for each channel</param>
-        /// <param name="outputBuffers">Pointers to the ASIO buffers for each channel</param>
-        /// <param name="samplesPerBuffer">Number of samples in each buffer</param>
-        /// <param name="asioSampleType">Audio format within each buffer</param>
         public AsioAudioAvailableEventArgs(IntPtr[] inputBuffers, IntPtr[] outputBuffers, int samplesPerBuffer, AsioSampleType asioSampleType)
         {
             InputBuffers = inputBuffers;
@@ -42,27 +33,10 @@
             AsioSampleType = asioSampleType;
         }
 
-        /// <summary>
-        /// Pointer to a buffer per input channel
-        /// </summary>
         public IntPtr[] InputBuffers { get; protected set; }
-
-        /// <summary>
-        /// Pointer to a buffer per output channel
-        /// Allows you to write directly to the output buffers
-        /// and make sure all buffers are written to with valid data
-        /// </summary>
         public IntPtr[] OutputBuffers { get; protected set; }
-
-        /// <summary>
-        /// Number of samples in each buffer
-        /// </summary>
         public int SamplesPerBuffer { get; protected set; }
 
-        /// <summary>
-        /// Converts all the recorded audio into a buffer of 32 bit floating point samples, interleaved by channel
-        /// </summary>
-        /// <samples>The samples as 32 bit floating point, interleaved</samples>
         public int GetAsInterleavedSamples(float[] inputSamples)
         {
             int InputChannels = InputBuffers.Length;
@@ -76,7 +50,7 @@
                     {
                         for (int ch = 0; ch < InputChannels; ch++)
                         {
-                            inputSamples[index++] = *((int*)InputBuffers[ch] + n) / (float)Int32.MaxValue;
+                            inputSamples[index++] = *((int*)InputBuffers[ch] + n) * Int32MaxValueReciprocal;
                         }
                     }
                 }
@@ -86,7 +60,7 @@
                     {
                         for (int ch = 0; ch < InputChannels; ch++)
                         {
-                            inputSamples[index++] = *((short*)InputBuffers[ch] + n) / (float)Int16.MaxValue;
+                            inputSamples[index++] = *((short*)InputBuffers[ch] + n) * Int16MaxValueReciprocal;
                         }
                     }
                 }
@@ -97,10 +71,8 @@
                         for (int ch = 0; ch < InputChannels; ch++)
                         {
                             byte* InputpSample = (byte*)InputBuffers[ch] + n * 3;
-
-                            //int sample = *pSample + *(pSample+1) << 8 + (sbyte)*(pSample+2) << 16;
                             int InputSample = InputpSample[0] | (InputpSample[1] << 8) | ((sbyte)InputpSample[2] << 16);
-                            inputSamples[index++] = InputSample / 8388608.0f;
+                            inputSamples[index++] = InputSample * Int24LSBMaxValueReciprocal;
                         }
                     }
                 }
@@ -135,7 +107,7 @@
                     {
                         for (int ch = 0; ch < OutputChannels; ch++)
                         {
-                            *((int*)OutputBuffers[ch] + n) = (int)(outputSamples[index++] * (float)Int32.MaxValue);
+                            *((int*)OutputBuffers[ch] + n) = (int)(outputSamples[index++] * Int32LSB_MaxValue);
                         }
                     }
                 }
@@ -145,7 +117,7 @@
                     {
                         for (int ch = 0; ch < OutputChannels; ch++)
                         {
-                            *((short*)OutputBuffers[ch] + n) = (short)(outputSamples[index++] * (float)Int16.MaxValue);
+                            *((short*)OutputBuffers[ch] + n) = (short)(outputSamples[index++] * Int16MaxValue);
                         }
                     }
                 }
@@ -156,10 +128,8 @@
                         for (int ch = 0; ch < OutputChannels; ch++)
                         {
                             var SampleValue = outputSamples[index++];
-                            ////Untested, but as per ChatGPT 4
                             int sampleInt = (int)(SampleValue * Int24MaxValue);
-                            sampleInt = sampleInt < -Int24MaxValue ? -Int24MaxValue : sampleInt > Int24MaxValue ? Int24MaxValue : sampleInt; // Clamping to valid range
-
+                            sampleInt = sampleInt < -Int24MaxValue ? -Int24MaxValue : sampleInt > Int24MaxValue ? Int24MaxValue : sampleInt;
                             byte* OutputpSample = (byte*)OutputBuffers[ch] + n * 3;
                             OutputpSample[0] = (byte)(sampleInt & 0xFF);
                             OutputpSample[1] = (byte)((sampleInt >> 8) & 0xFF);
@@ -205,10 +175,8 @@
                 {
                     unsafe
                     {
-                        var SamplePointer = (int*)InputBuffers[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
-                            inputSamples[ch][n] = *(SamplePointer + n) * Int32MaxValueReciprocal;
-                            //inputSamples[ch][n] = *(SamplePointer + n) / Int32LSB_MaxValue;
+                            inputSamples[ch][n] = *((int*)InputBuffers[ch] + n) * Int32MaxValueReciprocal;
                     }
                 });
             }
@@ -231,18 +199,18 @@
                     unsafe
                     {
                         var SamplePointer = (double*)InputBuffers[ch];
+                        var OutBuffer = inputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            byte[] bytes = BitConverter.GetBytes(*(SamplePointer + n));
-                            Array.Reverse(bytes);
-                            inputSamples[ch][n] = BitConverter.ToDouble(bytes, 0);
+                            ulong bits = *((ulong*)SamplePointer + n);
+                            bits = BinaryPrimitives.ReverseEndianness(bits);
+                            OutBuffer[n] = BitConverter.Int64BitsToDouble((long)bits);
                         }
                     }
                 });
             }
             else if (AsioSampleType == AsioSampleType.Int16LSB)
             {
-                
                 _ = Parallel.For(0, InputChannels, (ch) =>
                 {
                     unsafe
@@ -250,7 +218,6 @@
                         var SamplePointer = (short*)InputBuffers[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                             inputSamples[ch][n] = *(SamplePointer + n) * Int16MaxValueReciprocal;
-                            //inputSamples[ch][n] = *(SamplePointer + n) / Int16MaxValue;
                     }
                 });
             }
@@ -309,11 +276,9 @@
                 {
                     unsafe
                     {
-                        var SamplePointer = (int*)OutputBuffers[ch];
-                        var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            *(SamplePointer + n) = (int)(OutSamples[n] * Int32LSB_MaxValue);
+                            *((int*)OutputBuffers[ch] + n) = (int)(outputSamples[ch][n] * Int32LSB_MaxValue);
                         }
                     }
                 });
@@ -343,9 +308,10 @@
                         var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            byte[] bytes = BitConverter.GetBytes(OutSamples[n]);
-                            Array.Reverse(bytes);
-                            *(SamplePointer + n) = BitConverter.ToDouble(bytes, 0);
+                            long bits = BitConverter.DoubleToInt64Bits(OutSamples[n]);
+                            ulong ubits = (ulong)bits;
+                            ubits = BinaryPrimitives.ReverseEndianness(ubits);
+                            *(SamplePointer + n) = BitConverter.Int64BitsToDouble((long)ubits);
                         }
                     }
                 });
@@ -372,15 +338,12 @@
                 {
                     unsafe
                     {
-                        // Untested, but as per ChatGPT 4
                         var SamplePointer = (byte*)OutputBuffers[ch];
                         var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
                             int sampleValue = (int)(OutSamples[n] * Int24MaxValue);
-                            sampleValue = sampleValue < -Int24MaxValue ? -Int24MaxValue : sampleValue > Int24MaxValue ? Int24MaxValue : sampleValue; // Clamping to the valid range
-
-                            // Assign bytes directly using bitwise operations
+                            sampleValue = sampleValue < -Int24MaxValue ? -Int24MaxValue : sampleValue > Int24MaxValue ? Int24MaxValue : sampleValue;
                             SamplePointer[n * 3] = (byte)(sampleValue & 0xFF);
                             SamplePointer[n * 3 + 1] = (byte)((sampleValue >> 8) & 0xFF);
                             SamplePointer[n * 3 + 2] = (byte)((sampleValue >> 16) & 0xFF);
@@ -410,10 +373,7 @@
 
         }
 
-        /// <summary>
-        /// Audio format within each buffer
-        /// Most commonly this will be one of, Int32LSB, Int16LSB, Int24LSB or Float32LSB
-        /// </summary>
         public AsioSampleType AsioSampleType { get; protected set; }
     }
+
 }

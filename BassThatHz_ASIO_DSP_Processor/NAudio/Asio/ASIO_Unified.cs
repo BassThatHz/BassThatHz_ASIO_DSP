@@ -9,6 +9,9 @@ namespace NAudio.Wave
     using System.Runtime.InteropServices;
     using System.Text;
     using Microsoft.Win32;
+    using System.Buffers.Binary;
+    using System.Threading.Tasks;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// Original Contributor: Mark Heath 
@@ -40,6 +43,14 @@ namespace NAudio.Wave
 
         #endregion
 
+        // Compatibility: expose Capabilities and FillBufferCallback similar to AsioDriverExt
+        public AsioDriverCapability Capabilities => this.capability;
+
+        /// <summary>
+        /// Legacy callback used by AsioDriverExt style API. Kept for compatibility and lowered-indirection usage.
+        /// </summary>
+        public NAudio.Wave.Asio.AsioFillBufferCallback FillBufferCallback { get; set; }
+
         #region ASIO
 
         #region EventHandlers
@@ -56,6 +67,68 @@ namespace NAudio.Wave
             this.InstantiateAsioDriverByName(this.DriverName);
             this.AsioDriverExt();
             this.Driver_ResetRequestCallback = this.OnDriverResetRequest;
+        }
+
+        /// <summary>
+        /// Returns the ASIO driver names installed.
+        /// </summary>
+        public static string[] GetAsioDriverNames()
+        {
+            var names = Array.Empty<string>();
+            var regKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\ASIO");
+
+            if (regKey != null)
+            {
+                names = regKey.GetSubKeyNames();
+                regKey.Close();
+            }
+
+            return names;
+        }
+
+        /// <summary>
+        /// Instantiate an ASIO_Unified given its name.
+        /// </summary>
+        public static ASIO_Unified GetAsioDriverByName(string name)
+        {
+            return new ASIO_Unified(name);
+        }
+
+        /// <summary>
+        /// Instantiate an ASIO_Unified given its guid.
+        /// </summary>
+        public static ASIO_Unified GetAsioDriverByGuid(Guid guid)
+        {
+            return new ASIO_Unified(guid);
+        }
+
+        /// <summary>
+        /// Private ctor to instantiate from GUID when merging AsioDriver API into ASIO_Unified.
+        /// </summary>
+        private ASIO_Unified(Guid asioGuid)
+        {
+            this.DriverName = GetDriverNameFromRegistryGuid(asioGuid);
+            this.InitFromGuid(asioGuid);
+            this.AsioDriverExt();
+            this.Driver_ResetRequestCallback = this.OnDriverResetRequest;
+        }
+
+        private static string GetDriverNameFromRegistryGuid(Guid guid)
+        {
+            var regKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\ASIO");
+            if (regKey == null)
+                return string.Empty;
+
+            foreach (var name in regKey.GetSubKeyNames())
+            {
+                using var sub = regKey.OpenSubKey(name);
+                if (sub == null) continue;
+                var clsid = sub.GetValue("CLSID")?.ToString();
+                if (string.IsNullOrEmpty(clsid)) continue;
+                if (Guid.TryParse(clsid, out Guid parsed) && parsed == guid)
+                    return name;
+            }
+            return string.Empty;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -363,6 +436,16 @@ namespace NAudio.Wave
             // Call outputReady
             this.isOutputReadySupported = this.asioDriverVTable.outputReady(this.pAsioComObject) == AsioError.ASE_OK;
 
+            // Pre-create and reuse the AsioAudioAvailableEventArgs instance to avoid allocating during callbacks
+            if (this.On_Has_ASIO_Data_Args == null)
+            {
+                // Ensure arrays exist
+                this.currentOutputBuffers = new IntPtr[this.numberOfOutputChannels];
+                this.currentInputBuffers = new IntPtr[this.numberOfInputChannels];
+                var sampleType = this.capability.InputChannelInfos != null && this.capability.InputChannelInfos.Length > 0 ? this.capability.InputChannelInfos[0].type : AsioSampleType.Float32LSB;
+                this.On_Has_ASIO_Data_Args = new AsioAudioAvailableEventArgs(this.currentInputBuffers, this.currentOutputBuffers, this.bufferSize, sampleType);
+            }
+
             return this.bufferSize;
         }
 
@@ -427,6 +510,9 @@ namespace NAudio.Wave
             for (int i = 0; i < this.numberOfOutputChannels; i++)
                 this.currentOutputBuffers[i] = this.bufferInfos[i + IndexOffset].Buffer(doubleBufferIndex);
 
+            // If a legacy fill buffer callback is set, call it first to give direct buffer access
+            this.FillBufferCallback?.Invoke(this.currentInputBuffers, this.currentOutputBuffers);
+
             if (this.On_Has_ASIO_Data_Args == null)
             {
                 this.On_Has_ASIO_Data_Args =
@@ -478,8 +564,8 @@ namespace NAudio.Wave
             switch (selector)
             {
                 case AsioMessageSelector.kAsioSelectorSupported:
-                    AsioMessageSelector subValue = (AsioMessageSelector)Enum.ToObject(typeof(AsioMessageSelector), value);
-                    switch (subValue)
+                    // Avoid boxing allocations by casting directly to the enum type
+                    switch ((AsioMessageSelector)value)
                     {
                         case AsioMessageSelector.kAsioEngineVersion:
                             return 1;
