@@ -39,6 +39,8 @@ namespace BassThatHz_ASIO_DSP_Processor
             ctl_InputsConfigPage1 = new ctl_InputsConfigPage();
             OutputsConfigPage = new System.Windows.Forms.TabPage();
             ctl_OutputsConfigPage1 = new ctl_OutputsConfigPage();
+            Upmixer = new System.Windows.Forms.TabPage();
+            ctl_UpmixerPage1 = new ctl_UpmixerPage();
             BusesPage = new System.Windows.Forms.TabPage();
             ctl_BusesPage1 = new ctl_BusesPage();
             DSPConfigPage = new System.Windows.Forms.TabPage();
@@ -51,6 +53,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             GeneralConfigPage.SuspendLayout();
             InputsConfigPage.SuspendLayout();
             OutputsConfigPage.SuspendLayout();
+            Upmixer.SuspendLayout();
             BusesPage.SuspendLayout();
             DSPConfigPage.SuspendLayout();
             StatsPage.SuspendLayout();
@@ -62,6 +65,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             tabControl1.Controls.Add(GeneralConfigPage);
             tabControl1.Controls.Add(InputsConfigPage);
             tabControl1.Controls.Add(OutputsConfigPage);
+            tabControl1.Controls.Add(Upmixer);
             tabControl1.Controls.Add(BusesPage);
             tabControl1.Controls.Add(DSPConfigPage);
             tabControl1.Controls.Add(StatsPage);
@@ -71,7 +75,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             tabControl1.Margin = new System.Windows.Forms.Padding(2);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new System.Drawing.Size(1090, 529);
+            tabControl1.Size = new System.Drawing.Size(1384, 946);
             tabControl1.TabIndex = 0;
             // 
             // GeneralConfigPage
@@ -81,7 +85,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             GeneralConfigPage.Margin = new System.Windows.Forms.Padding(2);
             GeneralConfigPage.Name = "GeneralConfigPage";
             GeneralConfigPage.Padding = new System.Windows.Forms.Padding(2);
-            GeneralConfigPage.Size = new System.Drawing.Size(1082, 501);
+            GeneralConfigPage.Size = new System.Drawing.Size(1376, 918);
             GeneralConfigPage.TabIndex = 0;
             GeneralConfigPage.Text = "General Config";
             GeneralConfigPage.UseVisualStyleBackColor = true;
@@ -92,7 +96,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             ctl_GeneralConfigPage1.Location = new System.Drawing.Point(2, 2);
             ctl_GeneralConfigPage1.Margin = new System.Windows.Forms.Padding(2);
             ctl_GeneralConfigPage1.Name = "ctl_GeneralConfigPage1";
-            ctl_GeneralConfigPage1.Size = new System.Drawing.Size(1078, 497);
+            ctl_GeneralConfigPage1.Size = new System.Drawing.Size(1372, 914);
             ctl_GeneralConfigPage1.TabIndex = 0;
             // 
             // InputsConfigPage
@@ -135,6 +139,28 @@ namespace BassThatHz_ASIO_DSP_Processor
             ctl_OutputsConfigPage1.Name = "ctl_OutputsConfigPage1";
             ctl_OutputsConfigPage1.Size = new System.Drawing.Size(192, 72);
             ctl_OutputsConfigPage1.TabIndex = 0;
+            // 
+            // Upmixer
+            // 
+            Upmixer.Controls.Add(ctl_UpmixerPage1);
+            Upmixer.Location = new System.Drawing.Point(4, 24);
+            Upmixer.Name = "Upmixer";
+            Upmixer.Padding = new System.Windows.Forms.Padding(3);
+            Upmixer.Size = new System.Drawing.Size(1376, 918);
+            Upmixer.TabIndex = 7;
+            Upmixer.Text = "3D Audio Upmixer";
+            Upmixer.UseVisualStyleBackColor = true;
+            // 
+            // ctl_UpmixerPage1
+            // 
+            ctl_UpmixerPage1.AutoScroll = true;
+            ctl_UpmixerPage1.Dock = System.Windows.Forms.DockStyle.Fill;
+            ctl_UpmixerPage1.Enabled = false;
+            ctl_UpmixerPage1.Location = new System.Drawing.Point(3, 3);
+            ctl_UpmixerPage1.Margin = new System.Windows.Forms.Padding(2);
+            ctl_UpmixerPage1.Name = "ctl_UpmixerPage1";
+            ctl_UpmixerPage1.Size = new System.Drawing.Size(1370, 912);
+            ctl_UpmixerPage1.TabIndex = 0;
             // 
             // BusesPage
             // 
@@ -221,19 +247,20 @@ namespace BassThatHz_ASIO_DSP_Processor
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            ClientSize = new System.Drawing.Size(1090, 529);
+            ClientSize = new System.Drawing.Size(1384, 946);
             Controls.Add(tabControl1);
             Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
             Margin = new System.Windows.Forms.Padding(2);
             MinimumSize = new System.Drawing.Size(836, 320);
             Name = "FormMain";
-            Text = "BassThatHz_ASIO_DSP_Processor 2.0.2  Alpha";
+            Text = "BassThatHz_ASIO_DSP_Processor 2.0.3  Alpha";
             WindowState = System.Windows.Forms.FormWindowState.Maximized;
             Load += FormMain_Load;
             tabControl1.ResumeLayout(false);
             GeneralConfigPage.ResumeLayout(false);
             InputsConfigPage.ResumeLayout(false);
             OutputsConfigPage.ResumeLayout(false);
+            Upmixer.ResumeLayout(false);
             BusesPage.ResumeLayout(false);
             DSPConfigPage.ResumeLayout(false);
             StatsPage.ResumeLayout(false);
@@ -257,6 +284,8 @@ namespace BassThatHz_ASIO_DSP_Processor
         protected GUI.Tabs.ctl_StatsPage ctl_StatsPage1;
         protected GUI.Tabs.ctl_MonitorPage ctl_MonitorPage1;
         protected GUI.Tabs.ctl_BusesPage ctl_BusesPage1;
+        protected GUI.Tabs.ctl_UpmixerPage ctl_UpmixerPage1;
         protected System.Windows.Forms.TabPage BusesPage;
+        protected System.Windows.Forms.TabPage Upmixer;
     }
 }

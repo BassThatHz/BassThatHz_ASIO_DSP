@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-	  <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+	  <TargetFrameworks>net10.0-windows10.0.26100.0</TargetFrameworks>	  
 	  <OutputType>WinExe</OutputType>
 	  <PublishSingleFile>true</PublishSingleFile>
 	  <SelfContained>false</SelfContained>
@@ -23,6 +23,7 @@
 	  <BootstrapperEnabled>true</BootstrapperEnabled>
 	  <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	  <UseWindowsForms>true</UseWindowsForms>
+	  <UseWPF>true</UseWPF>
 	  <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
 	  <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
@@ -179,5 +180,10 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="GUI\Tabs\ctl_3DLayout.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </None>
   </ItemGroup>
 </Project>
