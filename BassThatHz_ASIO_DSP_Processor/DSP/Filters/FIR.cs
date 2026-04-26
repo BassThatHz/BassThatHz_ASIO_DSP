@@ -40,6 +40,7 @@ public class FIR : IFilter
     public double[]? Taps;
     protected double[]? ThreadLocal_Taps;
     protected Complex[]? ThreadLocal_Taps_FFT_Complex;
+    protected FFT? ThreadLocalFFT;
     protected double[] OverlapBuffer = Array.Empty<double>();
     #endregion
 
@@ -53,35 +54,34 @@ public class FIR : IFilter
 
         try
         {
-            //lock (this.ResizeTapsLockObject) //For Debugging
-            //{
-
-            //FFT FIR
             int InputLength = input.Length;
             int OverlapSize = this.FFTSize - InputLength;
 
-            //Overlap-save slide
+            // Overlap-save slide (move tail forward)
             Array.Copy(this.OverlapBuffer, InputLength, this.OverlapBuffer, 0, OverlapSize);
 
-            //Overlap-save inject input
+            // Inject input into overlap buffer
             Array.Copy(input, 0, this.OverlapBuffer, OverlapSize, InputLength);
 
-            //FFT the input
-            var temp_FFT = new FFT(this.FFTSize, 0);
-            Complex[] Input_FFT_Complex = temp_FFT.Perform_FFT(this.OverlapBuffer, false);
+            // Use cached FFT instance when available
+            var fft = this.ThreadLocalFFT ?? new FFT(this.FFTSize, 0);
 
-            //Freq-Amplitude Convolver
-            var Complex_Convolve = new Complex[this.FFTSize];
+            // FFT the input (returns complex spectrum)
+            Complex[] Input_FFT_Complex = fft.Perform_FFT(this.OverlapBuffer, false);
+
+            // Multiply (convolve) in frequency domain in-place to avoid extra allocation
+            var tapsFft = this.ThreadLocal_Taps_FFT_Complex;
+            if (tapsFft == null)
+                return input;
+
             for (int n = 0; n < this.FFTSize; n++)
-                Complex_Convolve[n] = Complex.Multiply(Input_FFT_Complex[n], this.ThreadLocal_Taps_FFT_Complex[n]);
+                Input_FFT_Complex[n] *= tapsFft[n];
 
-            //Inverse FFT
-            double[] Result = temp_FFT.Perform_IFFT(Complex_Convolve, false);
+            // Inverse FFT
+            double[] Result = fft.Perform_IFFT(Input_FFT_Complex, false);
 
-            //Overlap-save: copy the results to the output
+            // Overlap-save: copy the results to the output
             Array.Copy(Result, OverlapSize, input, 0, InputLength);
-
-            //} //For Debugging
         }
         catch (Exception ex)
         {
@@ -114,10 +114,23 @@ public class FIR : IFilter
             _ = Parallel.For(0, TapsLength, (n) =>
                  this.ThreadLocal_Taps[n] = input[n]);
 
-            var temparray = new double[this.FFTSize];
-            Array.Copy(input, temparray, input.Length);
-            var temp_FFT = new FFT(this.FFTSize, 0);
-            this.ThreadLocal_Taps_FFT_Complex = temp_FFT.Perform_FFT(temparray, false);
+            // Prepare a zero-padded array of size FFTSize using ArrayPool to avoid allocations
+            var pool = System.Buffers.ArrayPool<double>.Shared;
+            double[] temparray = pool.Rent(this.FFTSize);
+            try
+            {
+                Array.Clear(temparray, 0, this.FFTSize);
+                Array.Copy(input, temparray, input.Length);
+
+                var temp_FFT = new FFT(this.FFTSize, 0);
+                this.ThreadLocal_Taps_FFT_Complex = temp_FFT.Perform_FFT(temparray, false);
+                // Cache FFT instance for reuse
+                this.ThreadLocalFFT = temp_FFT;
+            }
+            finally
+            {
+                pool.Return(temparray, clearArray: false);
+            }
 
             if (this.OverlapBuffer.Length != this.FFTSize)
                 this.OverlapBuffer = new double[this.FFTSize];

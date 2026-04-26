@@ -77,13 +77,21 @@ public partial class AntiDCControl : UserControl, IFilterControl
     protected void TxtConsecutiveDCSamples_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtConsecutiveDCSamples.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtConsecutiveDCSamples.Text);
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtConsecutiveDCSamples.Text);
+        if (!string.Equals(this.txtConsecutiveDCSamples.Text, limited, StringComparison.Ordinal))
+        {
+            this.txtConsecutiveDCSamples.Text = limited;
+        }
     }
 
     protected void txtDuration_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtDuration.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDuration.Text);
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDuration.Text);
+        if (!string.Equals(this.txtDuration.Text, limited, StringComparison.Ordinal))
+        {
+            this.txtDuration.Text = limited;
+        }
     }
     #endregion
 
@@ -106,9 +114,11 @@ public partial class AntiDCControl : UserControl, IFilterControl
             {
                 if (!this.chkOutputMuted.Checked)
                 {
-                    this.chkOutputMuted.Text = string.Format(this.MutedTextStringFormat,
-                                                            e.ClippedSamples,
-                                                            e.ClippedEvents);
+                    var formatted = string.Format(this.MutedTextStringFormat, e.ClippedSamples, e.ClippedEvents);
+                    if (!string.Equals(this.chkOutputMuted.Text, formatted, StringComparison.Ordinal))
+                    {
+                        this.chkOutputMuted.Text = formatted;
+                    }
                 }
             });
         }
@@ -127,13 +137,27 @@ public partial class AntiDCControl : UserControl, IFilterControl
             {
                 if (!this.chkOutputMuted.Checked)
                 {
-                    this.chkOutputMuted.Text = string.Format(this.MutedTextStringFormat,
-                                                            e.ClippedSamples,
-                                                            e.ClippedEvents);
+                    var formatted = string.Format(this.MutedTextStringFormat, e.ClippedSamples, e.ClippedEvents);
+                    if (!string.Equals(this.chkOutputMuted.Text, formatted, StringComparison.Ordinal))
+                    {
+                        this.chkOutputMuted.Text = formatted;
+                    }
+
                     //Only enabled when it is muted and checked
-                    this.chkOutputMuted.ForeColor = Color.Red;
-                    this.chkOutputMuted.Checked = true;
-                    this.chkOutputMuted.Enabled = true;
+                    if (this.chkOutputMuted.ForeColor != Color.Red)
+                    {
+                        this.chkOutputMuted.ForeColor = Color.Red;
+                    }
+
+                    if (!this.chkOutputMuted.Checked)
+                    {
+                        this.chkOutputMuted.Checked = true;
+                    }
+
+                    if (!this.chkOutputMuted.Enabled)
+                    {
+                        this.chkOutputMuted.Enabled = true;
+                    }
                 }
             });
         }
@@ -151,8 +175,15 @@ public partial class AntiDCControl : UserControl, IFilterControl
             {
                 //Only enabled when it is muted and checked, thus false is assumed
                 this.chkOutputMuted.Enabled = false;
-                this.chkOutputMuted.Text = this.Default_MutedTextString;
-                this.chkOutputMuted.ForeColor = Color.Black;
+                if (!string.Equals(this.chkOutputMuted.Text, this.Default_MutedTextString, StringComparison.Ordinal))
+                {
+                    this.chkOutputMuted.Text = this.Default_MutedTextString;
+                }
+
+                if (this.chkOutputMuted.ForeColor != Color.Black)
+                {
+                    this.chkOutputMuted.ForeColor = Color.Black;
+                }
                 this.SetFilterSettings();
                 this.Filter.ResetDetection();
             }
@@ -179,9 +210,25 @@ public partial class AntiDCControl : UserControl, IFilterControl
     #region Protected Functions
     protected void SetFilterSettings()
     {
-        this.Filter.DetectionDuration = TimeSpan.FromMilliseconds(int.Parse(this.txtDuration.Text));
-        this.Filter.MaxClipEventsPerDuration = int.Parse(this.txtEvents.Text);
-        this.Filter.MaxConsecutiveDCSamples = int.Parse(this.txtConsecutiveDCSamples.Text);
+        // Parse inputs safely to avoid exceptions and unnecessary allocations
+        if (!double.TryParse(this.txtDuration.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ms))
+        {
+            ms = this.Filter.DetectionDuration.TotalMilliseconds;
+        }
+
+        if (!int.TryParse(this.txtEvents.Text, out var eventsCount))
+        {
+            eventsCount = this.Filter.MaxClipEventsPerDuration;
+        }
+
+        if (!int.TryParse(this.txtConsecutiveDCSamples.Text, out var consecutive))
+        {
+            consecutive = this.Filter.MaxConsecutiveDCSamples;
+        }
+
+        this.Filter.DetectionDuration = TimeSpan.FromMilliseconds(ms);
+        this.Filter.MaxClipEventsPerDuration = eventsCount;
+        this.Filter.MaxConsecutiveDCSamples = consecutive;
     }
     #endregion
 

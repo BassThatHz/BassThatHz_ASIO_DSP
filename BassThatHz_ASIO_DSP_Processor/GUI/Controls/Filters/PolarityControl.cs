@@ -31,7 +31,9 @@ using System.Windows.Forms;
 public partial class PolarityControl : UserControl, IFilterControl
 {
     #region Variables
-    protected Polarity Filter = new();
+    // Keep the active filter instance private to allow internal changes
+    // without exposing the concrete implementation to subclasses.
+    private Polarity Filter = new();
     #endregion
 
     #region Constructor
@@ -42,16 +44,19 @@ public partial class PolarityControl : UserControl, IFilterControl
     #endregion
 
     #region Event Handlers
-    protected void cboInverted_CheckedChanged(object? sender, System.EventArgs e)
+    // Event handler kept non-virtual (private) to avoid virtual dispatch overhead
+    // and avoid try/catch in the hot path. Only apply changes when the value
+    // actually differs to prevent unnecessary work.
+    private void cboInverted_CheckedChanged(object? sender, System.EventArgs e)
     {
-        try
-        {
-            this.Filter.Positive = !this.cboInverted.Checked;
-        }
-        catch (Exception ex)
-        {
-            this.Error(ex);
-        }
+        if (this.cboInverted == null)
+            return;
+
+        bool positive = !this.cboInverted.Checked;
+        if (this.Filter.Positive == positive)
+            return;
+
+        this.Filter.Positive = positive;
     }
     #endregion
 
@@ -66,10 +71,27 @@ public partial class PolarityControl : UserControl, IFilterControl
 
     public void SetDeepClonedFilter(IFilter input)
     {
-        if (input is Polarity polarity)
+        if (input is not Polarity polarity)
+            return;
+
+        // Prevent triggering the CheckedChanged event while we update the control
+        // and avoid unnecessary assignments.
+        bool desiredChecked = !polarity.Positive;
+        bool unsubscribed = false;
+        try
         {
+            this.cboInverted.CheckedChanged -= cboInverted_CheckedChanged;
+            unsubscribed = true;
+
             this.Filter = polarity;
-            this.cboInverted.Checked = !this.Filter.Positive;
+
+            if (this.cboInverted.Checked != desiredChecked)
+                this.cboInverted.Checked = desiredChecked;
+        }
+        finally
+        {
+            if (unsubscribed)
+                this.cboInverted.CheckedChanged += cboInverted_CheckedChanged;
         }
     }
     #endregion

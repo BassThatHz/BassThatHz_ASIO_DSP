@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 
 #region Usings
 using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 #endregion
 
@@ -39,10 +40,35 @@ public class Polarity : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        for(int i=0; i < input.Length ; i++)
+        // Fast-path: if polarity is positive, return buffer unchanged
+        if (this.Positive)
+            return input;
+
+        int len = input.Length;
+        if (len == 0)
+            return input;
+
+        // Use SIMD when available for faster negation
+        if (Vector.IsHardwareAccelerated && len >= Vector<double>.Count)
         {
-            input[i] = this.Positive ? input[i] : -input[i];
+            int i = 0;
+            int vc = Vector<double>.Count;
+            var vNeg = new Vector<double>(-1.0);
+            for (; i <= len - vc; i += vc)
+            {
+                var v = new Vector<double>(input, i);
+                v *= vNeg;
+                v.CopyTo(input, i);
+            }
+            for (; i < len; i++)
+                input[i] = -input[i];
         }
+        else
+        {
+            for (int i = 0; i < len; i++)
+                input[i] = -input[i];
+        }
+
         return input;
     }
 

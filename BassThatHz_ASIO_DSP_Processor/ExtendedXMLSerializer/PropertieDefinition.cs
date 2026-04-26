@@ -31,7 +31,18 @@ namespace ExtendedXmlSerialization.Cache
             Name = propertyInfo.Name;
             Type = propertyInfo.PropertyType;
             _getter = ObjectAccessors.CreatePropertyGetter(type, propertyInfo.Name);
-            _propertySetter = ObjectAccessors.CreatePropertySetter(type, propertyInfo.Name);
+            // Only create a setter when the property is writable. Some properties are read-only
+            // but expose a mutable collection via their getter (e.g. public List<T> Filters { get; }).
+            // In that case we should not attempt to build an assign setter (it would fail),
+            // instead we leave _propertySetter null and handle merging in SetValue.
+            if (propertyInfo.CanWrite && propertyInfo.GetSetMethod(true) != null && propertyInfo.GetSetMethod(true).IsPublic)
+            {
+                _propertySetter = ObjectAccessors.CreatePropertySetter(type, propertyInfo.Name);
+            }
+            else
+            {
+                _propertySetter = null;
+            }
         }
 
         public PropertieDefinition(Type type, FieldInfo fieldInfo)
@@ -55,7 +66,32 @@ namespace ExtendedXmlSerialization.Cache
 
         public void SetValue(object obj, object value)
         {
-            _propertySetter?.Invoke(obj, value);
+            if (_propertySetter != null)
+            {
+                _propertySetter.Invoke(obj, value);
+                return;
+            }
+
+            // If there's no setter, try to merge into the existing collection instance exposed by the getter.
+            if (value == null)
+                return;
+
+            var existing = _getter(obj);
+            if (existing == null)
+                return;
+
+            var enumerable = value as System.Collections.IEnumerable;
+            if (enumerable == null)
+                return;
+
+            var addMethod = existing.GetType().GetMethod("Add");
+            if (addMethod == null)
+                return;
+
+            foreach (var item in enumerable)
+            {
+                addMethod.Invoke(existing, new[] { item });
+            }
         }
     }
 }

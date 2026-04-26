@@ -146,7 +146,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             Upmixer.Location = new System.Drawing.Point(4, 24);
             Upmixer.Name = "Upmixer";
             Upmixer.Padding = new System.Windows.Forms.Padding(3);
-            Upmixer.Size = new System.Drawing.Size(1376, 918);
+            Upmixer.Size = new System.Drawing.Size(192, 72);
             Upmixer.TabIndex = 7;
             Upmixer.Text = "3D Audio Upmixer";
             Upmixer.UseVisualStyleBackColor = true;
@@ -159,7 +159,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             ctl_UpmixerPage1.Location = new System.Drawing.Point(3, 3);
             ctl_UpmixerPage1.Margin = new System.Windows.Forms.Padding(2);
             ctl_UpmixerPage1.Name = "ctl_UpmixerPage1";
-            ctl_UpmixerPage1.Size = new System.Drawing.Size(1370, 912);
+            ctl_UpmixerPage1.Size = new System.Drawing.Size(186, 66);
             ctl_UpmixerPage1.TabIndex = 0;
             // 
             // BusesPage
@@ -253,7 +253,7 @@ namespace BassThatHz_ASIO_DSP_Processor
             Margin = new System.Windows.Forms.Padding(2);
             MinimumSize = new System.Drawing.Size(836, 320);
             Name = "FormMain";
-            Text = "BassThatHz_ASIO_DSP_Processor 2.0.3  Alpha";
+            Text = "BassThatHz_ASIO_DSP_Processor 2.0.4  Alpha";
             WindowState = System.Windows.Forms.FormWindowState.Maximized;
             Load += FormMain_Load;
             tabControl1.ResumeLayout(false);

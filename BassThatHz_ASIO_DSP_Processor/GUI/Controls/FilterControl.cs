@@ -64,8 +64,8 @@ public partial class FilterControl : UserControl
     {
         InitializeComponent();
 
-        var EnumArray = Enum.GetValues(typeof(FilterTypes)).Cast<object>().ToArray();
-        this.cboFilterType.Items.AddRange(EnumArray);
+        // Use DataSource to avoid extra allocations/boxing from Cast<object>().ToArray()
+        this.cboFilterType.DataSource = Enum.GetValues(typeof(FilterTypes));
     }
     #endregion
 
@@ -74,8 +74,9 @@ public partial class FilterControl : UserControl
     {
         try
         {
-            if (this.CurrentFilterControl?.GetFilter != null)
-                this.CurrentFilterControl.GetFilter.FilterEnabled = this.chkEnabled.Checked;
+            var filter = this.CurrentFilterControl?.GetFilter;
+            if (filter is not null)
+                filter.FilterEnabled = this.chkEnabled.Checked;
         }
         catch (Exception ex)
         {
@@ -153,14 +154,20 @@ public partial class FilterControl : UserControl
 
     protected void CreateFilterType(bool setDeepClone, IFilter? input)
     {
+        // Clear existing controls and optimize layout updates
+        this.panel1.SuspendLayout();
         this.panel1.Controls.Clear();
-        if (this.cboFilterType.SelectedItem == null)
-            return;
 
-        dynamic tempControl;
-        switch ((FilterTypes)this.cboFilterType.SelectedItem)
+        if (this.cboFilterType.SelectedItem is not FilterTypes selectedType)
         {
-            case FilterTypes.PEQ:
+            this.panel1.ResumeLayout(false);
+            return;
+        }
+
+        IFilterControl tempControl;
+        switch (selectedType)
+        {
+                case FilterTypes.PEQ:
             case FilterTypes.Adv_High_Pass:
             case FilterTypes.Adv_Low_Pass:
             case FilterTypes.Low_Shelf:
@@ -169,7 +176,6 @@ public partial class FilterControl : UserControl
             case FilterTypes.Band_Pass:
             case FilterTypes.All_Pass:
                 tempControl = new BiQuadFilterControl();
-                tempControl.GetFilter.FilterType = (FilterTypes)this.cboFilterType.SelectedItem;
                 break;
             case FilterTypes.Polarity:
                 tempControl = new PolarityControl();
@@ -219,19 +225,22 @@ public partial class FilterControl : UserControl
             case FilterTypes.GPEQ:
                 tempControl = new GPEQControl();
                 break;
-
             default:
+                this.panel1.ResumeLayout(false);
                 throw new InvalidOperationException("FilterType not defined");
         }
 
-        if (setDeepClone && input != null)
-            ((ISetDeepClonedFilter)tempControl).SetDeepClonedFilter(input);
+        if (setDeepClone && input is not null && tempControl is ISetDeepClonedFilter clonable)
+            clonable.SetDeepClonedFilter(input);
 
-        this.CurrentFilterControl = (IFilterControl)tempControl;
-        this.panel1.Controls.Add(tempControl);
+        this.CurrentFilterControl = tempControl;
+        if (tempControl is System.Windows.Forms.Control ctrl)
+            this.panel1.Controls.Add(ctrl);
 
         this.chkEnabled.Enabled = true;
         this.chkEnabled.Checked = this.CurrentFilterControl.GetFilter.FilterEnabled;
+
+        this.panel1.ResumeLayout(false);
     }
     #endregion
 

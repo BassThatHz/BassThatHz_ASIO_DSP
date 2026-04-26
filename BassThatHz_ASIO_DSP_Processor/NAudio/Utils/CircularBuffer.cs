@@ -1,7 +1,6 @@
 ﻿namespace NAudio.Utils
 {
     using System;
-    using System.Diagnostics;
 
     /// <summary>
     /// A very basic circular buffer implementation
@@ -34,22 +33,29 @@
             int bytesWritten = 0;
             if (count > buffer.Length - this._Count)
                 count = buffer.Length - this._Count;
-                //throw new ArgumentException("Not enough space in buffer");
 
-            // write to end
-            int writeToEnd = Math.Min(buffer.Length - writePosition, count);
-            Array.Copy(data, offset, buffer, writePosition, writeToEnd);
-            writePosition += writeToEnd;
-            writePosition %= buffer.Length;
-            bytesWritten += writeToEnd;
+            // write up to the end of the internal buffer
+            int spaceToEnd = buffer.Length - writePosition;
+            int writeToEnd = Math.Min(spaceToEnd, count);
+
+            if (writeToEnd > 0)
+            {
+                Array.Copy(data, offset, buffer, writePosition, writeToEnd);
+                writePosition += writeToEnd;
+                if (writePosition >= buffer.Length) writePosition -= buffer.Length;
+                bytesWritten += writeToEnd;
+            }
+
             if (bytesWritten < count)
             {
-                Debug.Assert(writePosition == 0);
-                // must have wrapped round. Write to start
-                Array.Copy(data, offset + bytesWritten, buffer, writePosition, count - bytesWritten);
-                writePosition += count - bytesWritten;
-                bytesWritten = count;
+                // must have wrapped round. Write remaining to start
+                int remaining = count - bytesWritten;
+                Array.Copy(data, offset + bytesWritten, buffer, writePosition, remaining);
+                writePosition += remaining;
+                if (writePosition >= buffer.Length) writePosition -= buffer.Length;
+                bytesWritten += remaining;
             }
+
             this._Count += bytesWritten;
             return bytesWritten;
         }
@@ -67,24 +73,26 @@
                 count = _Count;
 
             int bytesRead = 0;
-            int readToEnd = Math.Min(buffer.Length - readPosition, count);
-            Array.Copy(buffer, readPosition, data, offset, readToEnd);
-            bytesRead += readToEnd;
-            var readPosition2 = readPosition;
-            readPosition2 += readToEnd;
-            readPosition2 %= buffer.Length;
+            int availableToEnd = buffer.Length - readPosition;
+            int readToEnd = Math.Min(availableToEnd, count);
+
+            if (readToEnd > 0)
+            {
+                Array.Copy(buffer, readPosition, data, offset, readToEnd);
+                bytesRead += readToEnd;
+                readPosition += readToEnd;
+                if (readPosition >= buffer.Length) readPosition -= buffer.Length;
+            }
 
             if (bytesRead < count)
             {
-                // must have wrapped round. Read from start
-                Debug.Assert(readPosition2 == 0);
-                Array.Copy(buffer, readPosition2, data, offset + bytesRead, count - bytesRead);
-                //readPosition += count - bytesRead;
-                bytesRead = count;
+                int remaining = count - bytesRead;
+                Array.Copy(buffer, readPosition, data, offset + bytesRead, remaining);
+                readPosition += remaining;
+                if (readPosition >= buffer.Length) readPosition -= buffer.Length;
+                bytesRead += remaining;
             }
 
-            //_Count -= bytesRead;
-            //Debug.Assert(_Count >= 0);
             return bytesRead;
         }
 
@@ -128,9 +136,8 @@
             {
                 _Count -= count;
                 readPosition += count;
-                readPosition %= MaxLength;
+                if (readPosition >= buffer.Length) readPosition %= buffer.Length;
             }
-
         }
     }
 }

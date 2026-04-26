@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Buffers;
 using System.Numerics;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
@@ -44,7 +45,7 @@ public partial class FormRTA : Form
     #region Multi-Threading and Closing State
     protected bool IsClosing = false;
     protected List<Task> ULF_FFT_Tasks = new();
-    protected List<Task> Top_FFT_Tasks = [];
+    protected List<Task> Top_FFT_Tasks = new();
     protected List<Task<ChartUpdateData>> Waveform_Tasks = new();
     #endregion
 
@@ -326,15 +327,15 @@ public partial class FormRTA : Form
     {
         try
         {
-            if (this.Output_Channel ==  null)
+            if (this.Output_Channel == null)
                 return;
             this.OutputBuffer = CommonFunctions.GetStreamOutputDataByStreamItem(this.Output_Channel).ToArray();
-           
+
             if (this.chart_Output_ULF_FFT.Visible)
                 _ = this.RTA_OutputULFBuffer.Write(this.OutputBuffer, 0, this.OutputBuffer.Length);
 
             if (this.chart_Output_Top_FFT.Visible)
-                _ = this.RTA_OutputTopBuffer.Write(this.OutputBuffer, 0, this.OutputBuffer.Length);            
+                _ = this.RTA_OutputTopBuffer.Write(this.OutputBuffer, 0, this.OutputBuffer.Length);
         }
         catch (Exception ex)
         {
@@ -355,7 +356,7 @@ public partial class FormRTA : Form
                 _ = this.RTA_InputULFBuffer.Write(this.InputBuffer, 0, this.InputBuffer.Length);
 
             if (this.chart_Input_Top_FFT.Visible)
-                _ = this.RTA_InputTopBuffer.Write(this.InputBuffer, 0, this.InputBuffer.Length);           
+                _ = this.RTA_InputTopBuffer.Write(this.InputBuffer, 0, this.InputBuffer.Length);
         }
         catch (Exception ex)
         {
@@ -685,25 +686,18 @@ public partial class FormRTA : Form
                 return;
             LastMouseMoveUpdate = DateTime.Now;
 
-            // Capture values needed for background computation.
+            // Capture values needed and compute synchronously on UI thread to avoid
+            // cross-thread chart API usage and extra Task allocations.
             int pixelX = e.X;
             int pixelY = e.Y;
             double sampleRate = Program.DSP_Info.InSampleRate;
 
-            // Offload expensive calculations to a background thread.
-            string newTitle = await Task.Run(() =>
-            {
-                double xValue = Math.Pow(10, ca.AxisX.PixelPositionToValue(pixelX));
-                double yValue = ca.AxisY.PixelPositionToValue(pixelY);
-                return xValue < sampleRate * 0.5
-                    ? $"Mouse: {xValue:0.0} | {yValue:0.0}"
-                    : string.Empty;
-            });
+            double xValue = Math.Pow(10, ca.AxisX.PixelPositionToValue(pixelX));
+            double yValue = ca.AxisY.PixelPositionToValue(pixelY);
+            string newTitle = xValue < sampleRate * 0.5 ? $"Mouse: {xValue:0.0} | {yValue:0.0}" : string.Empty;
 
-            // Update the UI if needed.
             if (!string.IsNullOrEmpty(newTitle) && !this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
-                this.SafeInvoke(() => 
-                    chart.Titles[5].Text = newTitle);
+                chart.Titles[5].Text = newTitle;
         }
         catch (Exception ex)
         {
@@ -1052,7 +1046,7 @@ public partial class FormRTA : Form
     {
         if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
             return;
-        if (chartControl.IsDisposed ||!chartControl.IsHandleCreated || chartControl == null || chartControl.ChartAreas.Count < 1)
+        if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl == null || chartControl.ChartAreas.Count < 1)
             return;
 
         // Use the Tag property to store a flag indicating initialization.
@@ -1120,7 +1114,8 @@ public partial class FormRTA : Form
 
             // Clear existing data points and bind new data.
             chartControl.Series["Series1"].Points.Clear();
-            chartControl.Series["Series1"].Points.DataBindXY(plotData.XData, plotData.YDataDec);
+            // Use the ArraySegment<T> instances to avoid allocating new arrays when possible.
+            chartControl.Series["Series1"].Points.DataBindXY((System.Collections.IEnumerable)plotData.XData, (System.Collections.IEnumerable)plotData.YDataDec);
 
             // Update Y‑axis scaling if needed.
             if (area.AxisY.Maximum < plotData.YMaximum || area.AxisY.Minimum > plotData.YMinimum)
@@ -1130,6 +1125,26 @@ public partial class FormRTA : Form
             }
 
             chartControl.ResumeLayout();
+
+            // Return rented arrays to the shared pool to reduce GC pressure.
+            try
+            {
+                if (plotData.RentedXArray != null)
+                {
+                    ArrayPool<double>.Shared.Return(plotData.RentedXArray);
+                    plotData.RentedXArray = null;
+                }
+
+                if (plotData.RentedYArray != null)
+                {
+                    ArrayPool<decimal>.Shared.Return(plotData.RentedYArray);
+                    plotData.RentedYArray = null;
+                }
+            }
+            catch
+            {
+                // Swallow: returning to pool should not crash UI updates.
+            }
         }
         catch (Exception ex)
         {
@@ -1142,24 +1157,25 @@ public partial class FormRTA : Form
     // converting the Y data to decimals, and computing axis scales.
     protected WaveformPlotData ComputeWaveformPlotData(double[] yData, double scaleYAxis)
     {
-        // Generate X‑axis data.
-        double[] xData = DSP.Generate.LinSpace(0, yData.Length - 1, yData.Length);
-        // If xData is not valid, return empty plot data.
-        if (xData.Length == 0 || xData[0] < 0)
-        {
+        int length = yData?.Length ?? 0;
+        if (length == 0)
             return new WaveformPlotData();
-        }
 
-        // Convert yData to decimals because MSChart cannot handle full doubles.
-        decimal[] yDataDec = new decimal[yData.Length];
-        for (int i = 0; i < yData.Length; i++)
-        {
-            yDataDec[i] = (decimal)yData[i];
-        }
+        // Rent arrays from the shared pool to avoid per-frame allocations.
+        double[] rentedX = ArrayPool<double>.Shared.Rent(length);
+        decimal[] rentedY = ArrayPool<decimal>.Shared.Rent(length);
+
+        // Fill X as simple linear indices (0 .. length-1) — faster than LinSpace.
+        for (int i = 0; i < length; i++)
+            rentedX[i] = i;
+
+        // Convert to decimals for the chart.
+        for (int i = 0; i < length; i++)
+            rentedY[i] = (decimal)yData[i];
 
         double xMin = 0;
-        double xMax = yData.Length;
-        double xInterval = yData.Length * 0.25;
+        double xMax = length;
+        double xInterval = length * 0.25;
 
         // Compute Y‑axis limits.
         double maxCandidate = yData.Max() * scaleYAxis;
@@ -1171,8 +1187,10 @@ public partial class FormRTA : Form
 
         return new WaveformPlotData
         {
-            XData = xData,
-            YDataDec = yDataDec,
+            RentedXArray = rentedX,
+            XData = new ArraySegment<double>(rentedX, 0, length),
+            RentedYArray = rentedY,
+            YDataDec = new ArraySegment<decimal>(rentedY, 0, length),
             XMinimum = xMin,
             XMaximum = xMax,
             XInterval = xInterval,
@@ -1184,8 +1202,14 @@ public partial class FormRTA : Form
     // Data container for all the computed data needed for a chart update.
     protected class WaveformPlotData
     {
-        public double[] XData { get; set; } = [];
-        public decimal[] YDataDec { get; set; } = [];
+        // Rented arrays (returned to ArrayPool after UI bind).
+        public double[]? RentedXArray { get; set; }
+        public decimal[]? RentedYArray { get; set; }
+
+        // Use ArraySegment to represent the valid slice of the rented arrays.
+        public ArraySegment<double> XData { get; set; } = new(Array.Empty<double>());
+        public ArraySegment<decimal> YDataDec { get; set; } = new(Array.Empty<decimal>());
+
         public double XMinimum { get; set; }
         public double XMaximum { get; set; }
         public double XInterval { get; set; }

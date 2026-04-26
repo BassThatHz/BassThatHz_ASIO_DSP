@@ -43,6 +43,7 @@ public class ULF_FIR : IFilter
     protected double[]? ThreadLocal_Taps;
     protected Complex[]? ThreadLocal_Taps_FFT_Complex;
     protected double[] OverlapBuffer = Array.Empty<double>();
+    protected FFT? ThreadLocalFFT;
     #endregion
 
     #region Public Functions
@@ -54,63 +55,55 @@ public class ULF_FIR : IFilter
 
         try
         {
-            //lock (this.ResizeTapsLockObject) //For Debugging
-            //{
+            int tapsLength = this.ThreadLocal_Taps_FFT_Complex.Length;
+            int inputLength = input.Length;
+            int overlapSize = this.FFTSize - inputLength;
 
-            int TapsLength = this.ThreadLocal_Taps_FFT_Complex.Length;
-            int InputLength = input.Length;
-            int OverlapSize = this.FFTSize - InputLength;
+            // Overlap-save slide and inject input
+            Array.Copy(this.OverlapBuffer, inputLength, this.OverlapBuffer, 0, overlapSize);
+            Array.Copy(input, 0, this.OverlapBuffer, overlapSize, inputLength);
 
-            // Overlap-save slide
-            Array.Copy(this.OverlapBuffer, InputLength, this.OverlapBuffer, 0, OverlapSize);
+            // Use cached FFT instance if available
+            var fft = this.ThreadLocalFFT ?? new FFT(this.FFTSize, 0);
+            Complex[] inputFft = fft.Perform_FFT(this.OverlapBuffer, false);
 
-            // Overlap-save inject input
-            Array.Copy(input, 0, this.OverlapBuffer, OverlapSize, InputLength);
+            // Precompute ratios
+            double tapsSampleRate = this.TapsSampleRate;
+            double inputSampleRate = Program.DSP_Info.InSampleRate;
+            double inputToTapsRatio = inputSampleRate / tapsSampleRate; // used to map bin indices
 
-            // Perform FFT on OverlapBuffer
-            var temp_FFT = new FFT(this.FFTSize, 0);
-            Complex[] Input_FFT = temp_FFT.Perform_FFT(this.OverlapBuffer, false);
+            double nyquist = tapsSampleRate * 0.5;
+            double cutoff = nyquist * 0.9;
+            double rolloff = nyquist * 0.1;
 
-            // Frequency resolution calculations
-            double taps_SampleRate = this.TapsSampleRate; // 960 Hz
-            double input_SampleRate = Program.DSP_Info.InSampleRate; // 96,000 Hz
-            double delta_f_input = input_SampleRate / (double)this.FFTSize;
-            double delta_f_taps = taps_SampleRate / (double)this.FFTSize;
+            int half = this.FFTSize / 2;
+            var tapsFft = this.ThreadLocal_Taps_FFT_Complex;
 
-            double nyquist = taps_SampleRate * 0.5; // 480 Hz
-            double cutoff_frequency = nyquist * 0.9; // Set cutoff at 90% of Nyquist
-            double rolloff_width = nyquist * 0.1; // Gaussian roll-off width (10% of Nyquist)
-
-            // Perform frequency-domain convolution directly on Input_FFT
-            for (int n = 0; n < this.FFTSize; n++)
+            // Process only positive frequencies and mirror to negative frequencies to halve work
+            for (int n = 0; n <= half; n++)
             {
-                double f_n = n * delta_f_input;
-                double attenuation = f_n >= cutoff_frequency
-                    ? Math.Exp(-Math.Pow((f_n - cutoff_frequency) / rolloff_width, 2))
-                    : 1.0;
+                double f_n = n * (inputSampleRate / (double)this.FFTSize);
+                double attenuation = f_n >= cutoff ? Math.Exp(-Math.Pow((f_n - cutoff) / rolloff, 2)) : 1.0;
 
-                // Apply the attenuation to Input_FFT directly
-                Input_FFT[n] *= attenuation;
+                Complex val = inputFft[n] * attenuation;
 
-                // Use nearest interpolation for filter response and combine it in Input_FFT
-                int m_index = (int)Math.Round(f_n / delta_f_taps);
-                if (m_index >= 0 && m_index < TapsLength)
-                    Input_FFT[n] *= this.ThreadLocal_Taps_FFT_Complex[m_index];
+                int mIndex = (int)Math.Round(n * inputToTapsRatio);
+                if (mIndex >= 0 && mIndex < tapsLength && tapsFft != null)
+                {
+                    val *= tapsFft[mIndex];
+                }
                 else
-                    Input_FFT[n] = Complex.Zero;
+                {
+                    val = Complex.Zero;
+                }
 
-                // Mirror the positive frequencies to the negative frequencies (complex conjugate)
-                if (n > 0 && n < this.FFTSize / 2)
-                    Input_FFT[this.FFTSize - n] = Complex.Conjugate(Input_FFT[n]);
+                inputFft[n] = val;
+                if (n > 0 && n < half)
+                    inputFft[this.FFTSize - n] = Complex.Conjugate(val);
             }
 
-            // Perform IFFT
-            double[] Result = temp_FFT.Perform_IFFT(Input_FFT, false);
-
-            // Overlap-save: copy the result to the output
-            Array.Copy(Result, OverlapSize, input, 0, InputLength);
-
-            //} //For Debugging
+            double[] result = fft.Perform_IFFT(inputFft, false);
+            Array.Copy(result, overlapSize, input, 0, inputLength);
         }
         catch (Exception ex)
         {
@@ -147,6 +140,7 @@ public class ULF_FIR : IFilter
             Array.Copy(input, temparray, input.Length);
             var temp_FFT = new FFT(this.FFTSize, 0);
             this.ThreadLocal_Taps_FFT_Complex = temp_FFT.Perform_FFT(temparray, false);
+            this.ThreadLocalFFT = temp_FFT;
 
             if (this.OverlapBuffer.Length != this.FFTSize)
                 this.OverlapBuffer = new double[this.FFTSize];

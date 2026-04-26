@@ -40,10 +40,23 @@ public partial class AuxGetControl : UserControl, IFilterControl
     {
         InitializeComponent();
 
-        var NumberOfAuxBuffers = new DSP_Stream().NumberOfAuxBuffers;
-        for (var i = 1; i < NumberOfAuxBuffers + 1; i++)
-            this.cbo_AuxToGet.Items.Add(i.ToString());
-        this.cbo_AuxToGet.SelectedIndex = 0;
+        var NumberOfAuxBuffers = DSP_Stream.NumberOfAuxBuffers;
+        // Use BeginUpdate/EndUpdate to avoid repeated UI redraws when adding many items
+        this.cbo_AuxToGet.BeginUpdate();
+        try
+        {
+            for (var i = 1; i <= NumberOfAuxBuffers; i++)
+            {
+                this.cbo_AuxToGet.Items.Add(i.ToString());
+            }
+
+            if (this.cbo_AuxToGet.Items.Count > 0)
+                this.cbo_AuxToGet.SelectedIndex = 0;
+        }
+        finally
+        {
+            this.cbo_AuxToGet.EndUpdate();
+        }
     }
     #endregion
 
@@ -51,8 +64,21 @@ public partial class AuxGetControl : UserControl, IFilterControl
 
     protected void btnApply_Click(object sender, EventArgs e)
     {
-        this.Filter.StreamAttenuation = double.Parse(this.txtStreamAttenuation.Text); 
-        this.Filter.AuxAttenuation = double.Parse(this.txtAuxAttenuation.Text);
+        // Use TryParse to avoid throwing exceptions on invalid input and to reduce exception costs
+        if (!double.TryParse(this.txtStreamAttenuation.Text, out var streamAtt))
+        {
+            Error(new FormatException("Invalid Stream Attenuation value."));
+            return;
+        }
+
+        if (!double.TryParse(this.txtAuxAttenuation.Text, out var auxAtt))
+        {
+            Error(new FormatException("Invalid Aux Attenuation value."));
+            return;
+        }
+
+        this.Filter.StreamAttenuation = streamAtt;
+        this.Filter.AuxAttenuation = auxAtt;
         this.Filter.AuxGetIndex = this.cbo_AuxToGet.SelectedIndex;
         this.Filter.MuteBefore = this.chk_MuteBefore.Checked;
     }
@@ -76,12 +102,11 @@ public partial class AuxGetControl : UserControl, IFilterControl
             this.chk_MuteBefore.Checked = this.Filter.MuteBefore;
             this.txtStreamAttenuation.Text = this.Filter.StreamAttenuation.ToString();
             this.txtAuxAttenuation.Text = this.Filter.AuxAttenuation.ToString();
-            try
+            // Only set SelectedIndex if it's within the valid range to avoid exceptions
+            var idx = this.Filter.AuxGetIndex;
+            if (idx >= 0 && idx < this.cbo_AuxToGet.Items.Count)
             {
-                this.cbo_AuxToGet.SelectedIndex = this.Filter.AuxGetIndex;
-            }
-            catch (Exception)
-            {
+                this.cbo_AuxToGet.SelectedIndex = idx;
             }
         }
     }

@@ -33,6 +33,11 @@ using System.Threading.Tasks;
 /// </summary>
 public class NetworkConfigAPI
 {
+    // Reuse common encodings to avoid repeated allocations
+    private static readonly System.Text.Encoding Utf8 = System.Text.Encoding.UTF8;
+
+    // Limit inbound POST size to avoid unbounded memory usage (4 MB default)
+    private const long MaxPostContentLength = 4 * 1024 * 1024;
     #region Public Events \ Callbacks
     public Func<string>? GetResponseString;
     public Func<string, string>? OnDataStringPosted;
@@ -55,7 +60,16 @@ public class NetworkConfigAPI
                 this.Listener.Close();
             }
             this.Listener = new();
-            this.CancellationTokenSource ??= new();
+            // Ensure we have a fresh CancellationTokenSource (replace if previously cancelled)
+            if (this.CancellationTokenSource == null || this.CancellationTokenSource.IsCancellationRequested)
+            {
+                if (this.CancellationTokenSource != null)
+                {
+                    this.CancellationTokenSource.Dispose();
+                }
+                this.CancellationTokenSource = new();
+            }
+
             var CancellationToken = this.CancellationTokenSource.Token;
             #endregion
 
@@ -68,7 +82,7 @@ public class NetworkConfigAPI
             while (!CancellationToken.IsCancellationRequested)
             {
                 #region Wait for an incoming request
-                HttpListenerContext context = await this.Listener.GetContextAsync(); //Main blocking call
+                HttpListenerContext context = await this.Listener.GetContextAsync().ConfigureAwait(false); //Main blocking call
                 
                 if (CancellationToken.IsCancellationRequested)
                     break; //Cancel was requested while we were awaiting, don't process any further
@@ -126,27 +140,39 @@ public class NetworkConfigAPI
 
     protected async Task POST_Listener(HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken)
     {
+        // Quick checks to avoid unnecessary allocations
+        if (!request.HasEntityBody)
+            return;
+
+        // Protect against extremely large inbound posts to avoid OOM
+        if (request.ContentLength64 > 0 && request.ContentLength64 > MaxPostContentLength)
+        {
+            response.StatusCode = 413; // Payload Too Large
+            return;
+        }
+
         using Stream body = request.InputStream;
         if (!body.CanRead)
             return;
 
         using var reader = new StreamReader(body, request.ContentEncoding);
-        var ReaderTask = reader.ReadToEndAsync(cancellationToken);
         string data = string.Empty;
         try
         {
-            //await for an inbound POST message to be posted
-            data = await ReaderTask;
+            // await for an inbound POST message to be posted
+            data = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException)
         {
-            //Do Nothing, The Cancellation Token was invoked
+            // Cancellation requested - abort processing
+            return;
         }
 
-        //Process the POST message
-        var Success = this.OnDataStringPosted?.Invoke(data);
+        // Process the POST message using a local copy to avoid race with event changes
+        var onData = this.OnDataStringPosted;
+        var Success = onData?.Invoke(data);
 
-        #region Send a Success \ Fail response
+        // Send a Success / Fail response
         if (Success == null)
             return;
 
@@ -154,40 +180,46 @@ public class NetworkConfigAPI
         if (!output.CanWrite)
             return;
 
-        var responsebuffer = System.Text.Encoding.UTF8.GetBytes(Success);
+        var responsebuffer = Utf8.GetBytes(Success);
         response.ContentLength64 = responsebuffer.Length;
-        if (Success != "Success")
+        if (!string.Equals(Success, "Success", StringComparison.Ordinal))
             response.StatusCode = 400; // Bad Request
 
-        output.Write(responsebuffer, 0, responsebuffer.Length);
-
-        #endregion
+        try
+        {
+            await output.WriteAsync(responsebuffer, 0, responsebuffer.Length, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException)
+        {
+            // Cancellation requested while writing the response - swallow
+        }
     }
 
     protected async Task GET_Listener(HttpListenerResponse response, CancellationToken cancellationToken)
     {
         //Get the response string from the listener owner
-        var responseString = this.GetResponseString?.Invoke();
+        var getResponse = this.GetResponseString;
+        var responseString = getResponse?.Invoke();
 
         if (responseString == null)
             return;
 
-        var responsebuffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+        var responsebuffer = Utf8.GetBytes(responseString);
         response.ContentLength64 = responsebuffer.Length;
-        using Stream output = response.OutputStream;
+        response.ContentType = "text/plain; charset=utf-8";
 
+        using Stream output = response.OutputStream;
         if (!output.CanWrite)
             return;
 
-        var WriteTask = output.WriteAsync(responsebuffer, 0, responsebuffer.Length, cancellationToken);
         try
         {
-            //wait for the GET message to respond to the web request
-            await WriteTask;
+            // wait for the GET message to respond to the web request
+            await output.WriteAsync(responsebuffer, 0, responsebuffer.Length, cancellationToken).ConfigureAwait(false);
         }
         catch (TaskCanceledException)
         {
-            //Do Nothing, The Cancellation Token was invoked
+            // Cancellation requested while writing response
         }
     }
     #endregion

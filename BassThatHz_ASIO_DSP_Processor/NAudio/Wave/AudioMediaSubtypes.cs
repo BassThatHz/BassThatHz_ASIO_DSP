@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 // ReSharper disable InconsistentNaming
 
 namespace NAudio.Dmo
 {
-    public class AudioMediaSubtypes
+    public static class AudioMediaSubtypes
     {
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dd317599(v=vs.85).aspx
         public static readonly Guid MEDIASUBTYPE_PCM = new Guid("00000001-0000-0010-8000-00AA00389B71"); // PCM audio. 
@@ -80,7 +82,7 @@ namespace NAudio.Dmo
         public static readonly Guid MEDIASUBTYPE_AU = new Guid("e436eb8c-524f-11ce-9f53-0020af0ba770");
         public static readonly Guid MEDIASUBTYPE_AIFF = new Guid("e436eb8d-524f-11ce-9f53-0020af0ba770");
 
-        public static readonly Guid[] AudioSubTypes = {
+        private static readonly Guid[] audioSubTypes = {
             MEDIASUBTYPE_PCM,
             MEDIASUBTYPE_PCMAudioObsolete,
             MEDIASUBTYPE_MPEG1Packet,
@@ -96,7 +98,7 @@ namespace NAudio.Dmo
             WMMEDIASUBTYPE_MP3,
         };
 
-        public static readonly string[] AudioSubTypeNames = {
+        private static readonly string[] audioSubTypeNames = {
             "PCM",
             "PCM Obsolete",
             "MPEG1Packet",
@@ -111,15 +113,32 @@ namespace NAudio.Dmo
             "SPDIF_TAG_241h",
             "MP3"
         };
+        // expose read-only views to avoid callers mutating the backing arrays
+        // create ReadOnlySpan from the backing arrays to avoid allocations while preventing mutation
+        public static ReadOnlySpan<Guid> AudioSubTypes => new ReadOnlySpan<Guid>(audioSubTypes);
+        public static ReadOnlySpan<string> AudioSubTypeNames => new ReadOnlySpan<string>(audioSubTypeNames);
+
+        // map for fast lookups (faster than linear search). Built once in static ctor.
+        private static readonly Dictionary<Guid, string> audioSubTypeMap;
+
+        static AudioMediaSubtypes()
+        {
+            audioSubTypeMap = new Dictionary<Guid, string>(audioSubTypes.Length);
+            // local refs to avoid repeated static field access in the loop
+            var types = audioSubTypes;
+            var names = audioSubTypeNames;
+            for (int i = 0; i < types.Length; i++)
+            {
+                // If there are duplicates, prefer the first name encountered.
+                // TryAdd avoids a double lookup compared to ContainsKey + indexer assignment.
+                audioSubTypeMap.TryAdd(types[i], names[i]);
+            }
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string GetAudioSubtypeName(Guid subType)
         {
-            for (int index = 0; index < AudioSubTypes.Length; index++)
-            {
-                if (subType == AudioSubTypes[index])
-                {
-                    return AudioSubTypeNames[index];
-                }
-            }
+            if (audioSubTypeMap.TryGetValue(subType, out var name))
+                return name;
             return subType.ToString();
         }
     }

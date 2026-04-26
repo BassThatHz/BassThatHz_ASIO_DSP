@@ -56,7 +56,7 @@ namespace DSPLib
         #endregion
 
         #region Constructor
-        public FFT(int inputDataLength, int zeroPaddingLength = 0) 
+        public FFT(int inputDataLength, int zeroPaddingLength = 0)
         {
             Init(inputDataLength, zeroPaddingLength);
         }
@@ -68,20 +68,17 @@ namespace DSPLib
         protected void Init(int inputDataLength, int zeroPaddingLength = 0)
         {
             N = inputDataLength;
-
             // Find the power of two for the total FFT size up to 2^32
-            bool foundIt = false;
-            for (LogN = 1; LogN <= 32; LogN++)
+            int total = inputDataLength + zeroPaddingLength;
+            LogN = 0;
+            int pow = 1;
+            while (pow < total && LogN < 31)
             {
-                double n = Math.Pow(2.0, LogN);
-                if (inputDataLength + zeroPaddingLength == n)
-                {
-                    foundIt = true;
-                    break;
-                }
+                pow <<= 1;
+                LogN++;
             }
 
-            if (foundIt == false)
+            if (pow != total)
                 throw new ArgumentOutOfRangeException("inputDataLength + zeroPaddingLength was not an even power of 2! FFT cannot continue.");
 
             // Set global parameters.
@@ -92,18 +89,28 @@ namespace DSPLib
             FFTScale = Math.Sqrt(2) / (double)LengthTotal; // Natural FFT Scale Factor  // Window Scale Factor
             FFTScale *= (double)LengthTotal / (double)inputDataLength; // Zero Padding Scale Factor
 
-            // Allocate elements for linked list of complex numbers.
-            FFTElements = new FFTElement[LengthTotal];
-            for (int k = 0; k < LengthTotal; k++)
-                FFTElements[k] = new FFTElement();
 
-            // Set up "next" pointers.
-            for (int k = 0; k < LengthTotal - 1; k++)
-                FFTElements[k].next = FFTElements[k + 1];
+            // Allocate elements for linked list of complex numbers only when size changed
+            if (FFTElements == null || FFTElements.Length != LengthTotal)
+            {
+                FFTElements = new FFTElement[LengthTotal];
+                for (int k = 0; k < LengthTotal; k++)
+                    FFTElements[k] = new FFTElement();
+
+                // Set up "next" pointers once for the allocated array
+                for (int k = 0; k < LengthTotal - 1; k++)
+                    FFTElements[k].next = FFTElements[k + 1];
+                FFTElements[LengthTotal - 1].next = null;
+            }
 
             // Specify target for bit reversal re-ordering.
             for (int k = 0; k < LengthTotal; k++)
+            {
                 FFTElements[k].revTgt = BitReverse(k, LogN);
+                // Reset values
+                FFTElements[k].re = 0.0;
+                FFTElements[k].im = 0.0;
+            }
         }
         #endregion
 
@@ -153,23 +160,25 @@ namespace DSPLib
             if (input.Length > LengthTotal)
                 throw new InvalidOperationException("The input timeSeries length was greater than the total number of points that was initialized.");
 
-            // Copy data into linked complex number objects
-            FFTElement x = FFTElements[0];
-            for (int i = 0; i < N; i++)
+            // Copy data into linked complex number objects (use indexed access for performance)
+            var elems = FFTElements;
+            int lenTotal = LengthTotal;
+            int n = N;
+            for (int i = 0; i < n; i++)
             {
-                x.re = input[i];
-                x.im = 0.0;
-                x = x.next;
+                var e = elems[i];
+                e.re = input[i];
+                e.im = 0.0;
             }
 
             // If zero padded, clean the 2nd half of the linked list from previous results
-            if (N != LengthTotal)
+            if (n != lenTotal)
             {
-                for (int i = N; i < LengthTotal; i++)
+                for (int i = n; i < lenTotal; i++)
                 {
-                    x.re = 0.0;
-                    x.im = 0.0;
-                    x = x.next;
+                    var e = elems[i];
+                    e.re = 0.0;
+                    e.im = 0.0;
                 }
             }
 
@@ -187,10 +196,10 @@ namespace DSPLib
                 double wMulRe = Math.Cos(wAngleInc);
                 double wMulIm = Math.Sin(wAngleInc);
 
-                for (int start = 0; start < LengthTotal; start += spacing)
+                for (int start = 0; start < lenTotal; start += spacing)
                 {
-                    FFTElement xTop = FFTElements[start];
-                    FFTElement xBot = FFTElements[start + span];
+                    FFTElement xTop = elems[start];
+                    FFTElement xBot = elems[start + span];
 
                     double wRe = 1.0;
                     double wIm = 0.0;
@@ -233,33 +242,30 @@ namespace DSPLib
                 spacing >>= 1;
                 wIndexStep <<= 1;     // Multiply by 2 by left shift
             }
-
             // The algorithm leaves the result in a scrambled order.
             // Unscramble while copying values from the complex
             // linked list elements to a complex output vector & properly apply scale factors.
 
-            x = FFTElements[0];
-            var unswizzle = new Complex[LengthTotal];
+            var unswizzle = new Complex[lenTotal];
+            double s = FFTScale;
             if (shouldScale)
             {
-                while (x != null)
+                for (int k = 0; k < lenTotal; k++)
                 {
-                    unswizzle[x.revTgt] = new Complex(x.re * FFTScale, x.im * FFTScale);
-                    x = x.next;
+                    var e = elems[k];
+                    unswizzle[e.revTgt] = new Complex(e.re * s, e.im * s);
                 }
 
                 // DC and Fs/2 Points are scaled differently, since they have only a real part
-                //result[0] = new Complex(result[0].Real / Math.Sqrt(2), 0.0);
-                //result[mLengthHalf - 1] = new Complex(result[mLengthHalf - 1].Real / Math.Sqrt(2), 0.0);
                 unswizzle[0] = new Complex(unswizzle[0].Real / Math.Sqrt(2), 0.0);
                 unswizzle[LengthHalf] = new Complex(unswizzle[LengthHalf].Real / Math.Sqrt(2), 0.0);
             }
             else
             {
-                while (x != null)
+                for (int k = 0; k < lenTotal; k++)
                 {
-                    unswizzle[x.revTgt] = new Complex(x.re, x.im);
-                    x = x.next;
+                    var e = elems[k];
+                    unswizzle[e.revTgt] = new Complex(e.re, e.im);
                 }
             }
             // Return 1/2 the FFT result from DC to Fs/2 (The real part of the spectrum)
@@ -283,23 +289,25 @@ namespace DSPLib
             if (input.Length != windowCoefficients.Length)
                 throw new InvalidOperationException("windowCoefficients must be same length as timeSeries");
 
-            // Copy data into linked complex number objects
-            FFTElement x = FFTElements[0];
-            for (int i = 0; i < N; i++)
+            // Copy data into linked complex number objects (use indexed access for performance)
+            var elems = FFTElements;
+            int lenTotal = LengthTotal;
+            int n = N;
+            for (int i = 0; i < n; i++)
             {
-                x.re = input[i] * windowCoefficients[i];
-                x.im = 0.0;
-                x = x.next;
+                var e = elems[i];
+                e.re = input[i] * windowCoefficients[i];
+                e.im = 0.0;
             }
 
             // If zero padded, clean the 2nd half of the linked list from previous results
-            if( N != LengthTotal)
+            if (n != lenTotal)
             {
-                for (int i = N; i < LengthTotal; i++)
+                for (int i = n; i < lenTotal; i++)
                 {
-                    x.re = 0.0; 
-                    x.im = 0.0;
-                    x = x.next;
+                    var e = elems[i];
+                    e.re = 0.0;
+                    e.im = 0.0;
                 }
             }
 
@@ -317,10 +325,10 @@ namespace DSPLib
                 double wMulRe = Math.Cos(wAngleInc);
                 double wMulIm = Math.Sin(wAngleInc);
 
-                for (int start = 0; start < LengthTotal; start += spacing)
+                for (int start = 0; start < lenTotal; start += spacing)
                 {
-                    FFTElement xTop = FFTElements[start];
-                    FFTElement xBot = FFTElements[start + span];
+                    FFTElement xTop = elems[start];
+                    FFTElement xBot = elems[start + span];
 
                     double wRe = 1.0;
                     double wIm = 0.0;
@@ -363,33 +371,30 @@ namespace DSPLib
                 spacing >>= 1;
                 wIndexStep <<= 1;     // Multiply by 2 by left shift
             }
-
             // The algorithm leaves the result in a scrambled order.
             // Unscramble while copying values from the complex
             // linked list elements to a complex output vector & properly apply scale factors.
 
-            x = FFTElements[0];
-            var unswizzle = new Complex[LengthTotal];
+            var unswizzle = new Complex[lenTotal];
+            double s = FFTScale;
             if (shouldScale)
             {
-                while (x != null)
+                for (int k = 0; k < lenTotal; k++)
                 {
-                    unswizzle[x.revTgt] = new Complex(x.re * FFTScale, x.im * FFTScale);
-                    x = x.next;
+                    var e = elems[k];
+                    unswizzle[e.revTgt] = new Complex(e.re * s, e.im * s);
                 }
 
                 // DC and Fs/2 Points are scaled differently, since they have only a real part
-                //result[0] = new Complex(result[0].Real / Math.Sqrt(2), 0.0);
-                //result[mLengthHalf - 1] = new Complex(result[mLengthHalf - 1].Real / Math.Sqrt(2), 0.0);
                 unswizzle[0] = new Complex(unswizzle[0].Real / Math.Sqrt(2), 0.0);
                 unswizzle[LengthHalf] = new Complex(unswizzle[LengthHalf].Real / Math.Sqrt(2), 0.0);
             }
             else
             {
-                while (x != null)
+                for (int k = 0; k < lenTotal; k++)
                 {
-                    unswizzle[x.revTgt] = new Complex(x.re, x.im);
-                    x = x.next;
+                    var e = elems[k];
+                    unswizzle[e.revTgt] = new Complex(e.re, e.im);
                 }
             }
             // Return 1/2 the FFT result from DC to Fs/2 (The real part of the spectrum)
@@ -444,23 +449,25 @@ namespace DSPLib
             if (input.Length > LengthTotal)
                 throw new InvalidOperationException("The input timeSeries length was greater than the total number of points that was initialized.");
 
-            // Copy data into linked complex number objects
-            FFTElement x = FFTElements[0];
-            for (int i = 0; i < N; i++)
+            // Copy data into linked complex number objects (use indexed access)
+            var elems = FFTElements;
+            int lenTotal = LengthTotal;
+            int n = N;
+            for (int i = 0; i < n; i++)
             {
-                x.re = input[i].Imaginary;
-                x.im = input[i].Real;
-                x = x.next;
+                var e = elems[i];
+                e.re = input[i].Imaginary;
+                e.im = input[i].Real;
             }
 
             // If zero padded, clean the 2nd half of the linked list from previous results
-            if (N != LengthTotal)
+            if (n != lenTotal)
             {
-                for (int i = N; i < LengthTotal; i++)
+                for (int i = n; i < lenTotal; i++)
                 {
-                    x.re = 0.0;
-                    x.im = 0.0;
-                    x = x.next;
+                    var e = elems[i];
+                    e.re = 0.0;
+                    e.im = 0.0;
                 }
             }
 
@@ -528,25 +535,25 @@ namespace DSPLib
             // The algorithm leaves the result in a scrambled order.
             // Unscramble while copying values from the complex
             // linked list elements to a complex output vector & properly apply scale factors.
-            x = FFTElements[0];
-            var ReturnValue = new double[LengthTotal];
+            var ReturnValue = new double[lenTotal];
             if (shouldScale)
             {
-                while (x != null)
+                double s = FFTScale * LengthHalf;
+                for (int k = 0; k < lenTotal; k++)
                 {
-                    var unswizzle = new Complex(x.re * FFTScale, x.im * FFTScale);
-                    ReturnValue[x.revTgt] = unswizzle.Imaginary * LengthHalf;
-                    x = x.next;
+                    var e = elems[k];
+                    // unswizzle imaginary component scaled
+                    ReturnValue[e.revTgt] = e.im * s;
                 }
             }
             else
             {
-                var ScaleFactor = (LengthTotal / 2 + 1) * LengthTotal;
-                while (x != null)
+                double ScaleFactor = (lenTotal / 2 + 1) * lenTotal;
+                double s = (double)LengthHalf / ScaleFactor;
+                for (int k = 0; k < lenTotal; k++)
                 {
-                    var unswizzle = new Complex(x.re, x.im);
-                    ReturnValue[x.revTgt] = unswizzle.Imaginary * LengthHalf / ScaleFactor;
-                    x = x.next;
+                    var e = elems[k];
+                    ReturnValue[e.revTgt] = e.im * s;
                 }
             }
 
@@ -586,13 +593,19 @@ namespace DSPLib
         /// <returns></returns>
         public double[] FrequencySpan(double samplingFrequencyHz)
         {
-            int points = (int)LengthHalf;
+            int points = LengthHalf;
+            if (points <= 0) return Array.Empty<double>();
+
             double[] result = new double[points];
             double stopValue = samplingFrequencyHz / 2.0;
             double increment = stopValue / ((double)points - 1.0);
 
+            double v = 0.0;
             for (int i = 0; i < points; i++)
-                result[i] += increment * i;
+            {
+                result[i] = v;
+                v += increment;
+            }
 
             return result;
         }

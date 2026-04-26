@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 
 #region Usings
 using System;
+using System.Globalization;
 using System.Windows.Forms;
 #endregion
 
@@ -32,6 +33,8 @@ public partial class ClassicLimiterControl : UserControl, IFilterControl
 {
     #region Variables
     protected ClassicLimiter Filter = new();
+    // cache last sample rate to avoid redundant coefficient calculations
+    private int _lastSampleRate = -1;
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -44,15 +47,28 @@ public partial class ClassicLimiterControl : UserControl, IFilterControl
 
     public void MapEventHandlers()
     {
+        // ensure handlers are not registered multiple times
+        SampleRateChangeNotifier.SampleRateChanged -= SampleRateChangeNotifier_SampleRateChanged;
         SampleRateChangeNotifier.SampleRateChanged += SampleRateChangeNotifier_SampleRateChanged;
+
+        this.Threshold.VolumeChanged -= Threshold_VolumeChanged;
         this.Threshold.VolumeChanged += Threshold_VolumeChanged;
     }
 
     protected void Threshold_VolumeChanged(object? sender, EventArgs e)
     {
+        // minimize repeated property access and avoid unnecessary coefficient recalculation
         this.Filter.Threshold_dB = this.Threshold.VolumedB;
-        if (Program.ASIO != null)
-            this.Filter.CalculateCoeffs(Program.ASIO.SampleRate_Current);
+        var asio = Program.ASIO;
+        if (asio != null)
+        {
+            var sr = asio.SampleRate_Current;
+            if (sr != _lastSampleRate)
+            {
+                this.Filter.CalculateCoeffs(sr);
+                _lastSampleRate = sr;
+            }
+        }
     }
     #endregion
 
@@ -88,7 +104,9 @@ public partial class ClassicLimiterControl : UserControl, IFilterControl
 
     protected void SampleRateChangeNotifier_SampleRateChanged(int newSampleRate)
     {
+        if (newSampleRate == _lastSampleRate) return;
         this.Filter.CalculateCoeffs(newSampleRate);
+        _lastSampleRate = newSampleRate;
     }
 
     #endregion
@@ -100,35 +118,34 @@ public partial class ClassicLimiterControl : UserControl, IFilterControl
     public void ApplySettings()
     {
         this.Filter.Threshold_dB = this.Threshold.VolumedB;
-        var TempAttackTime_ms = double.Parse(this.msb_AttackTime_ms.Text);
-        if (TempAttackTime_ms < 1)
-        {
+        // parse numeric inputs safely to avoid exceptions and allocations from thrown exceptions
+        if (!double.TryParse(this.msb_AttackTime_ms.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var TempAttackTime_ms))
             TempAttackTime_ms = 1;
-            this.msb_AttackTime_ms.Text = "1";
-        }
+        TempAttackTime_ms = Math.Max(1.0, TempAttackTime_ms);
+        this.msb_AttackTime_ms.Text = TempAttackTime_ms.ToString(CultureInfo.InvariantCulture);
         this.Filter.AttackTime_ms = TempAttackTime_ms;
 
-        var TempReleaseTime_ms = double.Parse(this.msb_ReleaseTime_ms.Text);
-        if (TempReleaseTime_ms < 1)
-        {
+        if (!double.TryParse(this.msb_ReleaseTime_ms.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var TempReleaseTime_ms))
             TempReleaseTime_ms = 1;
-            this.msb_ReleaseTime_ms.Text = "1";
-        }
+        TempReleaseTime_ms = Math.Max(1.0, TempReleaseTime_ms);
+        this.msb_ReleaseTime_ms.Text = TempReleaseTime_ms.ToString(CultureInfo.InvariantCulture);
         this.Filter.ReleaseTime_ms = TempReleaseTime_ms;
 
-        var TempKneeWidth_dB = double.Parse(this.msb_KneeWidth_db.Text);
-        if (TempKneeWidth_dB < 1)
-        {
+        if (!double.TryParse(this.msb_KneeWidth_db.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var TempKneeWidth_dB))
             TempKneeWidth_dB = 1;
-            this.msb_KneeWidth_db.Text = "1";
-        }
+        TempKneeWidth_dB = Math.Max(1.0, TempKneeWidth_dB);
+        this.msb_KneeWidth_db.Text = TempKneeWidth_dB.ToString(CultureInfo.InvariantCulture);
         this.Filter.KneeWidth_dB = TempKneeWidth_dB;
 
 
         this.Filter.UseSoftKnee = this.chkSoftKnee.Checked;
 
-        if (Program.ASIO != null)
-            this.Filter.CalculateCoeffs(Program.ASIO.SampleRate_Current);
+        var asio2 = Program.ASIO;
+        if (asio2 != null && asio2.SampleRate_Current != _lastSampleRate)
+        {
+            this.Filter.CalculateCoeffs(asio2.SampleRate_Current);
+            _lastSampleRate = asio2.SampleRate_Current;
+        }
 
         this.Filter.ApplySettings();
     }
@@ -139,13 +156,17 @@ public partial class ClassicLimiterControl : UserControl, IFilterControl
         {
             this.Filter = drc;
             this.Threshold.VolumedB = this.Filter.Threshold_dB;
-            this.msb_AttackTime_ms.Text = this.Filter.AttackTime_ms < 1 ? "1" : this.Filter.AttackTime_ms.ToString();
-            this.msb_ReleaseTime_ms.Text = this.Filter.ReleaseTime_ms < 1 ? "1" : this.Filter.ReleaseTime_ms.ToString();
-            this.msb_KneeWidth_db.Text = this.Filter.KneeWidth_dB < 1 ? "1" : this.Filter.KneeWidth_dB.ToString();
+            this.msb_AttackTime_ms.Text = (this.Filter.AttackTime_ms < 1 ? 1.0 : this.Filter.AttackTime_ms).ToString(CultureInfo.InvariantCulture);
+            this.msb_ReleaseTime_ms.Text = (this.Filter.ReleaseTime_ms < 1 ? 1.0 : this.Filter.ReleaseTime_ms).ToString(CultureInfo.InvariantCulture);
+            this.msb_KneeWidth_db.Text = (this.Filter.KneeWidth_dB < 1 ? 1.0 : this.Filter.KneeWidth_dB).ToString(CultureInfo.InvariantCulture);
             this.chkSoftKnee.Checked = this.Filter.UseSoftKnee;
 
-            if (Program.ASIO != null)
-                this.Filter.CalculateCoeffs(Program.ASIO.SampleRate_Current);
+            var asio3 = Program.ASIO;
+            if (asio3 != null && asio3.SampleRate_Current != _lastSampleRate)
+            {
+                this.Filter.CalculateCoeffs(asio3.SampleRate_Current);
+                _lastSampleRate = asio3.SampleRate_Current;
+            }
             this.Filter.ApplySettings();
         }
     }

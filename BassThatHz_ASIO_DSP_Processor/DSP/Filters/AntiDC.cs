@@ -81,39 +81,116 @@ public class AntiDC : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
+        // Use an in-place span-based implementation to avoid allocations
         try
         {
-            if (this.IsOutputMuted)
-                return new double[input.Length]; // Return all samples as muted
+            TransformInPlace(input, currentStream);
+            return input;
+        }
+        catch (Exception)
+        {
+            // swallow and return input to preserve previous behavior
+            return input;
+        }
+    }
 
-            var output = new double[input.Length];
-            for (int i = 0; i < input.Length; i++)
+    [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+    public void TransformInPlace(Span<double> buffer, DSP_Stream currentStream)
+    {
+        // Fast-path: if already muted, zero buffer and return
+        if (this.IsOutputMuted)
+        {
+            buffer.Fill(0);
+            return;
+        }
+
+        // Cache state/thresholds to locals to reduce field traffic
+        double clipThreshold = this.Clip_Threshold;
+        double dcThreshold = this.DC_Threshold;
+        int maxConsec = this._MaxConsecutiveDCSamples;
+        int maxClipEvents = this._MaxClipEventsPerDuration;
+        TimeSpan detectionDuration = this.DetectionDuration;
+
+        int consecDetected = this.ConsecutiveDCEventsDetected;
+        int clipEventsDetected = this.ClipEventsPerDurationDetected;
+
+        double prevValue = this.PreviousInputValue;
+        bool wasPrevIdentical = this.WasPreviousInputIdentical;
+
+        DateTime lastClipEvent = this.TimeOfLastClipEvent;
+
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            double sample = buffer[i];
+
+            // DC detection (only when sample magnitude above DC threshold)
+            if (sample >= dcThreshold || sample <= -dcThreshold)
             {
-                output[i] = input[i];
+                bool isPrevIdentical = prevValue == sample;
 
-                // DC Detection
-                this.DC_Detection(input[i]);
-
-                // Clip Detection
-                this.ClipDetection(input[i]);
-
-                if (this.IsOutputMuted)
+                if (wasPrevIdentical && !isPrevIdentical)
                 {
-                    Array.Fill(output, 0);
-                    this.RaiseOutputMutedEvent();
-                    break;
+                    // reset consecutive DC and report previous clip events
+                    if (DateTime.UtcNow - this.TimeOfLastClipEventRaised > TimeSpan.FromMilliseconds(1000))
+                    {
+                        // raise event asynchronously
+                        var args = Get_ClippedInfoArgs();
+                        _ = Task.Run(() => this.ClipEvent?.Invoke(this, args));
+                    }
+                    consecDetected = 0;
                 }
 
-                this.PreviousInputValue = input[i];
+                if (isPrevIdentical)
+                {
+                    consecDetected++;
+                    if (consecDetected >= maxConsec)
+                    {
+                        this.IsOutputMuted = true;
+                        // zero remaining buffer and raise output muted event asynchronously
+                        for (int j = i; j < buffer.Length; j++)
+                            buffer[j] = 0;
+                        var args = Get_ClippedInfoArgs();
+                        _ = Task.Run(() => this.OutputMutedEvent?.Invoke(this, args));
+                        break;
+                    }
+                }
+
+                wasPrevIdentical = isPrevIdentical;
             }
-            return output;
-        }
-        catch (Exception ex)
-        {
-            _ = ex;
+
+            // Clip detection
+            if (sample >= clipThreshold || sample <= -clipThreshold)
+            {
+                var now = DateTime.UtcNow;
+                if (now - lastClipEvent <= detectionDuration)
+                {
+                    clipEventsDetected++;
+                    if (clipEventsDetected >= maxClipEvents)
+                    {
+                        this.IsOutputMuted = true;
+                        for (int j = i; j < buffer.Length; j++)
+                            buffer[j] = 0;
+                        var args = Get_ClippedInfoArgs();
+                        _ = Task.Run(() => this.OutputMutedEvent?.Invoke(this, args));
+                        break;
+                    }
+                }
+                else
+                {
+                    clipEventsDetected = 0;
+                }
+                lastClipEvent = now;
+            }
+
+            prevValue = sample;
         }
 
-        return input;
+        // write back locals
+        this.ConsecutiveDCEventsDetected = consecDetected;
+        this.ClipEventsPerDurationDetected = clipEventsDetected;
+        this.PreviousInputValue = prevValue;
+        this.WasPreviousInputIdentical = wasPrevIdentical;
+        this.TimeOfLastClipEvent = lastClipEvent;
     }
 
     public void ResetDetection()

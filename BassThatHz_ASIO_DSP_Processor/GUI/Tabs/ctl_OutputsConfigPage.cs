@@ -59,6 +59,8 @@ public partial class ctl_OutputsConfigPage : UserControl
     {
         try
         {
+            // Ensure single subscription to avoid duplicate handlers if load fires multiple times
+            this.volMaster.VolumeChanged -= VolMaster_VolumeChanged;
             this.volMaster.VolumeChanged += VolMaster_VolumeChanged;
             this.Populate_ASIO_Device_Names();
 
@@ -143,15 +145,26 @@ public partial class ctl_OutputsConfigPage : UserControl
     #region Protected Functions
     protected void Populate_ASIO_Device_Names()
     {
-        var DriverNames = Program.ASIO.GetDriverNames();
+        var driverNames = Program.ASIO.GetDriverNames();
+        var driverArray = driverNames?.ToArray(); // materialize to avoid multiple enumerations
 
-        if (DriverNames != null && DriverNames.Count() > 0)
+        // Update UI in a single batch to reduce redraws
+        this.cboDevices.BeginUpdate();
+        try
         {
-            this.cboDevices.Items.AddRange(DriverNames);
+            this.cboDevices.Items.Clear();
+            if (driverArray != null && driverArray.Length > 0)
+            {
+                this.cboDevices.Items.AddRange(driverArray);
+            }
+            else
+            {
+                _ = MessageBox.Show("Cannot find any ASIO drivers or devices, application may not run correctly.");
+            }
         }
-        else
+        finally
         {
-            _ = MessageBox.Show("Cannot find any ASIO drivers or devices, application may not run correctly.");
+            this.cboDevices.EndUpdate();
         }
     }
 
@@ -167,11 +180,19 @@ public partial class ctl_OutputsConfigPage : UserControl
                 string Max = Program.ASIO.GetMaxBufferSize(DeviceName).ToString();
 
                 //var PlaybackLatency = Program.ASIO.GetPlaybackLatency(DeviceName);
-                this.cboBufferSize.Items.Clear();
-                _ = this.cboBufferSize.Items.Add("Hardware Min (~ ms)".Replace("~", Min));
-                _ = this.cboBufferSize.Items.Add("Hardware Recommended (~ ms)".Replace("~", Preferred));
-                _ = this.cboBufferSize.Items.Add("Hardware Max (~ ms)".Replace("~", Max));
-                this.cboBufferSize.SelectedItem = this.cboBufferSize.Items[1];
+                this.cboBufferSize.BeginUpdate();
+                try
+                {
+                    this.cboBufferSize.Items.Clear();
+                    _ = this.cboBufferSize.Items.Add("Hardware Min (~ ms)".Replace("~", Min));
+                    _ = this.cboBufferSize.Items.Add("Hardware Recommended (~ ms)".Replace("~", Preferred));
+                    _ = this.cboBufferSize.Items.Add("Hardware Max (~ ms)".Replace("~", Max));
+                    this.cboBufferSize.SelectedItem = this.cboBufferSize.Items[1];
+                }
+                finally
+                {
+                    this.cboBufferSize.EndUpdate();
+                }
             }
         }
         catch (Exception ex)
@@ -188,23 +209,38 @@ public partial class ctl_OutputsConfigPage : UserControl
         this.lstChannels.Items.Clear();
 
         string? DeviceName = this.cboDevices.SelectedItem?.ToString();
-        if (!String.IsNullOrEmpty(DeviceName))
+        if (String.IsNullOrEmpty(DeviceName))
+            return;
+
+        AsioDriverCapability? capabilities = null;
+        try
         {
-            AsioDriverCapability? Capabilities = null;
+            capabilities = Program.ASIO.GetDriverCapabilities(DeviceName);
+        }
+        catch (Exception ex)
+        {
+            _ = ex; // swallow - caller expects no throw
+        }
+
+        if (capabilities == null)
+            return;
+
+        // Build list of channel strings and add in one operation to minimize UI overhead
+        var channelStrings = capabilities.Value.OutputChannelInfos
+            .Select(info => "(" + info.channel + ") " + info.name)
+            .ToArray();
+
+        if (channelStrings.Length > 0)
+        {
+            this.lstChannels.BeginUpdate();
             try
             {
-                Capabilities = Program.ASIO.GetDriverCapabilities(DeviceName);
+                this.lstChannels.Items.AddRange(channelStrings);
             }
-            catch (Exception ex)
+            finally
             {
-                _ = ex;
-                //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
+                this.lstChannels.EndUpdate();
             }
-            if (Capabilities == null)
-                return;
-
-            foreach (var item in Capabilities.Value.OutputChannelInfos)
-                _ = this.lstChannels.Items.Add("(" + item.channel + ") " + item.name);
         }
     }
 
@@ -223,11 +259,13 @@ public partial class ctl_OutputsConfigPage : UserControl
     protected void Select_Existing_SampleRate()
     {
         //Select the previous matching sample rate
-        foreach (var SampleRate in this.cboSampleRate.Items)
+        var target = Program.DSP_Info.InSampleRate;
+        var targetString = target.ToString();
+        foreach (var sampleRate in this.cboSampleRate.Items)
         {
-            if (SampleRate.ToString() == Program.DSP_Info.InSampleRate.ToString())
+            if (sampleRate?.ToString() == targetString)
             {
-                this.cboSampleRate.SelectedItem = SampleRate;
+                this.cboSampleRate.SelectedItem = sampleRate;
                 break;
             }
         }

@@ -28,7 +28,9 @@ using System;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 [Serializable]
-public enum FilterProcessingTypes
+// Use the smallest underlying integral type that fits the values to reduce memory
+// when enums are stored in arrays or structs.
+public enum FilterProcessingTypes : byte
 {
-    WholeBlock
+    WholeBlock = 0
 }

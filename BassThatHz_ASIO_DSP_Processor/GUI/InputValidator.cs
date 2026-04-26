@@ -3,6 +3,9 @@
 namespace BassThatHz_ASIO_DSP_Processor.GUI;
 
 #region Usings
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Windows.Forms;
 #endregion
 
@@ -43,32 +46,43 @@ public static class InputValidator
 
     public static string LimitTo_ReasonableSizedNumber(string input, bool allowEmpty = false)
     {
-        var ReturnValue = input;
+        const int MaxChars = 9;
+        const double MaxValue = 999_999_999d;
+        const double MinValue = -999_999_999d;
 
-        if (!allowEmpty && string.IsNullOrEmpty(ReturnValue))
-            ReturnValue = "0";
+        input ??= string.Empty;
 
-        ReturnValue = ReturnValue.Trim();
+        // Trim whitespace without allocating when input has no surrounding whitespace
+        int start = 0, end = input.Length - 1;
+        while (start <= end && char.IsWhiteSpace(input[start])) start++;
+        while (end >= start && char.IsWhiteSpace(input[end])) end--;
 
-        if (ReturnValue.Length > 9)
-            ReturnValue = ReturnValue.Substring(0, 9);
+        string trimmed = (start == 0 && end == input.Length - 1) ? input : input.Substring(start, end - start + 1);
 
-        if (double.TryParse(ReturnValue, out double result))
+        if (!allowEmpty && trimmed.Length == 0)
+            return "0";
+
+        if (trimmed.Length > MaxChars)
+            trimmed = trimmed.Substring(0, MaxChars);
+
+        if (double.TryParse(trimmed, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out double value))
         {
-            if (result > 999999999) //Limit to 999 million
-                ReturnValue = "999999999";
-            else if(result < -999999999) //Limit to -999 million
-                ReturnValue = "-999999999";
-        }
-        else
-            if (!allowEmpty)
-                ReturnValue = "0"; //If not a number set to zero
+            if (value > MaxValue)
+                return MaxValue.ToString(CultureInfo.InvariantCulture);
+            if (value < MinValue)
+                return MinValue.ToString(CultureInfo.InvariantCulture);
 
-        return ReturnValue;
+            return trimmed;
+        }
+
+        return allowEmpty ? string.Empty : "0";
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Set_TextBox_MaxLength(TextBox input)
     {
-        input.MaxLength = 9;
+        const int MaxLength = 9;
+        if (input.MaxLength != MaxLength)
+            input.MaxLength = MaxLength;
     }
 }

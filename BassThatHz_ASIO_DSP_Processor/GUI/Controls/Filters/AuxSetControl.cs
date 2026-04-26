@@ -40,10 +40,36 @@ public partial class AuxSetControl : UserControl, IFilterControl
     {
         InitializeComponent();
 
-        var NumberOfAuxBuffers = new DSP_Stream().NumberOfAuxBuffers;
-        for (var i = 1; i < NumberOfAuxBuffers + 1; i++)
-            this.cbo_AuxToSet.Items.Add(i.ToString());
-        this.cbo_AuxToSet.SelectedIndex = 0;
+        var numberOfAuxBuffers = DSP_Stream.NumberOfAuxBuffers;
+
+        // Avoid repeated layout updates and per-item UI allocations by building
+        // the string array once and adding all items in a single operation.
+        if (numberOfAuxBuffers > 0)
+        {
+            this.cbo_AuxToSet.BeginUpdate();
+            try
+            {
+                var items = new string[numberOfAuxBuffers];
+                for (var i = 0; i < numberOfAuxBuffers; i++)
+                    items[i] = (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                this.cbo_AuxToSet.Items.AddRange(items);
+
+                // Safe to set to first entry because we know there is at least one.
+                this.cbo_AuxToSet.SelectedIndex = 0;
+            }
+            finally
+            {
+                this.cbo_AuxToSet.EndUpdate();
+            }
+        }
+        else
+        {
+            // If there are no aux buffers, leave the control empty and disabled to avoid
+            // unnecessary UI operations elsewhere.
+            this.cbo_AuxToSet.Items.Clear();
+            this.cbo_AuxToSet.Enabled = false;
+        }
     }
     #endregion
 
@@ -55,7 +81,9 @@ public partial class AuxSetControl : UserControl, IFilterControl
 
     protected void cbo_AuxToSet_SelectedIndexChanged(object sender, EventArgs e)
     {
-        this.Filter.AuxSetIndex = this.cbo_AuxToSet.SelectedIndex;
+        var idx = this.cbo_AuxToSet.SelectedIndex;
+        if (idx >= 0 && idx < this.cbo_AuxToSet.Items.Count)
+            this.Filter.AuxSetIndex = idx;
     }
     #endregion
 
@@ -75,12 +103,17 @@ public partial class AuxSetControl : UserControl, IFilterControl
             this.Filter = auxSet;
             this.chk_MuteAfter.Checked = this.Filter.MuteAfter;
 
-            try
+            // Only set the selected index if it's valid for the current combo box items.
+            var idx = this.Filter.AuxSetIndex;
+            if (idx >= 0 && idx < this.cbo_AuxToSet.Items.Count)
             {
-                this.cbo_AuxToSet.SelectedIndex = this.Filter.AuxSetIndex;
+                this.cbo_AuxToSet.SelectedIndex = idx;
             }
-            catch(Exception)
+            else if (this.cbo_AuxToSet.Items.Count > 0)
             {
+                // Clamp to a safe default to avoid throwing and to keep UI consistent.
+                this.cbo_AuxToSet.SelectedIndex = 0;
+                this.Filter.AuxSetIndex = 0;
             }
         }
     }

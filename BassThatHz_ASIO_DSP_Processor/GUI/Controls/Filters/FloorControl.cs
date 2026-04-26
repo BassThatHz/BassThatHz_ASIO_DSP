@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 
 #region Usings
 using System;
+using System.Globalization;
 using System.Windows.Forms;
 #endregion
 
@@ -85,14 +86,24 @@ public partial class FloorControl : UserControl, IFilterControl
     {
         try
         {
-            this.Filter.HoldInMS = TimeSpan.FromMilliseconds(double.Parse(this.txtHoldInMS.Text));
-            var Ratio = double.Parse(this.txtRatio.Text);
-            if (Ratio <= 1)
+            // Parse HoldInMS safely; fallback to existing value on failure
+            if (!double.TryParse(this.txtHoldInMS.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var holdMs))
+                holdMs = this.Filter.HoldInMS.TotalMilliseconds;
+            this.Filter.HoldInMS = TimeSpan.FromMilliseconds(holdMs);
+
+            // Parse ratio safely and clamp to >= 1
+            double ratio;
+            if (!double.TryParse(this.txtRatio.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out ratio))
+                ratio = this.Filter.Ratio;
+
+            if (ratio <= 1.0)
             {
-                Ratio = 1;
-                this.txtRatio.Text = Ratio.ToString();
+                ratio = 1.0;
+                // Use invariant culture to avoid culture-specific allocations
+                this.txtRatio.Text = ratio.ToString(CultureInfo.InvariantCulture);
             }
-            this.Filter.Ratio = Ratio;
+
+            this.Filter.Ratio = ratio;
         }
         catch (Exception ex)
         {
@@ -117,8 +128,8 @@ public partial class FloorControl : UserControl, IFilterControl
         {
             this.Filter = floor;
 
-            this.txtHoldInMS.Text = floor.HoldInMS.TotalMilliseconds.ToString();
-            this.txtRatio.Text = floor.Ratio.ToString();
+            this.txtHoldInMS.Text = floor.HoldInMS.TotalMilliseconds.ToString(CultureInfo.InvariantCulture);
+            this.txtRatio.Text = floor.Ratio.ToString(CultureInfo.InvariantCulture);
             this.Threshold.Volume = floor.MinValue;
         }
     }

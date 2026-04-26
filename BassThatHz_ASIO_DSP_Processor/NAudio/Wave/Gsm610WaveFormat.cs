@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.IO;
 
 // ReSharper disable once CheckNamespace
@@ -9,9 +10,12 @@ namespace NAudio.Wave
     /// GSM 610
     /// </summary>
     [StructLayout(LayoutKind.Sequential, Pack = 2)]
-    public class Gsm610WaveFormat : WaveFormat
+    public sealed class Gsm610WaveFormat : WaveFormat
     {
-        protected readonly short samplesPerBlock;
+        // samplesPerBlock is a constant for GSM 6.10 (320 samples per block).
+        // Use a const to avoid storing the same value per-instance and
+        // reduce memory footprint.
+        private const short samplesPerBlock = 320;
 
         /// <summary>
         /// Creates a GSM 610 WaveFormat
@@ -27,13 +31,17 @@ namespace NAudio.Wave
             sampleRate = 8000;
 
             extraSize = 2;
-            samplesPerBlock = 320;
+            // samplesPerBlock is a compile-time constant; nothing to assign.
         }
 
         /// <summary>
         /// Samples per block
         /// </summary>
-        public short SamplesPerBlock { get { return samplesPerBlock; } }
+        public short SamplesPerBlock
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return samplesPerBlock; }
+        }
 
         /// <summary>
         /// Writes this structure to a BinaryWriter

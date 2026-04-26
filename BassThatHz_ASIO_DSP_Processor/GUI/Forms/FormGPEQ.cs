@@ -6,10 +6,12 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Forms;
 using DSPLib;
 using NAudio.Dsp;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
 #endregion
@@ -42,6 +44,11 @@ public partial class FormGPEQ : Form
     protected List<IFilter>? ParentFilters;
 
     protected List<IFilter> Filters = new();
+    // Cached chart/series references to avoid repeated name lookups and allocations
+    private ChartArea? _chartArea0;
+    private Series? _seriesMag;
+    private Series? _seriesPhase;
+    private Series? _seriesDummy;
     #endregion
 
     #region Constructor and Init
@@ -150,14 +157,18 @@ public partial class FormGPEQ : Form
     #region Event Handlers
     protected void ShowTotalMag_CHK_CheckedChanged(object sender, EventArgs e)
     {
-        this.GPEQ_Chart.Series["Series1"].Enabled = this.ShowTotalMag_CHK.Checked;
-        this.GPEQ_Chart.ChartAreas[0].AxisY.Enabled = AxisEnabled.True;
+        if (_seriesMag != null)
+            _seriesMag.Enabled = this.ShowTotalMag_CHK.Checked;
+        if (_chartArea0 != null)
+            _chartArea0.AxisY.Enabled = AxisEnabled.True;
     }
 
     protected void ShowTotalPhase_CHK_CheckedChanged(object sender, EventArgs e)
     {
-        this.GPEQ_Chart.Series["Series2"].Enabled = this.ShowTotalPhase_CHK.Checked;
-        this.GPEQ_Chart.ChartAreas[0].AxisY2.Enabled = AxisEnabled.True;
+        if (_seriesPhase != null)
+            _seriesPhase.Enabled = this.ShowTotalPhase_CHK.Checked;
+        if (_chartArea0 != null)
+            _chartArea0.AxisY2.Enabled = AxisEnabled.True;
     }
 
     protected void SaveAndClose_BTN_Click(object sender, EventArgs e)
@@ -411,6 +422,30 @@ public partial class FormGPEQ : Form
         this.LPFFreq_TXT.MaxLength = 9;
 
         this.GPEQ_Chart.SuppressExceptions = true;
+
+        // Cache chart elements for performance to avoid repeated dictionary lookups
+        if (this.GPEQ_Chart.ChartAreas.Count > 0)
+            _chartArea0 = this.GPEQ_Chart.ChartAreas[0];
+
+        if (this.GPEQ_Chart.Series.FindByName("Series1") != null)
+            _seriesMag = this.GPEQ_Chart.Series["Series1"];
+        if (this.GPEQ_Chart.Series.FindByName("Series2") != null)
+            _seriesPhase = this.GPEQ_Chart.Series["Series2"];
+
+        // Ensure a Dummy series exists once
+        if (this.GPEQ_Chart.Series.FindByName("Dummy") == null)
+        {
+            _seriesDummy = new Series("Dummy");
+            _seriesDummy.ChartType = SeriesChartType.Point;
+            _seriesDummy.YAxisType = AxisType.Primary;
+            _seriesDummy.IsVisibleInLegend = false;
+            _seriesDummy.Points.AddXY(0, 0);
+            this.GPEQ_Chart.Series.Add(_seriesDummy);
+        }
+        else
+        {
+            _seriesDummy = this.GPEQ_Chart.Series["Dummy"];
+        }
     }
 
     protected void ApplySettingsToCurrentSelectedFilterItem()
@@ -441,16 +476,23 @@ public partial class FormGPEQ : Form
 
     protected void DisplayFilters()
     {
-        int i = 0;
-        this.Filters_LSB.Items.Clear();
-        foreach (var filter in this.Filters)
+        this.Filters_LSB.BeginUpdate();
+        try
         {
-            i++;
-            if (filter != null)
+            int i = 1;
+            this.Filters_LSB.Items.Clear();
+            foreach (var filter in this.Filters)
             {
-                var Text = i + " " + this.GetListText(filter);
-                this.Filters_LSB.Items.Add(Text);
+                if (filter != null)
+                {
+                    this.Filters_LSB.Items.Add(string.Concat(i, " ", this.GetListText(filter)));
+                }
+                i++;
             }
+        }
+        finally
+        {
+            this.Filters_LSB.EndUpdate();
         }
     }
 
@@ -464,9 +506,16 @@ public partial class FormGPEQ : Form
     {
         if (input is BiQuadFilter Temp_Biquad)
         {
-            double Freq = double.Parse(this.txtF.Text);
-            double Q = double.Parse(this.txtQ.Text);
-            double Gain = double.Parse(this.txtG.Text);
+            double Freq = Temp_Biquad.Frequency;
+            double Q = Temp_Biquad.Q;
+            double Gain = Temp_Biquad.Gain;
+            if (!string.IsNullOrWhiteSpace(this.txtF.Text) && double.TryParse(this.txtF.Text, out var tF))
+                Freq = tF;
+            if (!string.IsNullOrWhiteSpace(this.txtQ.Text) && double.TryParse(this.txtQ.Text, out var tQ))
+                Q = tQ;
+            if (!string.IsNullOrWhiteSpace(this.txtG.Text) && double.TryParse(this.txtG.Text, out var tG))
+                Gain = tG;
+
             Temp_Biquad.BiQuadFilterType = BiQuadFilter.BiQuadFilterTypes.PEQ;
             Temp_Biquad.PeakingEQ(Program.DSP_Info.InSampleRate, Freq, Q, Gain);
 
@@ -474,11 +523,13 @@ public partial class FormGPEQ : Form
         }
         else if (input is Basic_HPF_LPF Temp_HPF_LPF)
         {
-            Temp_HPF_LPF.HPFFreq = double.Parse(this.HPFFreq_TXT.Text);
+            if (!string.IsNullOrWhiteSpace(this.HPFFreq_TXT.Text) && double.TryParse(this.HPFFreq_TXT.Text, out var hpf))
+                Temp_HPF_LPF.HPFFreq = hpf;
             if (this.HPF_CBO.SelectedItem != null)
                 Temp_HPF_LPF.HPFFilter = (Basic_HPF_LPF.FilterOrder)this.HPF_CBO.SelectedItem;
 
-            Temp_HPF_LPF.LPFFreq = double.Parse(this.LPFFreq_TXT.Text);
+            if (!string.IsNullOrWhiteSpace(this.LPFFreq_TXT.Text) && double.TryParse(this.LPFFreq_TXT.Text, out var lpf))
+                Temp_HPF_LPF.LPFFreq = lpf;
             if (this.LPF_CBO.SelectedItem != null)
                 Temp_HPF_LPF.LPFFilter = (Basic_HPF_LPF.FilterOrder)this.LPF_CBO.SelectedItem;
 
@@ -493,11 +544,9 @@ public partial class FormGPEQ : Form
         double WindowScaleFactor = 1.0;   // Window compensation factor (if using window)
         var WindowType = DSP.Window.Type.None;
         double sampleRate = Program.DSP_Info.InSampleRate;
-
         var temp_FFT = new FFT(FFTSize, ZeroPadding);
-        Application.DoEvents();
 
-        // Create test signal
+        // Create test signal (symmetric spectrum -> real time-domain signal)
         var TestSignal = new Complex[FFTSize];
         for (int i = 0; i < FFTSize; i++)
         {
@@ -507,9 +556,7 @@ public partial class FormGPEQ : Form
                 TestSignal[i] = Complex.Conjugate(TestSignal[FFTSize - i]);
         }
 
-        Application.DoEvents();
         double[] DataBuffer = temp_FFT.Perform_IFFT(TestSignal);
-        Application.DoEvents();
 
         // Put test signal through the filter stack, and collect the output results
         int FilterCount = this.Filters.Count;
@@ -519,34 +566,26 @@ public partial class FormGPEQ : Form
                 DataBuffer = this.Filters[i].Transform(DataBuffer, new DSP_Stream());
         }
 
-        Application.DoEvents();
         // Calculate windowing
         var WindowCoefficients = DSP.Window.Coefficients(WindowType, FFTSize);
         WindowScaleFactor = DSP.Window.ScaleFactor.Signal(WindowCoefficients);
 
-        Application.DoEvents();
         // Perform FFT of the result
         Complex[] freqResponseFFT = temp_FFT.Perform_FFT(DataBuffer, WindowCoefficients);
-        Application.DoEvents();
 
         // Calculate frequency axis for plotting
         double[] freqSpan = temp_FFT.FrequencySpan(sampleRate);
         freqSpan[0] = 0.0001; // avoid log(0)
-        Application.DoEvents();
 
         // Keep only the real (non-mirrored) half of the spectrum
         int halfLen = freqResponseFFT.Length / 2 + 1;
         var realHalf = new Complex[halfLen];
         Array.Copy(freqResponseFFT, realHalf, halfLen);
-        Application.DoEvents();
 
-        // Convert FFT results to magnitude in decibels
+        // Convert FFT results to magnitude in decibels and phase
         double[] mag = DSP.ConvertComplex.ToMagnitude(realHalf);
-        Application.DoEvents();
         double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(mag);
-        Application.DoEvents();
         double[] phaseDeg = DSP.ConvertComplex.ToPhaseDegrees(realHalf);
-        Application.DoEvents();
 
         // ---------------------
         // PHASE CALCULATION
@@ -570,63 +609,76 @@ public partial class FormGPEQ : Form
 
         chartControl.SuspendLayout();
 
+        var chartArea = _chartArea0 ?? chartControl.ChartAreas[0];
+
         // Configure magnitude axis (primary Y-axis)
-        chartControl.ChartAreas[0].AxisY.Interval = 12;
-        chartControl.ChartAreas[0].AxisY.IntervalType = DateTimeIntervalType.Number;
-        chartControl.ChartAreas[0].AxisY.Maximum = double.Parse(this.maxdB_TXT.Text);
-        chartControl.ChartAreas[0].AxisY.Minimum = double.Parse(this.mindB_TXT.Text);
-        chartControl.ChartAreas[0].AxisY.MinorGrid.Enabled = true;
-        chartControl.ChartAreas[0].AxisY.MinorGrid.Interval = 3;
-        chartControl.ChartAreas[0].AxisY.Title = "Magnitude (dB)";
+        chartArea.AxisY.Interval = 12;
+        chartArea.AxisY.IntervalType = DateTimeIntervalType.Number;
+        chartArea.AxisY.Maximum = double.Parse(this.maxdB_TXT.Text);
+        chartArea.AxisY.Minimum = double.Parse(this.mindB_TXT.Text);
+        chartArea.AxisY.MinorGrid.Enabled = true;
+        chartArea.AxisY.MinorGrid.Interval = 3;
+        chartArea.AxisY.Title = "Magnitude (dB)";
 
         // Configure X-axis (frequency)
-        chartControl.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Number;
-        chartControl.ChartAreas[0].AxisX.MinorGrid.Enabled = true;
-        chartControl.ChartAreas[0].AxisX.MinorGrid.Interval = 1;
-        chartControl.ChartAreas[0].AxisX.Minimum = min;
-        chartControl.ChartAreas[0].AxisX.Maximum = max;
-        chartControl.ChartAreas[0].AxisX.IsLogarithmic = true;
-        chartControl.ChartAreas[0].AxisX.Title = "Frequency (Hz)";
+        chartArea.AxisX.IntervalType = DateTimeIntervalType.Number;
+        chartArea.AxisX.MinorGrid.Enabled = true;
+        chartArea.AxisX.MinorGrid.Interval = 1;
+        chartArea.AxisX.Minimum = min;
+        chartArea.AxisX.Maximum = max;
+        chartArea.AxisX.IsLogarithmic = true;
+        chartArea.AxisX.Title = "Frequency (Hz)";
 
-        // Configure "Series2" to use the secondary Y-axis
-        chartControl.Series["Series1"].YAxisType = AxisType.Primary;
-        chartControl.Series["Series1"].ChartType = SeriesChartType.Line;
-        chartControl.Series["Series1"].Color = System.Drawing.Color.Blue;
-        chartControl.Series["Series1"].BorderWidth = 2;
+        // Configure secondary Y-axis for Phase
+        chartArea.AxisY2.Title = "Phase (Degrees)";
+        chartArea.AxisY2.MajorGrid.Enabled = false;
+        chartArea.AxisY2.MinorGrid.Enabled = false;
+        chartArea.AxisY2.Minimum = -180;
+        chartArea.AxisY2.Maximum = 180;
+        chartArea.AxisY2.Interval = 90;
 
-        chartControl.Series["Series2"].YAxisType = AxisType.Secondary;
-        chartControl.Series["Series2"].ChartType = SeriesChartType.Line;
-        chartControl.Series["Series2"].Color = System.Drawing.Color.Red;
-        chartControl.Series["Series2"].BorderWidth = 2;
+        var series1 = _seriesMag ?? chartControl.Series.FindByName("Series1") ?? chartControl.Series.Add("Series1");
+        var series2 = _seriesPhase ?? chartControl.Series.FindByName("Series2") ?? chartControl.Series.Add("Series2");
 
-        // Enable and configure secondary Y-axis for Phase
-        chartControl.ChartAreas[0].AxisY2.Title = "Phase (Degrees)";
-        chartControl.ChartAreas[0].AxisY2.MajorGrid.Enabled = false; // optional
-        chartControl.ChartAreas[0].AxisY2.MinorGrid.Enabled = false; // optional
-        chartControl.ChartAreas[0].AxisY2.Minimum = -180;
-        chartControl.ChartAreas[0].AxisY2.Maximum = 180;
-        chartControl.ChartAreas[0].AxisY2.Interval = 90;
+        series1.YAxisType = AxisType.Primary;
+        series1.ChartType = SeriesChartType.Line;
+        series1.Color = System.Drawing.Color.Blue;
+        series1.BorderWidth = 2;
 
-        chartControl.Series["Series1"].Points.Clear();
-        chartControl.Series["Series1"].Points.DataBindXY(xData, magData);
+        series2.YAxisType = AxisType.Secondary;
+        series2.ChartType = SeriesChartType.Line;
+        series2.Color = System.Drawing.Color.Red;
+        series2.BorderWidth = 2;
 
-        chartControl.Series["Series2"].Points.Clear();
-        chartControl.Series["Series2"].Points.DataBindXY(xData, phaseData);
+        series1.Points.Clear();
+        series1.Points.DataBindXY(xData, magData);
 
-        if (chartControl.Series.FindByName("Dummy") == null)
+        series2.Points.Clear();
+        series2.Points.DataBindXY(xData, phaseData);
+
+        if (_seriesDummy == null)
         {
-            var dummySeries = new Series("Dummy");
-            dummySeries.ChartType = SeriesChartType.Point; 
-            dummySeries.YAxisType = AxisType.Primary;
-            dummySeries.IsVisibleInLegend = false; 
-            dummySeries.Points.AddXY(0, 0);
-            chartControl.Series.Add(dummySeries);
+            if (chartControl.Series.FindByName("Dummy") == null)
+            {
+                _seriesDummy = new Series("Dummy");
+                _seriesDummy.ChartType = SeriesChartType.Point;
+                _seriesDummy.YAxisType = AxisType.Primary;
+                _seriesDummy.IsVisibleInLegend = false;
+                _seriesDummy.Points.AddXY(0, 0);
+                chartControl.Series.Add(_seriesDummy);
+            }
+            else
+            {
+                _seriesDummy = chartControl.Series["Dummy"];
+            }
         }
-        // Ensure the dummy series remains visible to prevent AxisY from hiding
-        chartControl.Series["Dummy"].Enabled = true;
+        if (_seriesDummy != null)
+            _seriesDummy.Enabled = true;
 
-        this.GPEQ_Chart.Series["Series1"].Enabled = this.ShowTotalMag_CHK.Checked;
-        this.GPEQ_Chart.Series["Series2"].Enabled = this.ShowTotalPhase_CHK.Checked;
+        if (series1 != null)
+            series1.Enabled = this.ShowTotalMag_CHK.Checked;
+        if (series2 != null)
+            series2.Enabled = this.ShowTotalPhase_CHK.Checked;
 
         chartControl.ResumeLayout();
     }

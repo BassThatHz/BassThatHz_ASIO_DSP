@@ -45,29 +45,45 @@ public class AuxGet : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        var AuxBuffers = currentStream.AuxBuffer;
+        // Forward to Span-based in-place implementation to avoid per-call allocations and repeated work
+        TransformInPlace(input.AsSpan(), currentStream);
+        return input;
+    }
 
-        if (this.AuxGetIndex >= 0 && AuxBuffers != null &&
-            this.AuxGetIndex < AuxBuffers.Length)
+    [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+    public void TransformInPlace(Span<double> input, DSP_Stream currentStream)
+    {
+        var auxBuffers = currentStream.AuxBuffer;
+        int auxIndex = this.AuxGetIndex;
+
+        if (auxIndex < 0 || auxBuffers == null || auxIndex >= auxBuffers.Length)
+            return;
+
+        var auxBuffer = auxBuffers[auxIndex];
+        if (auxBuffer == null)
+            return;
+
+        if (auxBuffer.Length != input.Length)
+            return;
+
+        // Precompute linear gains
+        double streamLinear = Decibels.DecibelsToLinear(this.StreamAttenuation);
+        double auxLinear = Decibels.DecibelsToLinear(this.AuxAttenuation);
+
+        if (this.MuteBefore)
         {
-            var AuxBuffer = AuxBuffers[this.AuxGetIndex];
-            if (AuxBuffer != null && input.Length == AuxBuffer.Length)
-            {
-                if (this.MuteBefore)
-                {
-                    Array.Copy(AuxBuffer, input, input.Length);
-                }
-                else
-                {
-                    for (int i = 0; i < input.Length; i++)
-                        input[i] = input[i] * Decibels.DecibelsToLinear(this.StreamAttenuation)
-                                   +
-                                   AuxBuffer[i] * Decibels.DecibelsToLinear(this.AuxAttenuation);
-                }
-            }
+            // Copy from aux to input efficiently via Span
+            auxBuffer.AsSpan().CopyTo(input);
+            return;
         }
 
-        return input;
+        // Mix input and aux into input span
+        var auxSpan = auxBuffer.AsSpan();
+        int len = input.Length;
+        for (int i = 0; i < len; i++)
+        {
+            input[i] = input[i] * streamLinear + auxSpan[i] * auxLinear;
+        }
     }
 
     public void ApplySettings()

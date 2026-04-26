@@ -6,6 +6,7 @@ namespace NAudio.Wave
     using System.IO;
     using System.Runtime.InteropServices;
     using System.Diagnostics;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// Represents a Wave file format
@@ -52,15 +53,30 @@ namespace NAudio.Wave
         /// </summary>
         /// <param name="milliseconds">The milliseconds.</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ConvertLatencyToByteSize(int milliseconds)
         {
-            int bytes = (int) (AverageBytesPerSecond/1000.0*milliseconds);
-            if (bytes%BlockAlign != 0)
+            // Use integer arithmetic to avoid floating point allocations and
+            // reduce rounding surprises. Use long to avoid intermediate overflow.
+            if (milliseconds <= 0)
             {
-                // Return the upper BlockAligned
-                bytes = bytes + BlockAlign - bytes % BlockAlign;
+                return 0;
             }
-            return bytes;
+
+            long bytesLong = (long)AverageBytesPerSecond * milliseconds / 1000L;
+            int align = BlockAlign;
+            if (align > 1)
+            {
+                int remainder = (int)(bytesLong % align);
+                if (remainder != 0)
+                {
+                    bytesLong += align - remainder;
+                }
+            }
+            // clamp to int range (shouldn't normally be necessary)
+            if (bytesLong > int.MaxValue) return int.MaxValue;
+            if (bytesLong < int.MinValue) return int.MinValue;
+            return (int)bytesLong;
         }
 
         /// <summary>
@@ -243,6 +259,7 @@ namespace NAudio.Wave
         /// Reports this WaveFormat as a string
         /// </summary>
         /// <returns>String describing the wave format</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override string ToString()
         {
             switch (waveFormatTag)
@@ -250,7 +267,8 @@ namespace NAudio.Wave
                 case WaveFormatEncoding.Pcm:
                 case WaveFormatEncoding.Extensible:
                     // extensible just has some extra bits after the PCM header
-                    return $"{bitsPerSample} bit PCM: {sampleRate/1000}kHz {channels} channels";
+                    // Keep formatting simple to avoid extra allocations
+                    return bitsPerSample + " bit PCM: " + sampleRate / 1000 + "kHz " + channels + " channels";
                 default:
                     return waveFormatTag.ToString();
             }
@@ -261,33 +279,28 @@ namespace NAudio.Wave
         /// </summary>
         /// <param name="obj">Object to compare to</param>
         /// <returns>True if the objects are the same</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(object obj)
         {
-            var other = obj as WaveFormat;
-            if(other != null)
-            {
-                return waveFormatTag == other.waveFormatTag &&
-                    channels == other.channels &&
-                    sampleRate == other.sampleRate &&
-                    averageBytesPerSecond == other.averageBytesPerSecond &&
-                    blockAlign == other.blockAlign &&
-                    bitsPerSample == other.bitsPerSample;
-            }
-            return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj is not WaveFormat other) return false;
+            return waveFormatTag == other.waveFormatTag &&
+                   channels == other.channels &&
+                   sampleRate == other.sampleRate &&
+                   averageBytesPerSecond == other.averageBytesPerSecond &&
+                   blockAlign == other.blockAlign &&
+                   bitsPerSample == other.bitsPerSample;
         }
 
         /// <summary>
         /// Provides a Hashcode for this WaveFormat
         /// </summary>
         /// <returns>A hashcode</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode()
         {
-            return (int) waveFormatTag ^ 
-                (int) channels ^ 
-                sampleRate ^ 
-                averageBytesPerSecond ^ 
-                (int) blockAlign ^ 
-                (int) bitsPerSample;
+            // Use System.HashCode for a well distributed hash without manual bit fiddling
+            return System.HashCode.Combine(waveFormatTag, channels, sampleRate, averageBytesPerSecond, blockAlign, bitsPerSample);
         }
 
         /// <summary>

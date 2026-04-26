@@ -44,7 +44,7 @@ public interface IAbstractBus
 }
 
 [Serializable]
-public class DSP_AbstractBus : IAbstractBus
+public sealed class DSP_AbstractBus : IAbstractBus
 {
     #region IAbstractBus
     public bool IsBypassed { get; set; } = false;
@@ -54,7 +54,13 @@ public class DSP_AbstractBus : IAbstractBus
     [XmlIgnoreAttribute]
     public string DisplayMember => this.Name + " | " + this.IsBypassed;
 
-    public List<IAbstractBusMappings> Mappings { get; set; } = new();
+    // Lazy-init the list to avoid allocating when not used.
+    private List<IAbstractBusMappings>? _mappings;
+    public List<IAbstractBusMappings> Mappings
+    {
+        get => _mappings ??= new List<IAbstractBusMappings>(0);
+        set => _mappings = value ?? new List<IAbstractBusMappings>(0);
+    }
     #endregion
 
     public override string ToString() => this.DisplayMember;
@@ -88,17 +94,27 @@ public interface IAbstractBusMappings
     #endregion
 }
 
-public class DSP_AbstractBusMappings : IAbstractBusMappings
+public sealed class DSP_AbstractBusMappings : IAbstractBusMappings
 {
     public bool IsBypassed { get; set; } = false;
 
-    public StreamItem InputSource { get; set; } = new();
+    // Lazily initialize the StreamItem instances to avoid allocations when defaults are not used.
+    private StreamItem? _inputSource;
+    public StreamItem InputSource
+    {
+        get => _inputSource ??= new StreamItem();
+        set => _inputSource = value ?? new StreamItem();
+    }
 
-    public StreamItem OutputDestination { get; set; } = new();
+    private StreamItem? _outputDestination;
+    public StreamItem OutputDestination
+    {
+        get => _outputDestination ??= new StreamItem();
+        set => _outputDestination = value ?? new StreamItem();
+    }
 
     [XmlIgnoreAttribute]
-    public string DisplayMember => this.InputSource.DisplayMember + " | " +
-                                this.OutputDestination.DisplayMember + " | " + this.IsBypassed;
+    public string DisplayMember => string.Concat(this.InputSource.DisplayMember, " | ", this.OutputDestination.DisplayMember, " | ", this.IsBypassed.ToString());
 
     [XmlIgnoreAttribute]
     public double[] Buffer { get; set; } = Array.Empty<double>();

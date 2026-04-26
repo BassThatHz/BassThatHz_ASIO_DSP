@@ -39,6 +39,8 @@ public partial class ctl_GeneralConfigPage : UserControl
 {
     #region Variables
     protected NetworkConfigAPI? NetworkConfigAPI;
+    // Reuse a single serializer instance to avoid repeated allocations
+    private readonly ExtendedXmlSerializer _xmlSerializer = new();
     #endregion
 
     #region Constructor
@@ -139,7 +141,7 @@ public partial class ctl_GeneralConfigPage : UserControl
             this.saveFileDialog1.InitialDirectory = AppContext.BaseDirectory;
             if (this.saveFileDialog1.ShowDialog(this) == DialogResult.OK)
             {
-                var xml = new ExtendedXmlSerializer().Serialize(Program.DSP_Info);
+                var xml = _xmlSerializer.Serialize(Program.DSP_Info);
                 xml = CommonFunctions.RemoveDeprecatedXMLOutputTags(xml);
                 File.WriteAllText(this.saveFileDialog1.FileName, xml);
             }
@@ -178,10 +180,14 @@ public partial class ctl_GeneralConfigPage : UserControl
     {
         try
         {
-            Program.DSP_Info.StartUpDelay = Math.Max(0, int.Parse(this.maskStartUpDelay.Text));
+            if (int.TryParse(this.maskStartUpDelay.Text, out var val))
+            {
+                Program.DSP_Info.StartUpDelay = Math.Max(0, val);
+            }
         }
         catch (Exception ex)
         {
+            // Intentionally ignore parsing errors; invalid input will be ignored.
             _ = ex;
         }
     }
@@ -214,7 +220,10 @@ public partial class ctl_GeneralConfigPage : UserControl
 
     protected void maskNetworkConfig_Port_TextChanged(object? sender, EventArgs e)
     {
-        Program.DSP_Info.NetworkConfigAPI_Port = int.Parse(this.maskNetworkConfig_Port.Text);
+        if (int.TryParse(this.maskNetworkConfig_Port.Text, out var port))
+        {
+            Program.DSP_Info.NetworkConfigAPI_Port = port;
+        }
     }
 
     protected void txt_NetworkConfigAPI_Host_TextChanged(object? sender, EventArgs e)
@@ -266,7 +275,7 @@ public partial class ctl_GeneralConfigPage : UserControl
     protected string NetworkConfigListener_GetResponseString()
     {
         //Returns the XML serialization of the Config settings for the Network API response
-        return new ExtendedXmlSerializer().Serialize(Program.DSP_Info);
+        return _xmlSerializer.Serialize(Program.DSP_Info);
     }
 
     protected string NetworkConfigListener_OnDataStringPosted(string data)
@@ -281,7 +290,8 @@ public partial class ctl_GeneralConfigPage : UserControl
 
                 //Try Deserializing the XML string, this will throw an error if it fails
                 //A Try Deserialize XML if you will
-                _ = new ExtendedXmlSerializer().Deserialize<DSP_Info>(XML);
+                // Validate that the posted XML can be deserialized using the shared serializer
+                _ = _xmlSerializer.Deserialize<DSP_Info>(XML);
 
                 //No Errors occured so we are good to "actually" load the
                 //configuration XML that was posted via the network api
@@ -315,8 +325,8 @@ public partial class ctl_GeneralConfigPage : UserControl
             if (string.IsNullOrEmpty(hostname) || string.IsNullOrEmpty(port))
                 return;
 
-            //This function validates if it is already running, so no need to check it
-            await NetworkConfigAPI.NetworkConfigAPI_Listener(hostname, port);
+            // This function validates if it is already running, so no need to check it
+            await NetworkConfigAPI.NetworkConfigAPI_Listener(hostname, port).ConfigureAwait(false);
         }
     }
 

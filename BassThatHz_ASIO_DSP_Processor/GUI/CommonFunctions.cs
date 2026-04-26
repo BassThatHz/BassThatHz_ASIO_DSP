@@ -8,73 +8,60 @@ using NAudio.Wave.Asio;
 
 #region Usings
 using System;
-using System.Text.Json;
 using System.Windows.Forms;
 using System.Xml.Linq;
-using Windows.Devices.WiFiDirect.Services;
 #endregion
 
 public static class CommonFunctions
 {
+    // Reuse serializer instance to avoid repeated allocations and startup cost
+    private static readonly ExtendedXmlSerializer s_serializer = new ExtendedXmlSerializer();
     public static double[] GetStreamInputDataByStreamItem(IStreamItem source)
     {
-        double[] inputData = new double[Program.ASIO.SamplesPerChannel];
+        // Return references where possible to avoid allocations and copies.
         switch (source.StreamType)
         {
             case StreamType.Bus:
-                inputData = Program.DSP_Info.Buses[source.Index].Buffer;
-                break;
+                return Program.DSP_Info.Buses[source.Index].Buffer;
             case StreamType.AbstractBus:
-                break;
             case StreamType.Stream:
-                break;
+                // Fallback to an appropriately sized buffer when no specific source exists
+                return new double[Program.ASIO.SamplesPerChannel];
             case StreamType.Channel:
             default:
-                var Data = Program.ASIO.GetInputAudioData(source.Index);
-                if (Data != null)
-                    inputData = Data;
-                break;
+            {
+                var data = Program.ASIO.GetInputAudioData(source.Index);
+                return data ?? new double[Program.ASIO.SamplesPerChannel];
+            }
         }
-
-        return inputData;
     }
 
     public static double[] GetStreamOutputDataByStreamItem(IStreamItem destination)
     {
-        double[] outputData = new double[Program.ASIO.SamplesPerChannel];
+        // Return references where possible to avoid allocations and copies.
         switch (destination.StreamType)
         {
             case StreamType.Bus:
-                outputData = Program.DSP_Info.Buses[destination.Index].Buffer;
-                break;
+                return Program.DSP_Info.Buses[destination.Index].Buffer;
             case StreamType.AbstractBus:
-                break;
             case StreamType.Stream:
-                break;
+                return new double[Program.ASIO.SamplesPerChannel];
             case StreamType.Channel:
             default:
-                var Data =Program.ASIO.GetOutputAudioData(destination.Index);
-                if (Data != null)
-                    outputData = Data;
-                break;
+            {
+                var data = Program.ASIO.GetOutputAudioData(destination.Index);
+                return data ?? new double[Program.ASIO.SamplesPerChannel];
+            }
         }
-        return outputData;
     }
 
     public static T DeepClone<T>(T source) where T : class
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        string json = new ExtendedXmlSerializer().Serialize(source);
-        try
-        {
-            return new ExtendedXmlSerializer().Deserialize<T>(json) ?? throw new InvalidOperationException("Deserialization failed.");
-        }
-        catch(Exception ex)
-        {
-            _ = ex;
-            throw;
-        }
+        // Reuse serializer to reduce allocation and initialization cost
+        string xml = s_serializer.Serialize(source);
+        return s_serializer.Deserialize<T>(xml) ?? throw new InvalidOperationException("Deserialization failed.");
     }
 
     public static void Set_DropDownTargetLists(ComboBox inputs, ComboBox outputs, bool IsAbstractBusDropDown)
@@ -82,132 +69,132 @@ public static class CommonFunctions
         if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
             return;
 
-        if (IsAbstractBusDropDown)
+        // Clear existing items and batch updates to reduce UI overhead
+        inputs.Items.Clear();
+        outputs.Items.Clear();
+        inputs.BeginUpdate();
+        outputs.BeginUpdate();
+        try
         {
-            for (int i = 0; i < Program.DSP_Info.Streams.Count; i++)
-            {
-                var Stream = Program.DSP_Info.Streams[i];
-                if (Stream.InputSource.Equals(Stream.OutputDestination))
-                    continue;
+            var dsp = Program.DSP_Info;
+            var asio = Program.ASIO;
 
-                if (Stream.OutputDestination.StreamType == StreamType.AbstractBus)
+            if (IsAbstractBusDropDown)
+            {
+                for (int i = 0; i < dsp.Streams.Count; i++)
+                {
+                    var stream = dsp.Streams[i];
+                    if (stream.InputSource.Equals(stream.OutputDestination))
+                        continue;
+
+                    if (stream.OutputDestination.StreamType == StreamType.AbstractBus)
+                    {
+                        var name = $"Stream({i}) {stream.InputSource.Name} | {stream.OutputDestination.Name}";
+                        _ = inputs.Items.Add(new StreamItem()
+                        {
+                            Name = name,
+                            Index = i,
+                            StreamType = StreamType.Stream,
+                            DisplayMember = $"Stream({i}) In {stream.InputSource.Name} | {stream.OutputDestination.Name}"
+                        });
+                    }
+
+                    if (stream.InputSource.StreamType == StreamType.AbstractBus)
+                    {
+                        _ = outputs.Items.Add(new StreamItem()
+                        {
+                            Name = $"Stream {i}",
+                            Index = i,
+                            StreamType = StreamType.Stream,
+                            DisplayMember = $"Stream({i}) Out {stream.InputSource.Name} | {stream.OutputDestination.Name}"
+                        });
+                    }
+                }
+            }
+            else
+            {
+                AsioDriverCapability? capabilities = null;
+                try
+                {
+                    capabilities = asio.GetDriverCapabilities(dsp.ASIO_InputDevice);
+                }
+                catch (Exception)
+                {
+                    // ignore failures fetching capabilities; leave lists empty
+                }
+
+                if (capabilities == null)
+                    return;
+
+                var inputInfos = capabilities.Value.InputChannelInfos;
+                for (int i = 0; i < inputInfos.Length; i++)
+                {
+                    var inputChannel = inputInfos[i];
                     _ = inputs.Items.Add(new StreamItem()
                     {
-                        Name = "Stream(" + i + ") " + Stream.InputSource.Name + " | " + Stream.OutputDestination.Name
-                        ,
-                        Index = i
-                        ,
-                        StreamType = StreamType.Stream
-                        ,
-                        DisplayMember = "Stream(" + i + ") In " + Stream.InputSource.Name + " | " + Stream.OutputDestination.Name
+                        Name = inputChannel.name,
+                        Index = inputChannel.channel,
+                        StreamType = StreamType.Channel,
+                        DisplayMember = $"({inputChannel.channel}) {inputChannel.name}"
                     });
-                if (Stream.InputSource.StreamType == StreamType.AbstractBus)
+                }
+
+                var outputInfos = capabilities.Value.OutputChannelInfos;
+                for (int i = 0; i < outputInfos.Length; i++)
+                {
+                    var outputChannel = outputInfos[i];
                     _ = outputs.Items.Add(new StreamItem()
                     {
-                        Name = "Stream " + i
-                        ,
-                        Index = i
-                        ,
-                        StreamType = StreamType.Stream
-                        ,
-                        DisplayMember = "Stream(" + i + ") Out " + Stream.InputSource.Name + " | " + Stream.OutputDestination.Name
+                        Name = outputChannel.name,
+                        Index = outputChannel.channel,
+                        StreamType = StreamType.Channel,
+                        DisplayMember = $"({outputChannel.channel}) {outputChannel.name}"
                     });
-            }
-        }
-        else
-        {
-            AsioDriverCapability? Capabilities = null;
-            try
-            {
-                Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
-            }
-            catch (Exception ex)
-            {
-                _ = ex;
-                //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
-            }
-            if (Capabilities == null)
-                return;
+                }
 
-            for (int i = 0; i < Capabilities.Value.InputChannelInfos.Length; i++)
+                for (int i = 0; i < dsp.AbstractBuses.Count; i++)
+                {
+                    var abstractBus = dsp.AbstractBuses[i];
+                    _ = inputs.Items.Add(new StreamItem()
+                    {
+                        Name = abstractBus.Name,
+                        Index = i,
+                        StreamType = StreamType.AbstractBus,
+                        DisplayMember = $"AbstractBus({i}) In {abstractBus.Name}"
+                    });
+                    _ = outputs.Items.Add(new StreamItem()
+                    {
+                        Name = abstractBus.Name,
+                        Index = i,
+                        StreamType = StreamType.AbstractBus,
+                        DisplayMember = $"AbstractBus({i}) Out {abstractBus.Name}"
+                    });
+                }
+            }
+
+            for (int i = 0; i < dsp.Buses.Count; i++)
             {
-                var InputChannel = Capabilities.Value.InputChannelInfos[i];
+                var bus = dsp.Buses[i];
                 _ = inputs.Items.Add(new StreamItem()
                 {
-                    Name = InputChannel.name
-                    ,
-                    Index = InputChannel.channel
-                    ,
-                    StreamType = StreamType.Channel
-                    ,
-                    DisplayMember = "(" + InputChannel.channel + ") " + InputChannel.name
-                });
-            }
-
-            for (int i = 0; i < Capabilities.Value.OutputChannelInfos.Length; i++)
-            {
-                var OutputChannel = Capabilities.Value.OutputChannelInfos[i];
-                _ = outputs.Items.Add(new StreamItem()
-                {
-                    Name = OutputChannel.name
-                    ,
-                    Index = OutputChannel.channel
-                    ,
-                    StreamType = StreamType.Channel
-                    ,
-                    DisplayMember = "(" + OutputChannel.channel + ") " + OutputChannel.name
-                });
-            }
-
-            for (int i = 0; i < Program.DSP_Info.AbstractBuses.Count; i++)
-            {
-                var AbstractBus = Program.DSP_Info.AbstractBuses[i];
-                _ = inputs.Items.Add(new StreamItem()
-                {
-                    Name = AbstractBus.Name
-                    ,
-                    Index = i
-                    ,
-                    StreamType = StreamType.AbstractBus
-                    ,
-                    DisplayMember = "AbstractBus(" + i + ") In " + AbstractBus.Name
+                    Name = bus.Name,
+                    Index = i,
+                    StreamType = StreamType.Bus,
+                    DisplayMember = $"Bus({i}) In {bus.Name}"
                 });
                 _ = outputs.Items.Add(new StreamItem()
                 {
-                    Name = AbstractBus.Name
-                    ,
-                    Index = i
-                    ,
-                    StreamType = StreamType.AbstractBus
-                    ,
-                    DisplayMember = "AbstractBus(" + i + ") Out " + AbstractBus.Name
+                    Name = bus.Name,
+                    Index = i,
+                    StreamType = StreamType.Bus,
+                    DisplayMember = $"Bus({i}) Out {bus.Name}"
                 });
             }
         }
-
-        for (int i = 0; i < Program.DSP_Info.Buses.Count; i++)
+        finally
         {
-            var Bus = Program.DSP_Info.Buses[i];
-            _ = inputs.Items.Add(new StreamItem()
-            {
-                Name = Bus.Name
-                ,
-                Index = i
-                ,
-                StreamType = StreamType.Bus
-                ,
-                DisplayMember = "Bus(" + i + ") In " + Bus.Name
-            });
-            _ = outputs.Items.Add(new StreamItem()
-            {
-                Name = Bus.Name
-                ,
-                Index = i
-                ,
-                StreamType = StreamType.Bus
-                ,
-                DisplayMember = "Bus(" + i + ") Out " + Bus.Name
-            });
+            outputs.EndUpdate();
+            inputs.EndUpdate();
         }
     }
 

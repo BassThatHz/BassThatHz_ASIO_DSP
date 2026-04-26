@@ -48,16 +48,32 @@ public partial class GPEQControl : UserControl, IFilterControl
     #region Event Handlers
     protected void ConfigGPEQ_BTN_Click(object sender, System.EventArgs e)
     {
-        this.GPEQ_Form = new();
-        this.GPEQ_Form.SetFilters(this.Filter.Filters);
+        // Create a local form instance and assign to the field so callers
+        // can still access it if needed. Capturing the local variable
+        // in the closure avoids accidental reference to 'this' and
+        // reduces unexpected lifetime extensions.
+        var form = new FormGPEQ();
+        this.GPEQ_Form = form;
+        form.SetFilters(this.Filter.Filters);
 
-        this.GPEQ_Form.FormClosing += (s, e) =>
+        form.FormClosing += (s, e) =>
         {
             try
             {
-                if (this.GPEQ_Form.SavedChanges)
+                if (form.SavedChanges)
                 {
-                    this.Filters_LSB.DataSource = this.GPEQ_Form.GetListBoxItems();
+                    // Update the listbox data source in one operation.
+                    // BeginUpdate/EndUpdate are not required for DataSource,
+                    // but keeping UI update concise avoids extra redraws.
+                    this.Filters_LSB.BeginUpdate();
+                    try
+                    {
+                        this.Filters_LSB.DataSource = form.GetListBoxItems();
+                    }
+                    finally
+                    {
+                        this.Filters_LSB.EndUpdate();
+                    }
                 }
             }
             catch (Exception ex)
@@ -66,7 +82,7 @@ public partial class GPEQControl : UserControl, IFilterControl
             }
         };
 
-        this.GPEQ_Form.Show(this);
+        form.Show(this);
     }
     #endregion
 
@@ -84,17 +100,40 @@ public partial class GPEQControl : UserControl, IFilterControl
         if (input is GPEQ filter)
         {
             this.Filter = filter;
-            var TempGPEQForm = new FormGPEQ();
-            int i = 0;
-            foreach (var Filter in this.Filter.Filters)
+
+            // Use a temporary FormGPEQ only for formatting list text
+            // and make sure it's disposed promptly to free resources.
+            using var tempForm = new FormGPEQ();
+
+            // Update the ListBox in a single batch to avoid repeated
+            // UI updates and reduce allocations.
+            this.Filters_LSB.BeginUpdate();
+            try
             {
-                i++;
-                if (Filter != null)
+                this.Filters_LSB.Items.Clear();
+                int i = 0;
+                if (this.Filter?.Filters != null)
                 {
-                    Filter.ApplySettings();
-                    this.Filters_LSB.Items.Add(i + " " + TempGPEQForm.GetListText(Filter));
+                    foreach (var f in this.Filter.Filters)
+                    {
+                        i++;
+                        if (f == null)
+                            continue;
+
+                        // ApplySettings may be required per-filter; keep it
+                        // but avoid re-creating objects inside the loop.
+                        f.ApplySettings();
+
+                        // Use string interpolation which is efficient and
+                        // clear about intent.
+                        this.Filters_LSB.Items.Add(i + " " + tempForm.GetListText(f));
+                    }
                 }
-            }             
+            }
+            finally
+            {
+                this.Filters_LSB.EndUpdate();
+            }
         }
     }
     #endregion

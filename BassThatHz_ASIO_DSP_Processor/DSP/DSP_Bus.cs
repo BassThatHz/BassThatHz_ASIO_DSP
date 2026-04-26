@@ -43,17 +43,23 @@ public interface IBus
 }
 
 [Serializable]
-public class DSP_Bus : IBus
+public sealed class DSP_Bus : IBus
 {
     #region IBus
 
     public string Name { get; set; } = string.Empty;
 
+    // Lazily initialized backing field for Buffer to avoid unnecessary allocations.
+    private double[]? _buffer;
     [XmlIgnoreAttribute]
-    public double[] Buffer { get; set; } = Array.Empty<double>();
+    public double[] Buffer
+    {
+        get => _buffer ??= Array.Empty<double>();
+        set => _buffer = value ?? Array.Empty<double>();
+    }
 
     [XmlIgnoreAttribute]
-    public string DisplayMember => this.Name + " | " + this.IsBypassed;
+    public string DisplayMember => string.Concat(this.Name, " | ", this.IsBypassed.ToString());
 
     public bool IsBypassed { get; set; } = false;
     #endregion

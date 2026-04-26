@@ -112,8 +112,8 @@ namespace ExtendedXmlSerialization.Cache
             var properties = type.GetProperties();
             foreach (PropertyInfo propertyInfo in properties)
             {
-                if (!propertyInfo.CanWrite || !propertyInfo.GetSetMethod(true).IsPublic ||
-                    propertyInfo.GetIndexParameters().Length > 0)
+                // Skip indexers
+                if (propertyInfo.GetIndexParameters().Length > 0)
                 {
                     continue;
                 }
@@ -123,6 +123,21 @@ namespace ExtendedXmlSerialization.Cache
                 {
                     continue;
                 }
+
+                // Include property if it's writable (has a public setter) OR if it's a read-only
+                // property that exposes a mutable collection via its getter (e.g. List<T> Filters { get; }).
+                bool include = false;
+                if (propertyInfo.CanWrite && propertyInfo.GetSetMethod(true) != null && propertyInfo.GetSetMethod(true).IsPublic)
+                {
+                    include = true;
+                }
+                else if (propertyInfo.CanRead && typeof(System.Collections.IEnumerable).IsAssignableFrom(propertyInfo.PropertyType) && propertyInfo.PropertyType != typeof(string))
+                {
+                    include = true;
+                }
+
+                if (!include)
+                    continue;
 
                 result.Add(new PropertieDefinition(type, propertyInfo));
             }

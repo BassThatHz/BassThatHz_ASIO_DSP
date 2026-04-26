@@ -41,7 +41,22 @@ public partial class FormMixer : Form
     #endregion
 
     #region Variables
-    protected List<MixerElement> OriginalMixerElements = new();
+    // Lightweight snapshot of UI element state to avoid keeping extra control instances in memory
+    protected readonly struct MixerElementSnapshot
+    {
+        public readonly string ChAttenuationText;
+        public readonly string StreamAttenuationText;
+        public readonly bool Checked;
+
+        public MixerElementSnapshot(string ch, string stream, bool @checked)
+        {
+            ChAttenuationText = ch;
+            StreamAttenuationText = stream;
+            Checked = @checked;
+        }
+    }
+
+    protected List<MixerElementSnapshot> OriginalMixerElements = new();
     protected List<MixerInput> OriginalMixerInputs = new();
 
     protected List<MixerElement> MixerElements = new();
@@ -192,15 +207,15 @@ public partial class FormMixer : Form
 
     protected void PersistentDeepClone()
     {
+        // Capture only the minimal state required to restore UI and inputs later.
         this.OriginalMixerElements = this.MixerElements.Select(item =>
-        {
-            var newElement = new MixerElement();
-            newElement.Get_txtChAttenuation.Text = item.Get_txtChAttenuation.Text;
-            newElement.Get_txtStreamAttenuation.Text = item.Get_txtStreamAttenuation.Text;
-            newElement.Get_chkChannel.Checked = item.Get_chkChannel.Checked;
-            return newElement;
-        }).ToList();
+            new MixerElementSnapshot(
+                item.Get_txtChAttenuation.Text,
+                item.Get_txtStreamAttenuation.Text,
+                item.Get_chkChannel.Checked
+            )).ToList();
 
+        // Deep copy of MixerInputs values (keep simple DTO copies)
         this.OriginalMixerInputs = this.MixerInputs.Select(item => new MixerInput
         {
             Attenuation = item.Attenuation,
@@ -213,25 +228,24 @@ public partial class FormMixer : Form
 
     protected void RevertToOrignal()
     {
-        foreach (var MixerInput1 in this.MixerInputs)
+        // Build a lookup for original inputs by ChannelIndex for O(1) access
+        var originalByChannel = this.OriginalMixerInputs.ToDictionary(mi => mi.ChannelIndex);
+
+        // MixerInputs and MixerElements are expected to be 1:1 mapped by index
+        for (int i = 0; i < this.MixerInputs.Count && i < this.MixerElements.Count && i < this.OriginalMixerElements.Count; i++)
         {
-            foreach (var MixerInput2 in this.OriginalMixerInputs)
+            var currentInput = this.MixerInputs[i];
+            if (originalByChannel.TryGetValue(currentInput.ChannelIndex, out var originalInput))
             {
-                if (MixerInput1.ChannelIndex == MixerInput2.ChannelIndex)
-                {
-                    MixerInput1.Attenuation = MixerInput2.Attenuation;
-                    MixerInput1.StreamAttenuation = MixerInput2.StreamAttenuation;
-                    MixerInput1.Enabled = MixerInput2.Enabled;
+                currentInput.Attenuation = originalInput.Attenuation;
+                currentInput.StreamAttenuation = originalInput.StreamAttenuation;
+                currentInput.Enabled = originalInput.Enabled;
 
-                    var MixerIndex = this.MixerInputs.IndexOf(MixerInput1);
-                    var MixerElement = this.MixerElements[MixerIndex]; //1:1 mapping
-                    var OriginalMixerElement = this.OriginalMixerElements[MixerIndex]; //1:1 mapping
-                    MixerElement.Get_txtChAttenuation.Text = OriginalMixerElement.Get_txtChAttenuation.Text;
-                    MixerElement.Get_txtStreamAttenuation.Text = OriginalMixerElement.Get_txtStreamAttenuation.Text;
-                    MixerElement.Get_chkChannel.Checked = OriginalMixerElement.Get_chkChannel.Checked;
-
-                    break;
-                }
+                var element = this.MixerElements[i]; // 1:1 mapping
+                var snapshot = this.OriginalMixerElements[i];
+                element.Get_txtChAttenuation.Text = snapshot.ChAttenuationText;
+                element.Get_txtStreamAttenuation.Text = snapshot.StreamAttenuationText;
+                element.Get_chkChannel.Checked = snapshot.Checked;
             }
         }
     }
@@ -271,24 +285,21 @@ public partial class FormMixer : Form
     {
         this.RedrawPanelItems();
 
-        foreach (var MixerInput1 in this.MixerInputs)
+        // Use a lookup to avoid O(n^2) nested loops
+        var loaderByChannel = input.ToDictionary(mi => mi.ChannelIndex);
+        for (int i = 0; i < this.MixerInputs.Count && i < this.MixerElements.Count; i++)
         {
-            foreach (var MixerInput2 in input)
+            var current = this.MixerInputs[i];
+            if (loaderByChannel.TryGetValue(current.ChannelIndex, out var loaded))
             {
-                if (MixerInput1.ChannelIndex == MixerInput2.ChannelIndex)
-                {
-                    MixerInput1.Attenuation = MixerInput2.Attenuation;
-                    MixerInput1.StreamAttenuation = MixerInput2.StreamAttenuation;
-                    MixerInput1.Enabled = MixerInput2.Enabled;
+                current.Attenuation = loaded.Attenuation;
+                current.StreamAttenuation = loaded.StreamAttenuation;
+                current.Enabled = loaded.Enabled;
 
-                    var MixerIndex = this.MixerInputs.IndexOf(MixerInput1);
-                    var MixerElement = this.MixerElements[MixerIndex]; //1:1 mapping
-                    MixerElement.Get_txtChAttenuation.Text = MixerInput2.Attenuation.ToString();
-                    MixerElement.Get_txtStreamAttenuation.Text = MixerInput2.StreamAttenuation.ToString();
-                    MixerElement.Get_chkChannel.Checked = MixerInput2.Enabled;
-
-                    break;
-                }
+                var element = this.MixerElements[i]; //1:1 mapping
+                element.Get_txtChAttenuation.Text = loaded.Attenuation.ToString();
+                element.Get_txtStreamAttenuation.Text = loaded.StreamAttenuation.ToString();
+                element.Get_chkChannel.Checked = loaded.Enabled;
             }
         }
 
@@ -312,37 +323,24 @@ public partial class FormMixer : Form
         {
             this.HasChangesBeenSaved = false;
             mixerInput.Enabled = mixerElement.Get_chkChannel.Checked;
-            try
-            {
-                mixerInput.Attenuation = -Math.Abs(double.Parse(mixerElement.Get_txtChAttenuation.Text));
-            }
-            catch { }
-
-            try
-            {
-                mixerInput.StreamAttenuation = -Math.Abs(double.Parse(mixerElement.Get_txtStreamAttenuation.Text));
-            }
-            catch { }
+            if (double.TryParse(mixerElement.Get_txtChAttenuation.Text, out var chVal))
+                mixerInput.Attenuation = -Math.Abs(chVal);
+            if (double.TryParse(mixerElement.Get_txtStreamAttenuation.Text, out var stVal))
+                mixerInput.StreamAttenuation = -Math.Abs(stVal);
         };
 
         mixerElement.Get_txtChAttenuation.TextChanged += (s, e) =>
         {
             this.HasChangesBeenSaved = false;
-            try
-            {
-                mixerInput.Attenuation = -Math.Abs(double.Parse(mixerElement.Get_txtChAttenuation.Text));
-            }
-            catch { }
+            if (double.TryParse(mixerElement.Get_txtChAttenuation.Text, out var chVal))
+                mixerInput.Attenuation = -Math.Abs(chVal);
         };
 
         mixerElement.Get_txtStreamAttenuation.TextChanged += (s, e) =>
         {
             this.HasChangesBeenSaved = false;
-            try
-            {
-                mixerInput.StreamAttenuation = -Math.Abs(double.Parse(mixerElement.Get_txtStreamAttenuation.Text));
-            }
-            catch { }
+            if (double.TryParse(mixerElement.Get_txtStreamAttenuation.Text, out var stVal))
+                mixerInput.StreamAttenuation = -Math.Abs(stVal);
         };
 
         mixerElement.Get_txtChAttenuation.Text = Math.Round(mixerInput.Attenuation, 4).ToString();
@@ -352,7 +350,23 @@ public partial class FormMixer : Form
 
     protected void ClearGUI()
     {
-        this.MixerElements.Clear();
+        if (this.MixerElements.Count > 0)
+        {
+            // Remove controls from panel and dispose them to free resources and event handlers
+            foreach (var ctrl in this.MixerElements)
+            {
+                try
+                {
+                    this.panel1.Controls.Remove(ctrl);
+                    ctrl.Dispose();
+                }
+                catch { }
+            }
+            this.MixerElements.Clear();
+        }
+
+        // Clear inputs and ensure panel is empty
+        this.MixerInputs.Clear();
         this.panel1.Controls.Clear();
     }
 

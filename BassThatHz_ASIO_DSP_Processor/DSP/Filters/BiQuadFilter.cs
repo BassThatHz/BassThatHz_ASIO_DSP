@@ -52,6 +52,7 @@ namespace NAudio.Dsp
         #region Constants
         protected const double PI = Math.PI;
         protected const double PI2 = Math.PI * 2;
+        protected const double EPS = 1e-12;
         #endregion
 
         // state
@@ -60,7 +61,7 @@ namespace NAudio.Dsp
         protected double y1 = 0;
         protected double y2 = 0;
 
-        protected double result = 0;
+        // removed per-sample field to avoid unnecessary heap writes; use local stack variable in Transform
         #endregion
 
         #endregion
@@ -82,19 +83,20 @@ namespace NAudio.Dsp
             Inv
         }
 
-        public double SampleRate { get; set; } 
-        public double Frequency { get; set; } 
-        public double Q { get; set; } 
-        public double Slope { get; set; } 
-        public double Gain { get; set; } 
+        // Public fields (converted from auto-properties to reduce property overhead)
+        public double SampleRate;
+        public double Frequency;
+        public double Q;
+        public double Slope;
+        public double Gain;
 
-        // coefficients
-        public double aa0 { get; set; } 
-        public double aa1 { get; set; } 
-        public double aa2 { get; set; } 
-        public double b0 { get; set; } 
-        public double b1 { get; set; } 
-        public double b2 { get; set; } 
+        // coefficients (exposed as fields for lower overhead)
+        public double aa0;
+        public double aa1;
+        public double aa2;
+        public double b0;
+        public double b1;
+        public double b2;
         #endregion
 
         #region Constructors and Initializers
@@ -116,29 +118,98 @@ namespace NAudio.Dsp
 
         #region Public Functions
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
-        public double[] Transform(double[] input, DSP_Stream currentStream)
+        public void TransformInPlace(Span<double> input, DSP_Stream currentStream)
         {
+            // Cache fields to locals to avoid repeated instance field access and reduce memory traffic
+            double a0 = this.a0;
+            double a1 = this.a1;
+            double a2 = this.a2;
+            double a3 = this.a3;
+            double a4 = this.a4;
+
+            double lx1 = this.x1;
+            double lx2 = this.x2;
+            double ly1 = this.y1;
+            double ly2 = this.y2;
+
             for (int i = 0; i < input.Length; i++)
             {
-                // compute result
-                this.result = a0 * input[i] + a1 * x1 + a2 * x2 - a3 * y1 - a4 * y2;
+                double sample = input[i];
 
-                // shift x1 to x2, sample to x1 
-                x2 = x1;
-                x1 = input[i];
+                // compute result using locals
+                double res = a0 * sample + a1 * lx1 + a2 * lx2 - a3 * ly1 - a4 * ly2;
 
-                // shift y1 to y2, result to y1 
-                y2 = y1;
-                y1 = (double)this.result;
+                // shift state
+                lx2 = lx1;
+                lx1 = sample;
 
-                input[i] = y1;
+                ly2 = ly1;
+                ly1 = res;
+
+                input[i] = ly1;
             }
+
+            // write back state
+            this.x1 = lx1;
+            this.x2 = lx2;
+            this.y1 = ly1;
+            this.y2 = ly2;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+        public void Transform(ReadOnlySpan<double> input, Span<double> output, DSP_Stream currentStream)
+        {
+            if (input.Length != output.Length)
+                throw new ArgumentException("Input and output spans must have the same length.", nameof(output));
+
+            // Cache fields to locals to avoid repeated instance field access and reduce memory traffic
+            double a0 = this.a0;
+            double a1 = this.a1;
+            double a2 = this.a2;
+            double a3 = this.a3;
+            double a4 = this.a4;
+
+            double lx1 = this.x1;
+            double lx2 = this.x2;
+            double ly1 = this.y1;
+            double ly2 = this.y2;
+
+            for (int i = 0; i < input.Length; i++)
+            {
+                double sample = input[i];
+
+                // compute result using locals
+                double res = a0 * sample + a1 * lx1 + a2 * lx2 - a3 * ly1 - a4 * ly2;
+
+                // shift state
+                lx2 = lx1;
+                lx1 = sample;
+
+                ly2 = ly1;
+                ly1 = res;
+
+                output[i] = ly1;
+            }
+
+            // write back state
+            this.x1 = lx1;
+            this.x2 = lx2;
+            this.y1 = ly1;
+            this.y2 = ly2;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+        public double[] Transform(double[] input, DSP_Stream currentStream)
+        {
+            // Forward to Span-based implementation (no allocation)
+            TransformInPlace(input, currentStream);
             return input;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         public void SetCoefficients(double aa0, double aa1, double aa2, double b0, double b1, double b2)
         {
-            this.aa0 = aa0 == 0 ? 0.000000000001 : aa0;
+            this.aa0 = aa0 == 0 ? EPS : aa0;
             this.aa1 = aa1;
             this.aa2 = aa2;
             this.b0 = b0;
@@ -454,6 +525,7 @@ namespace NAudio.Dsp
             this.SetCoefficients(aa0, aa1, aa2, b0, b1, b2);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         public void UpdateGain(double newDbGain)
         {
             double oldA = Math.Pow(10, this.Gain / 40);
@@ -477,6 +549,7 @@ namespace NAudio.Dsp
             this.Gain = newDbGain;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         public void UpdateGain_LowShelf(double newDbGain)
         {
             // Update the gain
@@ -501,6 +574,7 @@ namespace NAudio.Dsp
             this.SetCoefficients(a0, a1, a2, b0, b1, b2);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         public void UpdateGain_HighShelf(double newDbGain)
         {
             // Update the gain

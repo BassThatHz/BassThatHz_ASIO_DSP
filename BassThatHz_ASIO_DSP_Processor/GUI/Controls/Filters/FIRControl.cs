@@ -4,7 +4,8 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 
 #region Usings
 using System;
-using System.Threading.Tasks;
+using System.Globalization;
+using System.Collections.Generic;
 using System.Windows.Forms;
 #endregion
 
@@ -47,24 +48,33 @@ public partial class FIRControl : UserControl, IFilterControl
     {
         try
         {
-            var FilterState = (bool)this.Filter.FilterEnabled;
+            // Preserve previous enabled state and disable while applying settings
+            bool filterState = this.Filter.FilterEnabled;
             this.Filter.FilterEnabled = false;
-            this.Filter.FFTSize = int.Parse(this.txtFFTSize.Text);
 
-            var TapsString = this.txtTaps.Text.Trim();
-            if (!string.IsNullOrEmpty(TapsString))
+            // Parse FFT size safely to avoid exceptions and unnecessary allocations
+            if (!int.TryParse(this.txtFFTSize.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fftSize))
+                fftSize = this.Filter.FFTSize; // fallback to existing value on parse failure
+            this.Filter.FFTSize = fftSize;
+
+            // Parse taps with minimal allocations and robust handling of empty/whitespace lines
+            var tapsText = this.txtTaps.Text;
+            if (!string.IsNullOrWhiteSpace(tapsText))
             {
-                var Task_Convert = Task.Run(() => Array.ConvertAll
-                                    (
-                                        TapsString.Split('\n'),
-                                        Double.Parse
-                                    ));
+                var parts = tapsText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var list = new List<double>(parts.Length);
+                foreach (var p in parts)
+                {
+                    // TryParse avoids exceptions for malformed lines and uses invariant culture
+                    if (double.TryParse(p.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var d))
+                        list.Add(d);
+                }
 
-                Task_Convert.Wait();
-                this.Filter.SetTaps(Task_Convert.Result);
+                if (list.Count > 0)
+                    this.Filter.SetTaps(list.ToArray());
             }
 
-            this.Filter.FilterEnabled = FilterState;
+            this.Filter.FilterEnabled = filterState;
         }
         catch (Exception ex)
         {
@@ -90,7 +100,8 @@ public partial class FIRControl : UserControl, IFilterControl
         {
             this.Filter = fir;
 
-            this.txtFFTSize.Text = fir.FFTSize.ToString();
+            // Use invariant culture when converting numeric values to string to avoid culture-dependent allocations
+            this.txtFFTSize.Text = fir.FFTSize.ToString(CultureInfo.InvariantCulture);
 
             if (fir.Taps != null)
                 this.txtTaps.Text = string.Join("\n", fir.Taps);

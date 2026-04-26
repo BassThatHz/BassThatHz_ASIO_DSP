@@ -6,6 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 using NAudio.Dsp;
 using NAudio.Utils;
 using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 #endregion
@@ -99,59 +100,80 @@ public class DEQ : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
+        int len = input.Length;
 
-        double AmplitudeAtFrequency_Linear;
+        if (len == 0)
+            return input;
 
-        #region CalculateAmplitude
-        double[] inputFiltered = new double[input.Length];
-        Array.Copy(input, inputFiltered, input.Length);
+        double amplitudeAtFrequencyLinear;
 
-        //Filter it with a band pass to calculate the level at that frequency (faster than FFT or DCT)
-        switch (this.Biquad_Type)
+        var pool = ArrayPool<double>.Shared;
+        double[]? rented = null;
+        try
         {
-            case BiquadType.PEQ:
-                inputFiltered = this.InputBandPassFilteringBiQuad.Transform(inputFiltered, currentStream);
+            rented = pool.Rent(len);
+            var tmp = rented.AsSpan(0, len);
+
+            // copy input into rented buffer
+            input.AsSpan().CopyTo(tmp);
+
+            // Filter it with a band pass to calculate level at that frequency (faster than FFT or DCT)
+            switch (this.Biquad_Type)
+            {
+                case BiquadType.PEQ:
+                    this.InputBandPassFilteringBiQuad.TransformInPlace(tmp, currentStream);
+                    break;
+                case BiquadType.High_Shelf:
+                    this.InputHighPassFilteringBiQuad.TransformInPlace(tmp, currentStream);
+                    break;
+                case BiquadType.Low_Shelf:
+                    this.InputLowPassFilteringBiQuad.TransformInPlace(tmp, currentStream);
+                    break;
+            }
+
+            if (this.Threshold_Type == ThresholdType.Peak)
+            {
+                double max = 0;
+                for (int i = 0; i < len; i++)
+                {
+                    double v = Math.Abs(tmp[i]);
+                    if (v > max) max = v;
+                }
+                amplitudeAtFrequencyLinear = max;
+            }
+            else // RMS
+            {
+                double sum = 0;
+                for (int i = 0; i < len; i++)
+                {
+                    double v = tmp[i];
+                    sum += v * v;
+                }
+                amplitudeAtFrequencyLinear = Math.Sqrt(sum / len);
+            }
+        }
+        finally
+        {
+            if (rented != null)
+                pool.Return(rented, clearArray: false);
+        }
+
+        // Dispatch to appropriate action using Span-based in-place processing on input
+        var inputSpan = input.AsSpan();
+        switch (this.DEQ_Type)
+        {
+            case DEQType.CutAbove:
+                CutAbove(inputSpan, amplitudeAtFrequencyLinear, currentStream);
                 break;
-            case BiquadType.High_Shelf:
-                inputFiltered = this.InputHighPassFilteringBiQuad.Transform(inputFiltered, currentStream);
+            case DEQType.BoostAbove:
+                BoostAbove(inputSpan, amplitudeAtFrequencyLinear, currentStream);
                 break;
-            case BiquadType.Low_Shelf:
-                inputFiltered = this.InputLowPassFilteringBiQuad.Transform(inputFiltered, currentStream);
+            case DEQType.BoostBelow:
+                BoostBelow(inputSpan, amplitudeAtFrequencyLinear, currentStream);
                 break;
-        }
-
-        if (this.Threshold_Type == ThresholdType.Peak)
-        {
-            AmplitudeAtFrequency_Linear = 0;
-            for (int i = 0; i < inputFiltered.Length; i++)
-                AmplitudeAtFrequency_Linear = Math.Max(AmplitudeAtFrequency_Linear, Math.Abs(inputFiltered[i]));
-        }
-        else //ThresholdType.RMS
-        {
-            double sumOfSquares = 0;
-            for (int i = 0; i < inputFiltered.Length; i++)
-                sumOfSquares += inputFiltered[i] * inputFiltered[i];
-
-            double rms = Math.Sqrt(sumOfSquares / inputFiltered.Length);
-            AmplitudeAtFrequency_Linear = rms;
-        }
-        #endregion
-
-        if (this.DEQ_Type == DEQType.CutAbove)
-        {
-            input = this.CutAbove(input, AmplitudeAtFrequency_Linear, currentStream);
-        }
-        else if (this.DEQ_Type == DEQType.BoostAbove)
-        {
-            input = this.BoostAbove(input, AmplitudeAtFrequency_Linear, currentStream);
-        }
-        else if (this.DEQ_Type == DEQType.BoostBelow)
-        {
-            input = this.BoostBelow(input, AmplitudeAtFrequency_Linear, currentStream);
-        }
-        else if (this.DEQ_Type == DEQType.CutBelow)
-        {
-            input = this.CutBelow(input, AmplitudeAtFrequency_Linear, currentStream);
+            case DEQType.CutBelow:
+                CutBelow(inputSpan, amplitudeAtFrequencyLinear, currentStream);
+                break;
         }
 
         return input;
@@ -225,61 +247,45 @@ public class DEQ : IFilter
     #endregion
 
     #region Protected Functions
-    protected double[] CutAbove(double[] input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
+    protected void CutAbove(Span<double> input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
     {
-        var NegativeGain = -Math.Abs(this.TargetGain_dB);
-        var amplitudeAtFrequency_dB = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
-        double InverseCompressionRatio = 10D / this.Ratio;
-        double GainReduction_Linear = 1;
+        var negativeGain = -Math.Abs(this.TargetGain_dB);
+        var amplitudeAtFrequencyDb = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
+        double inverseCompressionRatio = 10D / this.Ratio;
+        double gainReductionLinear = 1;
 
-        if (amplitudeAtFrequency_dB >= this.Threshold_dB) //Above Threshold
+        if (amplitudeAtFrequencyDb >= this.Threshold_dB) // Above threshold
         {
-            // Calculate the proportion of how far the amplitude is above the threshold
-            double ratioAboveThreshold = (amplitudeAtFrequency_dB - this.Threshold_dB) / Math.Abs(NegativeGain - this.Threshold_dB);
-
-            // Ensure the ratio is between 0 and 1
-            ratioAboveThreshold = Math.Max(0, Math.Min(1, ratioAboveThreshold));
-
-            // Apply an exponential scale to make the gain reduction more pronounced as the amplitude gets further above the threshold
-            GainReduction_Linear = 1 - Math.Pow(ratioAboveThreshold, InverseCompressionRatio);
+            double ratioAboveThreshold = (amplitudeAtFrequencyDb - this.Threshold_dB) / Math.Abs(negativeGain - this.Threshold_dB);
+            if (ratioAboveThreshold < 0) ratioAboveThreshold = 0;
+            else if (ratioAboveThreshold > 1) ratioAboveThreshold = 1;
+            gainReductionLinear = 1 - Math.Pow(ratioAboveThreshold, inverseCompressionRatio);
         }
 
-        if (this.UseSoftKnee && amplitudeAtFrequency_dB > this.Threshold_dB - this.KneeWidth_dB * 0.5D
-                     && amplitudeAtFrequency_dB < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
+        if (this.UseSoftKnee && amplitudeAtFrequencyDb > this.Threshold_dB - this.KneeWidth_dB * 0.5D
+            && amplitudeAtFrequencyDb < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
         {
-            // Calculate the start and end points of the knee region in dB.
-            double KneeStart_dB = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
-            double KneeEnd_dB = this.Threshold_dB + this.KneeWidth_dB * 0.5D;
-
-            // Calculate the ratio of how far the input is into the knee region.
-            double Ratio = (amplitudeAtFrequency_dB - KneeStart_dB) / this.KneeWidth_dB;
-
-            // Calculate an adjusted threshold based on the ratio,
-            // creating a smooth transition through the knee region.
-            double AdjustedThreshold_dB = KneeStart_dB + Ratio * (KneeEnd_dB - KneeStart_dB);
-
-            // Calculate the gain reduction factor for this adjusted threshold.
-            GainReduction_Linear = Decibels.DecibelsToLinear(AdjustedThreshold_dB - amplitudeAtFrequency_dB);
+            double kneeStartDb = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
+            double ratio = (amplitudeAtFrequencyDb - kneeStartDb) / this.KneeWidth_dB;
+            double adjustedThresholdDb = kneeStartDb + ratio * this.KneeWidth_dB;
+            gainReductionLinear = Decibels.DecibelsToLinear(adjustedThresholdDb - amplitudeAtFrequencyDb);
         }
 
-        GainReduction_Linear = Math.Min(1, Math.Max(Decibels.DecibelsToLinear(NegativeGain), GainReduction_Linear));
+        gainReductionLinear = Math.Min(1, Math.Max(Decibels.DecibelsToLinear(negativeGain), gainReductionLinear));
 
-        if (GainReduction_Linear < this.Gain_Linear)
-            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+        if (gainReductionLinear < this.Gain_Linear)
+            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
         else
-            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
 
-        if (amplitudeAtFrequency_dB < this.Threshold_dB) //Below Threshold
+        if (amplitudeAtFrequencyDb < this.Threshold_dB)
         {
-            double ExcessdB = Math.Abs(this.Threshold_dB - amplitudeAtFrequency_dB);
-            double a = 0.01; // Scale factor
-            double b = 0.01; // Adjusts the rate of change
-            double d = 1.0; // Final value to approach
-            // Calculate the Gain_Linear
-            this.Gain_Linear = a * Math.Log10(b * ExcessdB + double.Epsilon) + d;
+            double excessDb = Math.Abs(this.Threshold_dB - amplitudeAtFrequencyDb);
+            double a = 0.01, b = 0.01, d = 1.0;
+            this.Gain_Linear = a * Math.Log10(b * excessDb + double.Epsilon) + d;
 
             this.GainApplied = -Math.Abs(Decibels.LinearToDecibels(this.Gain_Linear));
-            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d) //Zero it
+            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d)
             {
                 this.GainApplied = 0d;
                 this.Gain_Linear = 1d;
@@ -290,7 +296,6 @@ public class DEQ : IFilter
 
         if (this.GainApplied < 0)
         {
-            //Apply BiQuad
             switch (this.Biquad_Type)
             {
                 case BiquadType.PEQ:
@@ -303,68 +308,49 @@ public class DEQ : IFilter
                     this.BiQuad.UpdateGain_LowShelf(this.GainApplied);
                     break;
             }
-            input = this.BiQuad.Transform(input, currentStream);
+            this.BiQuad.TransformInPlace(input, currentStream);
         }
-
-        return input;
     }
 
-    protected double[] CutBelow(double[] input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
+    protected void CutBelow(Span<double> input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
     {
-        var NegativeGain = -Math.Abs(this.TargetGain_dB);
-        var amplitudeAtFrequency_dB = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
-        double InverseCompressionRatio = 10D / this.Ratio;
-        double GainReduction_Linear = 1;
+        var negativeGain = -Math.Abs(this.TargetGain_dB);
+        var amplitudeAtFrequencyDb = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
+        double inverseCompressionRatio = 10D / this.Ratio;
+        double gainReductionLinear = 1;
 
-        if (amplitudeAtFrequency_dB <= this.Threshold_dB) //Below Threshold
+        if (amplitudeAtFrequencyDb <= this.Threshold_dB)
         {
-            // Calculate the proportion of how far the amplitude is below the threshold
-            double ratioBelowThreshold = (this.Threshold_dB - amplitudeAtFrequency_dB) / Math.Abs(NegativeGain - this.Threshold_dB);
-
-            // Ensure the ratio is between 0 and 1
-            ratioBelowThreshold = Math.Max(0, Math.Min(1, ratioBelowThreshold));
-
-            // Apply an exponential scale to make the gain reduction more pronounced as the amplitude gets further below the threshold
-            GainReduction_Linear = 1 - Math.Pow(ratioBelowThreshold, InverseCompressionRatio);
+            double ratioBelowThreshold = (this.Threshold_dB - amplitudeAtFrequencyDb) / Math.Abs(negativeGain - this.Threshold_dB);
+            if (ratioBelowThreshold < 0) ratioBelowThreshold = 0;
+            else if (ratioBelowThreshold > 1) ratioBelowThreshold = 1;
+            gainReductionLinear = 1 - Math.Pow(ratioBelowThreshold, inverseCompressionRatio);
         }
 
-        if (this.UseSoftKnee && amplitudeAtFrequency_dB > this.Threshold_dB - this.KneeWidth_dB * 0.5D
-                     && amplitudeAtFrequency_dB < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
+        if (this.UseSoftKnee && amplitudeAtFrequencyDb > this.Threshold_dB - this.KneeWidth_dB * 0.5D
+            && amplitudeAtFrequencyDb < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
         {
-            // Calculate the start and end points of the knee region in dB.
-            double KneeStart_dB = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
-            double KneeEnd_dB = this.Threshold_dB + this.KneeWidth_dB * 0.5D;
-
-            // Calculate the ratio of how far the input is into the knee region.
-            double Ratio = (amplitudeAtFrequency_dB - KneeStart_dB) / this.KneeWidth_dB;
-
-            // Calculate an adjusted threshold based on the ratio,
-            // creating a smooth transition through the knee region.
-            double AdjustedThreshold_dB = KneeStart_dB + Ratio * (KneeEnd_dB - KneeStart_dB);
-
-            // Calculate the gain reduction factor for this adjusted threshold.
-            GainReduction_Linear = Decibels.DecibelsToLinear(AdjustedThreshold_dB - amplitudeAtFrequency_dB);
+            double kneeStartDb = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
+            double ratio = (amplitudeAtFrequencyDb - kneeStartDb) / this.KneeWidth_dB;
+            double adjustedThresholdDb = kneeStartDb + ratio * this.KneeWidth_dB;
+            gainReductionLinear = Decibels.DecibelsToLinear(adjustedThresholdDb - amplitudeAtFrequencyDb);
         }
 
-        // Limit the gain reduction to not exceed the maximum specified decrease
-        GainReduction_Linear = Math.Min(1, Math.Max(Decibels.DecibelsToLinear(NegativeGain), GainReduction_Linear));
+        gainReductionLinear = Math.Min(1, Math.Max(Decibels.DecibelsToLinear(negativeGain), gainReductionLinear));
 
-        if (GainReduction_Linear < this.Gain_Linear)
-            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+        if (gainReductionLinear < this.Gain_Linear)
+            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
         else
-            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
 
-        if (amplitudeAtFrequency_dB > this.Threshold_dB) //Above Threshold
+        if (amplitudeAtFrequencyDb > this.Threshold_dB)
         {
-            double ExcessdB = Math.Abs(this.Threshold_dB - amplitudeAtFrequency_dB);
-            double a = 0.01; // Scale factor
-            double b = 0.01; // Adjusts the rate of change
-            double d = 1.0; // Final value to approach
-            // Calculate the Gain_Linear
-            this.Gain_Linear = a * Math.Log10(b * ExcessdB + double.Epsilon) + d;
+            double excessDb = Math.Abs(this.Threshold_dB - amplitudeAtFrequencyDb);
+            double a = 0.01, b = 0.01, d = 1.0;
+            this.Gain_Linear = a * Math.Log10(b * excessDb + double.Epsilon) + d;
 
             this.GainApplied = -Math.Abs(Decibels.LinearToDecibels(this.Gain_Linear));
-            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d) //Zero it
+            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d)
             {
                 this.GainApplied = 0d;
                 this.Gain_Linear = 1d;
@@ -375,7 +361,6 @@ public class DEQ : IFilter
 
         if (this.GainApplied < 0)
         {
-            //Apply BiQuad
             switch (this.Biquad_Type)
             {
                 case BiquadType.PEQ:
@@ -388,75 +373,52 @@ public class DEQ : IFilter
                     this.BiQuad.UpdateGain_LowShelf(this.GainApplied);
                     break;
             }
-            input = this.BiQuad.Transform(input, currentStream);
+            this.BiQuad.TransformInPlace(input, currentStream);
         }
-
-        return input;
     }
 
-    protected double[] BoostAbove(double[] input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
+    protected void BoostAbove(Span<double> input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
     {
-        var amplitudeAtFrequency_dB = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
-        var PositiveGain = Math.Abs(this.TargetGain_dB);
-        double InverseCompressionRatio = 10D / this.Ratio;
-        double GainBoost_Linear = 1;
+        var amplitudeAtFrequencyDb = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
+        var positiveGain = Math.Abs(this.TargetGain_dB);
+        double inverseCompressionRatio = 10D / this.Ratio;
+        double gainBoostLinear = 1;
 
-        if (amplitudeAtFrequency_dB >= this.Threshold_dB) //Above Threshold
+        if (amplitudeAtFrequencyDb >= this.Threshold_dB)
         {
-            // Calculate the proportion of how far the amplitude is above the threshold
-            double ratioAboveThreshold = (amplitudeAtFrequency_dB - this.Threshold_dB) / Math.Abs(PositiveGain - this.Threshold_dB);
-
-            // Ensure the ratio is between 0 and 1
-            ratioAboveThreshold = Math.Max(0, Math.Min(1, ratioAboveThreshold));
-
-            // Apply a more pronounced gain boost as the amplitude gets further above the threshold
-            double scaledBoost = Math.Pow(ratioAboveThreshold, InverseCompressionRatio);
-
-            // Calculate the final GainBoost_Linear, scaling it appropriately
-            GainBoost_Linear = 1 + scaledBoost * (Decibels.DecibelsToLinear(PositiveGain) - 1);
+            double ratioAboveThreshold = (amplitudeAtFrequencyDb - this.Threshold_dB) / Math.Abs(positiveGain - this.Threshold_dB);
+            if (ratioAboveThreshold < 0) ratioAboveThreshold = 0;
+            else if (ratioAboveThreshold > 1) ratioAboveThreshold = 1;
+            double scaledBoost = Math.Pow(ratioAboveThreshold, inverseCompressionRatio);
+            gainBoostLinear = 1 + scaledBoost * (Decibels.DecibelsToLinear(positiveGain) - 1);
         }
 
-        if (this.UseSoftKnee
-         && amplitudeAtFrequency_dB > this.Threshold_dB - this.KneeWidth_dB * 0.5D
-         && amplitudeAtFrequency_dB < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
+        if (this.UseSoftKnee && amplitudeAtFrequencyDb > this.Threshold_dB - this.KneeWidth_dB * 0.5D
+            && amplitudeAtFrequencyDb < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
         {
-            // Calculate the start and end points of the knee region in dB.
-            double KneeStart_dB = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
-            double KneeEnd_dB = this.Threshold_dB + this.KneeWidth_dB * 0.5D;
-
-            // Calculate the ratio of how far the input is into the knee region.
-            double Ratio = (amplitudeAtFrequency_dB - KneeStart_dB) / this.KneeWidth_dB;
-
-            // Calculate an adjusted threshold based on the ratio,
-            // creating a smooth transition through the knee region.
-            double AdjustedThreshold_dB = KneeStart_dB + Ratio * (KneeEnd_dB - KneeStart_dB);
-
-            // Calculate the gain boost factor for this adjusted threshold.
-            double proximityToMax = (AdjustedThreshold_dB - this.Threshold_dB) / (PositiveGain - this.Threshold_dB);
-            GainBoost_Linear = 1 + Math.Log(Math.Max(0, proximityToMax) + 1) / Math.Log(2);
-
-            // Ensure the gain boost is within the expected range.
-            GainBoost_Linear = Math.Min(PositiveGain, Math.Max(1, GainBoost_Linear));
+            double kneeStartDb = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
+            double ratio = (amplitudeAtFrequencyDb - kneeStartDb) / this.KneeWidth_dB;
+            double adjustedThresholdDb = kneeStartDb + ratio * this.KneeWidth_dB;
+            double proximityToMax = (adjustedThresholdDb - this.Threshold_dB) / (positiveGain - this.Threshold_dB);
+            gainBoostLinear = 1 + Math.Log(Math.Max(0, proximityToMax) + 1) / Math.Log(2);
+            gainBoostLinear = Math.Min(positiveGain, Math.Max(1, gainBoostLinear));
         }
 
-        GainBoost_Linear = Math.Min(Decibels.DecibelsToLinear(PositiveGain), Math.Max(1, GainBoost_Linear));
+        gainBoostLinear = Math.Min(Decibels.DecibelsToLinear(positiveGain), Math.Max(1, gainBoostLinear));
 
-        if (GainBoost_Linear < this.Gain_Linear)
-            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - GainBoost_Linear) + GainBoost_Linear;
+        if (gainBoostLinear < this.Gain_Linear)
+            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - gainBoostLinear) + gainBoostLinear;
         else
-            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - GainBoost_Linear) + GainBoost_Linear;
+            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - gainBoostLinear) + gainBoostLinear;
 
-        if (amplitudeAtFrequency_dB < this.Threshold_dB) //Below Threshold
+        if (amplitudeAtFrequencyDb < this.Threshold_dB)
         {
-            double ExcessdB = Math.Abs(this.Threshold_dB - amplitudeAtFrequency_dB);
-            double a = 0.01; // Scale factor
-            double b = 0.01; // Adjusts the rate of change
-            double d = 1.0; // Final value to approach
-            // Calculate the Gain_Linear
-            this.Gain_Linear = a * Math.Log10(b * ExcessdB + double.Epsilon) + d;
+            double excessDb = Math.Abs(this.Threshold_dB - amplitudeAtFrequencyDb);
+            double a = 0.01, b = 0.01, d = 1.0;
+            this.Gain_Linear = a * Math.Log10(b * excessDb + double.Epsilon) + d;
 
             this.GainApplied = Math.Abs(Decibels.LinearToDecibels(this.Gain_Linear));
-            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d) //Zero it
+            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d)
             {
                 this.GainApplied = 0d;
                 this.Gain_Linear = 1d;
@@ -467,7 +429,6 @@ public class DEQ : IFilter
 
         if (this.GainApplied > 0)
         {
-            //Apply BiQuad
             switch (this.Biquad_Type)
             {
                 case BiquadType.PEQ:
@@ -480,83 +441,61 @@ public class DEQ : IFilter
                     this.BiQuad.UpdateGain_LowShelf(this.GainApplied);
                     break;
             }
-            input = this.BiQuad.Transform(input, currentStream);
+            this.BiQuad.TransformInPlace(input, currentStream);
         }
-
-        return input;
     }
 
-    protected double[] BoostBelow(double[] input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
+    protected void BoostBelow(Span<double> input, double amplitudeAtFrequency_Linear, DSP_Stream currentStream)
     {
-        var amplitudeAtFrequency_dB = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
-        var PositiveGain = Math.Abs(this.TargetGain_dB);
-        double InverseCompressionRatio = 10D / this.Ratio;
-        double GainBoost_Linear = 1;
+        var amplitudeAtFrequencyDb = Decibels.LinearToDecibels(amplitudeAtFrequency_Linear);
+        var positiveGain = Math.Abs(this.TargetGain_dB);
+        double inverseCompressionRatio = 10D / this.Ratio;
+        double gainBoostLinear = 1;
 
-        if (amplitudeAtFrequency_dB <= this.Threshold_dB) //Below Threshold
+        if (amplitudeAtFrequencyDb <= this.Threshold_dB)
         {
-            // Calculate the proportion of how far the amplitude is below the threshold
-            double ratioBelowThreshold = (this.Threshold_dB - amplitudeAtFrequency_dB) / Math.Abs(PositiveGain - this.Threshold_dB);
-            
-            // Ensure the ratio is between 0 and 1
-            ratioBelowThreshold = Math.Max(0, Math.Min(1, ratioBelowThreshold));
-
-            // Apply a more pronounced gain boost as the amplitude gets further below the threshold
-            double scaledBoost = Math.Pow(ratioBelowThreshold, InverseCompressionRatio);
-            
-            // Calculate the final GainBoost_Linear, scaling it appropriately
-            GainBoost_Linear = 1 + scaledBoost * (Decibels.DecibelsToLinear(PositiveGain) - 1);
+            double ratioBelowThreshold = (this.Threshold_dB - amplitudeAtFrequencyDb) / Math.Abs(positiveGain - this.Threshold_dB);
+            if (ratioBelowThreshold < 0) ratioBelowThreshold = 0;
+            else if (ratioBelowThreshold > 1) ratioBelowThreshold = 1;
+            double scaledBoost = Math.Pow(ratioBelowThreshold, inverseCompressionRatio);
+            gainBoostLinear = 1 + scaledBoost * (Decibels.DecibelsToLinear(positiveGain) - 1);
         }
 
-        if (this.UseSoftKnee
-         && amplitudeAtFrequency_dB > this.Threshold_dB - this.KneeWidth_dB * 0.5D
-         && amplitudeAtFrequency_dB < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
+        if (this.UseSoftKnee && amplitudeAtFrequencyDb > this.Threshold_dB - this.KneeWidth_dB * 0.5D
+            && amplitudeAtFrequencyDb < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
         {
-            // Calculate the start and end points of the knee region in dB.
-            double KneeStart_dB = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
-            double KneeEnd_dB = this.Threshold_dB + this.KneeWidth_dB * 0.5D;
-
-            // Calculate the ratio of how far the input is into the knee region.
-            double Ratio = (amplitudeAtFrequency_dB - KneeStart_dB) / this.KneeWidth_dB;
-
-            // Calculate an adjusted threshold based on the ratio,
-            // creating a smooth transition through the knee region.
-            double AdjustedThreshold_dB = KneeStart_dB + Ratio * (KneeEnd_dB - KneeStart_dB);
-
-            // Calculate the gain boost factor for this adjusted threshold.
-            double proximityToMax = (AdjustedThreshold_dB - this.Threshold_dB) / (PositiveGain - this.Threshold_dB);
-            GainBoost_Linear = 1 + Math.Log(Math.Max(0, proximityToMax) + 1) / Math.Log(2);
+            double kneeStartDb = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
+            double ratio = (amplitudeAtFrequencyDb - kneeStartDb) / this.KneeWidth_dB;
+            double adjustedThresholdDb = kneeStartDb + ratio * this.KneeWidth_dB;
+            double proximityToMax = (adjustedThresholdDb - this.Threshold_dB) / (positiveGain - this.Threshold_dB);
+            gainBoostLinear = 1 + Math.Log(Math.Max(0, proximityToMax) + 1) / Math.Log(2);
         }
 
-        GainBoost_Linear = Math.Min(Decibels.DecibelsToLinear(PositiveGain), Math.Max(1, GainBoost_Linear));
+        gainBoostLinear = Math.Min(Decibels.DecibelsToLinear(positiveGain), Math.Max(1, gainBoostLinear));
 
-        if (GainBoost_Linear < this.Gain_Linear)
-            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - GainBoost_Linear) + GainBoost_Linear;
+        if (gainBoostLinear < this.Gain_Linear)
+            this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - gainBoostLinear) + gainBoostLinear;
         else
-            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - GainBoost_Linear) + GainBoost_Linear;
+            this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - gainBoostLinear) + gainBoostLinear;
 
-        if (amplitudeAtFrequency_dB > this.Threshold_dB) //Above Threshold
+        if (amplitudeAtFrequencyDb > this.Threshold_dB)
         {
-            double ExcessdB = Math.Abs(this.Threshold_dB - amplitudeAtFrequency_dB);
-            double a = 0.01; // Scale factor
-            double b = 0.01; // Adjusts the rate of change
-            double d = 1.0; // Final value to approach
-            // Calculate the Gain_Linear
-            this.Gain_Linear = a * Math.Log10(b * ExcessdB + double.Epsilon) + d;
+            double excessDb = Math.Abs(this.Threshold_dB - amplitudeAtFrequencyDb);
+            double a = 0.01, b = 0.01, d = 1.0;
+            this.Gain_Linear = a * Math.Log10(b * excessDb + double.Epsilon) + d;
 
             this.GainApplied = Math.Abs(Decibels.LinearToDecibels(this.Gain_Linear));
-            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d) //Zero it
+            if (this.GainApplied > -0.00001d && this.GainApplied < 0.00001d)
             {
                 this.GainApplied = 0d;
                 this.Gain_Linear = 1d;
             }
-        }            
+        }
 
         this.GainApplied = Math.Abs(Decibels.LinearToDecibels(this.Gain_Linear));
 
         if (this.GainApplied > 0)
         {
-            //Apply BiQuad
             switch (this.Biquad_Type)
             {
                 case BiquadType.PEQ:
@@ -568,12 +507,9 @@ public class DEQ : IFilter
                 case BiquadType.Low_Shelf:
                     this.BiQuad.UpdateGain_LowShelf(this.GainApplied);
                     break;
-            }               
-
-            input = this.BiQuad.Transform(input, currentStream);
+            }
+            this.BiQuad.TransformInPlace(input, currentStream);
         }
-
-        return input;
     }
 
     #endregion

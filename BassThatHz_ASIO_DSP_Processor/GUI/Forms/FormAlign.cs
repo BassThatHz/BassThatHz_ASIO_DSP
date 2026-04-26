@@ -67,6 +67,15 @@ public partial class FormAlign : Form
     protected double[]? _SyyB;
     protected double[]? _Sxx;
     protected int _TfAvgFrames = 0;
+    // Cached FFT + window to avoid reallocating each refresh
+    protected FFT? _fftCached;
+    protected double[]? _windowCached;
+    protected int _cachedFFTSize = 0;
+
+    // Reusable temporary buffers for input copies to avoid per-tick allocations
+    protected double[]? _tmpA;
+    protected double[]? _tmpB;
+    protected double[]? _tmpRef;
     #endregion
 
     #endregion
@@ -188,15 +197,23 @@ public partial class FormAlign : Form
                     this.FFTSize = size;
                 });
 
-                var LocalCopyA = new double[this.FFTSize];
-                var LocalCopyB = new double[this.FFTSize];
-                var LocalCopyRef = new double[this.FFTSize];
+                // Reuse temporary buffers to avoid per-tick allocations
+                this.EnsureTempBuffers();
 
-                Array.Copy(this.DataBufferA, LocalCopyA, this.DataBufferA.Length);
-                Array.Copy(this.DataBufferB, LocalCopyB, this.DataBufferB.Length);
-                Array.Copy(this.DataBufferRef, LocalCopyRef, this.DataBufferRef.Length);
+                int copyA = Math.Min(this.DataBufferA.Length, this.FFTSize);
+                int copyB = Math.Min(this.DataBufferB.Length, this.FFTSize);
+                int copyR = Math.Min(this.DataBufferRef.Length, this.FFTSize);
 
-                this.Display_RTA_Results(LocalCopyA, LocalCopyB, LocalCopyRef);
+                Array.Copy(this.DataBufferA, 0, this._tmpA!, 0, copyA);
+                if (copyA < this.FFTSize) Array.Clear(this._tmpA!, copyA, this.FFTSize - copyA);
+
+                Array.Copy(this.DataBufferB, 0, this._tmpB!, 0, copyB);
+                if (copyB < this.FFTSize) Array.Clear(this._tmpB!, copyB, this.FFTSize - copyB);
+
+                Array.Copy(this.DataBufferRef, 0, this._tmpRef!, 0, copyR);
+                if (copyR < this.FFTSize) Array.Clear(this._tmpRef!, copyR, this.FFTSize - copyR);
+
+                this.Display_RTA_Results(this._tmpA!, this._tmpB!, this._tmpRef!);
                 this.RefreshTimer.Start();
             }
         }
@@ -208,10 +225,12 @@ public partial class FormAlign : Form
     #endregion
 
     #region Protected Methods
+    // Patch checkpoint
     protected void Display_RTA_Results(double[] dataA, double[] dataB, double[] dataRef)
     {
         // 1) Setup
         double sampleRate = Program.DSP_Info.InSampleRate;
+        // Patch checkpoint
         var fft = this.CreateFFT(out double[] window);
 
         // 2) FFTs
@@ -273,12 +292,19 @@ public partial class FormAlign : Form
     #region Setup helpers
     protected FFT CreateFFT(out double[] window)
     {
+        // Reuse cached FFT and window when possible to avoid reallocations
         int zeroPadding = 0;
         var windowType = DSPLib.DSP.Window.Type.Hanning;
 
-        var fft = new FFT(this.FFTSize, zeroPadding);
-        window = DSPLib.DSP.Window.Coefficients(windowType, this.FFTSize);
-        return fft;
+        if (this._fftCached == null || this._cachedFFTSize != this.FFTSize)
+        {
+            this._fftCached = new FFT(this.FFTSize, zeroPadding);
+            this._windowCached = DSPLib.DSP.Window.Coefficients(windowType, this.FFTSize);
+            this._cachedFFTSize = this.FFTSize;
+        }
+
+        window = this._windowCached!;
+        return this._fftCached!;
     }
 
     protected void ComputeFFTs(
@@ -662,6 +688,16 @@ public partial class FormAlign : Form
 
         if (this._SyyB == null || this._SyyB.Length != this.FFTSize)
             this._SyyB = new double[this.FFTSize];
+    }
+
+    protected void EnsureTempBuffers()
+    {
+        if (this._tmpA == null || this._tmpA.Length != this.FFTSize)
+        {
+            this._tmpA = new double[this.FFTSize];
+            this._tmpB = new double[this.FFTSize];
+            this._tmpRef = new double[this.FFTSize];
+        }
     }
 
     protected int ArgMaxAbsRange(double[] x, int startInclusive, int endInclusive)

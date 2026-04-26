@@ -6,6 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 using NAudio.Utils;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 #endregion
@@ -42,31 +43,48 @@ public class Mixer : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        //Range of input is -1 to +1
-        try
+        // Range of input is -1 to +1
+        int len = input.Length;
+        if (len == 0 || this.MixerInputs == null || this.MixerInputs.Count == 0)
+            return input;
+
+        // Process each MixerInput: precompute linear gains and avoid repeated lookups
+        for (int i = 0; i < this.MixerInputs.Count; i++)
         {
-            for (int i = 0; i < this.MixerInputs.Count; i++)
+            var mi = this.MixerInputs[i];
+            if (mi == null || !mi.Enabled)
+                continue;
+
+            double streamGain = Decibels.DecibelsToLinear(mi.StreamAttenuation);
+            double inputGain = Decibels.DecibelsToLinear(mi.Attenuation);
+
+            var source = Program.ASIO.InputBuffer[mi.ChannelIndex];
+
+            // Use SIMD when available and length is sufficient
+            int j = 0;
+            if (Vector.IsHardwareAccelerated && len >= Vector<double>.Count * 2)
             {
-                var MixerItem = this.MixerInputs[i];
-                if (MixerItem != null && MixerItem.Enabled)
+                int vecCount = Vector<double>.Count;
+                var vStreamGain = new Vector<double>(streamGain);
+                var vInputGain = new Vector<double>(inputGain);
+
+                for (; j <= len - vecCount; j += vecCount)
                 {
-                    for (int j = 0; j < input.Length; j++)
-                    {
-                        input[j] = input[j]
-                               *
-                               Decibels.DecibelsToLinear(MixerItem.StreamAttenuation)
-                               +
-                               Program.ASIO.InputBuffer[MixerItem.ChannelIndex][j]
-                               *
-                               Decibels.DecibelsToLinear(MixerItem.Attenuation);
-                    }
+                    var vOut = new Vector<double>(input, j);
+                    var vSrc = new Vector<double>(source, j);
+                    vOut = vOut * vStreamGain + vSrc * vInputGain;
+                    vOut.CopyTo(input, j);
                 }
             }
+
+            // Remainder
+            for (; j < len; j++)
+            {
+                double v = input[j] * streamGain + source[j] * inputGain;
+                input[j] = v;
+            }
         }
-        catch (Exception ex)
-        {
-            _ = ex;
-        }
+
         return input;
     }
 

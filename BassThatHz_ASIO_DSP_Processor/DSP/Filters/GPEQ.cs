@@ -40,37 +40,44 @@ public class GPEQ : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        try
+        var filters = this.Filters;
+        if (filters == null || filters.Count == 0)
+            return input;
+
+        int count = filters.Count;
+        for (int i = 0; i < count; i++)
         {
-            int FilterCount = this.Filters.Count;
-            for (int i = 0; i < FilterCount; i++)
-                if (this.Filters[i] != null && this.Filters[i].FilterEnabled)
-                    input = this.Filters[i].Transform(input, currentStream);
+            var f = filters[i];
+            if (f == null || !f.FilterEnabled)
+                continue;
+
+            try
+            {
+                input = f.Transform(input, currentStream);
+            }
+            catch (IndexOutOfRangeException) { /* ignore concurrent modifications */ }
+            catch (ArgumentOutOfRangeException) { /* ignore concurrent modifications */ }
+            catch (NullReferenceException) { /* ignore concurrent modifications */ }
         }
-        catch (Exception ex)
-        {
-            //We don't care if these two exceptions occur. It often happens because the user is 
-            //deleting or adding filters while the DSP is on.
-            if (ex is not IndexOutOfRangeException
-                && ex is not ArgumentOutOfRangeException
-                && ex is not NullReferenceException)
-                throw; //Throws all the remaining valid errors with stack trace info
-        }
+
         return input;
     }
 
     public void ResetSampleRate(int sampleRate)
     {
-        try
+        var filters = this.Filters;
+        if (filters == null || filters.Count == 0)
+            return;
+
+        int count = filters.Count;
+        for (int i = 0; i < count; i++)
         {
-            int FilterCount = this.Filters.Count;
-            for (int i = 0; i < FilterCount; i++)
-                this.Filters[i]?.ResetSampleRate(sampleRate);
-        }
-        catch (NullReferenceException ex)
-        {
-            //Ignore errors, User probably deleted a filter while the DSP is running
-            _ = ex;
+            try
+            {
+                filters[i]?.ResetSampleRate(sampleRate);
+            }
+            catch (NullReferenceException) { /* ignore concurrent modifications */ }
+            catch (ArgumentOutOfRangeException) { /* ignore concurrent modifications */ }
         }
     }
 

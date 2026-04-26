@@ -40,6 +40,12 @@ public partial class ctl_StatsPage : UserControl
 {
     #region Variables
 
+    // Cached current process to avoid repeated allocations from Process.GetCurrentProcess()
+    private readonly Process CurrentProcess;
+
+    // Preserve previous GC latency mode so we can restore it when stopping DSP
+    private readonly GCLatencyMode PreviousGCLatencyMode;
+
     #region String Formats
     protected readonly string ms_TimeFormat = "00.0000";
     protected readonly string Percentage_StringFormat = "00.00";
@@ -87,8 +93,33 @@ public partial class ctl_StatsPage : UserControl
         Program.ASIO.Driver_LatenciesChanged += ASIO_Driver_LatenciesChanged;
         Program.ASIO.Driver_Overload += ASIO_Driver_Overload;
         Program.ASIO.Driver_SampleRateChanged += ASIO_Driver_SampleRateChanged;
+
+        // Cache current process instance for stats (avoids allocating a new Process each timer tick)
+        this.CurrentProcess = Process.GetCurrentProcess();
+        // Save previous GC latency mode to restore later
+        this.PreviousGCLatencyMode = GCSettings.LatencyMode;
     }
     #endregion
+
+    // Unsubscribe from ASIO events when the control's handle is destroyed to avoid memory leaks
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        try
+        {
+            Program.ASIO.Driver_ResetRequest -= ASIO_Driver_ResetRequest;
+            Program.ASIO.Driver_BufferSizeChanged -= ASIO_Driver_BufferSizeChanged;
+            Program.ASIO.Driver_ResyncRequest -= ASIO_Driver_ResyncRequest;
+            Program.ASIO.Driver_LatenciesChanged -= ASIO_Driver_LatenciesChanged;
+            Program.ASIO.Driver_Overload -= ASIO_Driver_Overload;
+            Program.ASIO.Driver_SampleRateChanged -= ASIO_Driver_SampleRateChanged;
+        }
+        catch
+        {
+            // Best-effort unsubscribe; ignore any issues during handle destruction
+        }
+
+        base.OnHandleDestroyed(e);
+    }
 
     #region LoadConfigRefresh
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -162,7 +193,7 @@ public partial class ctl_StatsPage : UserControl
         {
             Program.ASIO.Stop();
             if (!this.No_GC_Set)
-                GCSettings.LatencyMode = GCLatencyMode.Interactive;
+                GCSettings.LatencyMode = this.PreviousGCLatencyMode;
             this.DSP_StopTime = DateTime.Now;
         }
         catch (Exception ex)
@@ -274,33 +305,57 @@ public partial class ctl_StatsPage : UserControl
     
     protected void NoGC_Timer_Tick(object sender, EventArgs e)
     {
-        var currentProcess = Process.GetCurrentProcess();
-        if (currentProcess.WorkingSet64 >= this.No_GC_CleanupLimitMB * 1024L * 1024L)
+        try
         {
-            this.TrySetNoGC_Limit();
+            // Refresh cached process info and check working set to avoid allocating a new Process
+            this.CurrentProcess.Refresh();
+            if (this.CurrentProcess.WorkingSet64 >= this.No_GC_CleanupLimitMB * 1024L * 1024L)
+            {
+                this.TrySetNoGC_Limit();
+            }
+        }
+        catch
+        {
+            // Best-effort; ignore failures here
         }
     }
 
     protected void TrySetNoGC_Limit()
     {
-        if (this.No_GC_Set)
+        try
         {
-            GC.EndNoGCRegion();
-            this.No_GC_Set = false;
-            GC.Collect();
-        }
+            if (this.No_GC_Set)
+            {
+                GC.EndNoGCRegion();
+                this.No_GC_Set = false;
+                GC.Collect();
+            }
 
-        this.No_GC_Set = GC.TryStartNoGCRegion(1024L * 1024L * 1023L * 2L); //2GB
-        if (this.No_GC_Set)
-        {
-            this.No_GC_CleanupLimitMB = 2000L;
+            // Use safe explicit sizes
+            long twoGB = 2L * 1024L * 1024L * 1024L;
+            long oneGB = 1L * 1024L * 1024L * 1024L;
+
+            // Try 2GB first, fall back to 1GB
+            this.No_GC_Set = GC.TryStartNoGCRegion(twoGB);
+            if (this.No_GC_Set)
+            {
+                this.No_GC_CleanupLimitMB = 2000L;
+            }
+            else
+            {
+                this.No_GC_Set = GC.TryStartNoGCRegion(oneGB);
+                this.No_GC_CleanupLimitMB = this.No_GC_Set ? 1000L : 900L;
+            }
+
+            this.lblRAM_Limit.Text = this.No_GC_CleanupLimitMB + "MB";
         }
-        else
+        catch (Exception)
         {
+            // If TryStartNoGCRegion throws or fails for any reason, ensure flags reflect that
+            this.No_GC_Set = false;
             this.No_GC_CleanupLimitMB = 900L;
-            this.No_GC_Set = GC.TryStartNoGCRegion(1024L * 1024L * 1024L); //1GB
+            this.lblRAM_Limit.Text = this.No_GC_CleanupLimitMB + "MB";
         }
-        this.lblRAM_Limit.Text = this.No_GC_CleanupLimitMB + "MB";
     }
     
     protected void chkNoGCMode_CheckedChanged(object sender, EventArgs e)
@@ -371,11 +426,15 @@ public partial class ctl_StatsPage : UserControl
                 this.MaxDSP_Processing_Lat_ms = 0;
                 this.AverageDSP_Processing_Lat_ms = 0;
 
-                this.lbl_TotalChannels.Text = Program.ASIO.NumberOf_IO_Channels_Total.ToString();
-                this.lbl_InputChannels.Text = Program.ASIO.NumberOf_Input_Channels.ToString();
-                this.lbl_OutputChannels.Text = Program.ASIO.NumberOf_Output_Channels.ToString();
-                this.lblSampleRate.Text = Program.ASIO.DriverCapabilities?.SampleRate.ToString();
-                this.lblASIOBitType.Text = Program.ASIO.DriverCapabilities?.InputChannelInfos[0].type.ToString();
+                // Cache repeated lookups
+                var asio = Program.ASIO;
+                this.lbl_TotalChannels.Text = asio.NumberOf_IO_Channels_Total.ToString();
+                this.lbl_InputChannels.Text = asio.NumberOf_Input_Channels.ToString();
+                this.lbl_OutputChannels.Text = asio.NumberOf_Output_Channels.ToString();
+                this.lblSampleRate.Text = asio.DriverCapabilities?.SampleRate.ToString();
+                this.lblASIOBitType.Text = asio.DriverCapabilities?.InputChannelInfos.Length > 0
+                    ? asio.DriverCapabilities?.InputChannelInfos[0].type.ToString()
+                    : string.Empty;
 
                 this.Show_ThreadID();
                 this.Show_Total_Streams();
@@ -424,11 +483,20 @@ public partial class ctl_StatsPage : UserControl
     #region RealTime Stats
     protected void Show_ProcessPriorityAndRAMUsage()
     {
-        using var p = Diagnostics.Process.GetCurrentProcess();
-        this.lbl_ProcessPriorityLevel.Text = p.PriorityClass.ToString();
-        
-        long totalBytesOfMemoryUsed_MB = p.WorkingSet64 / 1024 / 1024;
-        this.lblRAM.Text = totalBytesOfMemoryUsed_MB.ToString();
+        try
+        {
+            // Refresh cached process info to get up-to-date values without allocating
+            this.CurrentProcess.Refresh();
+            this.lbl_ProcessPriorityLevel.Text = this.CurrentProcess.PriorityClass.ToString();
+
+            long totalBytesOfMemoryUsed_MB = this.CurrentProcess.WorkingSet64 / 1024 / 1024;
+            this.lblRAM.Text = totalBytesOfMemoryUsed_MB.ToString();
+        }
+        catch (Exception ex)
+        {
+            // If anything goes wrong, report via error helper but don't throw from UI timer
+            _ = ex;
+        }
     }
     protected void Show_CPU_Usage()
     {
@@ -444,41 +512,31 @@ public partial class ctl_StatsPage : UserControl
 
     protected void Show_DSPLatency()
     {
-        TimeSpan InputBufferTime = Program.ASIO.InputBufferConversion_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
-        TimeSpan OutputBufferTime = Program.ASIO.OutputBufferConversion_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
-        TimeSpan DSP_ProcessingTime = Program.ASIO.DSP_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
+        var asio = Program.ASIO;
+        TimeSpan inputBufferTime = asio.InputBufferConversion_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
+        TimeSpan outputBufferTime = asio.OutputBufferConversion_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
+        TimeSpan dspProcessingTime = asio.DSP_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
 
-        this.lbl_InputBufferConversionLatency.Text = InputBufferTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
-        this.lbl_OutputBufferConversionLatency.Text = OutputBufferTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
-        this.lbl_TotalDSP_Processing_Latency.Text = DSP_ProcessingTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
+        this.lbl_InputBufferConversionLatency.Text = inputBufferTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
+        this.lbl_OutputBufferConversionLatency.Text = outputBufferTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
+        this.lbl_TotalDSP_Processing_Latency.Text = dspProcessingTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
 
-        this.lbl_DSP_Processing_Latency.Text =
-                                                (
-                                                DSP_ProcessingTime
-                                                - InputBufferTime
-                                                - OutputBufferTime
-                                                )
-                                               .TotalMilliseconds.ToString(this.ms_TimeFormat);
+        this.lbl_DSP_Processing_Latency.Text = (dspProcessingTime - inputBufferTime - outputBufferTime).TotalMilliseconds.ToString(this.ms_TimeFormat);
 
-        this.AverageDSP_Processing_Lat_ms = (this.TotalDSP_Processing_Lat_ms + DSP_ProcessingTime.TotalMilliseconds) * 0.5;
-        this.TotalDSP_Processing_Lat_ms = DSP_ProcessingTime.TotalMilliseconds;
+        // Update averages/peaks
+        this.AverageDSP_Processing_Lat_ms = (this.TotalDSP_Processing_Lat_ms + dspProcessingTime.TotalMilliseconds) * 0.5;
+        this.TotalDSP_Processing_Lat_ms = dspProcessingTime.TotalMilliseconds;
         this.lbl_Average_DSP_Latency.Text = this.AverageDSP_Processing_Lat_ms.ToString(this.ms_TimeFormat);
 
-        this.MaxDSP_Processing_Lat_ms = Program.ASIO.DSP_PeakProcessingTime.TotalMilliseconds;
+        this.MaxDSP_Processing_Lat_ms = asio.DSP_PeakProcessingTime.TotalMilliseconds;
         this.lbl_Max_Detected_DSP_Latency.Text = this.MaxDSP_Processing_Lat_ms.ToString(this.ms_TimeFormat);
 
-
-        //Avoid Div by 0 error. We don't know what Lat format the ASIO Device is using (we can't trust it.)
+        // Avoid Div by 0 error.
         if (this.BufferSize_Lat_ms > 0)
         {
-            this.lbl_Current_DSP_Load.Text = (this.TotalDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100)
-                .ToString(this.Percentage_StringFormat);
-
-            this.lbl_Average_DSP_Load.Text = (this.AverageDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100)
-                .ToString(this.Percentage_StringFormat);
-
-            this.lbl_Max_DSP_Load.Text = (this.MaxDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100)
-                .ToString(this.Percentage_StringFormat);
+            this.lbl_Current_DSP_Load.Text = (this.TotalDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100).ToString(this.Percentage_StringFormat);
+            this.lbl_Average_DSP_Load.Text = (this.AverageDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100).ToString(this.Percentage_StringFormat);
+            this.lbl_Max_DSP_Load.Text = (this.MaxDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100).ToString(this.Percentage_StringFormat);
         }
     }
 
@@ -504,20 +562,25 @@ public partial class ctl_StatsPage : UserControl
 
         try
         {
-            foreach (var Stream in Program.DSP_Info.Streams)
-                if (Stream != null
-                    && Stream.Filters != null
-                    && Stream.InputSource != null 
-                    && Stream.InputSource.Index != -1
-                    && Stream.OutputDestination != null
-                    && Stream.OutputDestination.Index != -1)
-                    foreach (var Filter in Stream.Filters)
-                        if (Filter != null)
-                        {
-                            FilterCount++;
-                            if (Filter.FilterEnabled)
-                                EnabledFilterCount++;
-                        }
+            var streams = Program.DSP_Info?.Streams;
+            if (streams != null)
+            {
+                foreach (var stream in streams)
+                {
+                    if (stream == null || stream.Filters == null || stream.InputSource == null || stream.OutputDestination == null)
+                        continue;
+
+                    if (stream.InputSource.Index == -1 || stream.OutputDestination.Index == -1)
+                        continue;
+
+                    foreach (var filter in stream.Filters)
+                    {
+                        if (filter == null) continue;
+                        FilterCount++;
+                        if (filter.FilterEnabled) EnabledFilterCount++;
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {

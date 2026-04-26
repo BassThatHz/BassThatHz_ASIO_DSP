@@ -4,6 +4,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 
 #region Usings
 using System;
+using System.Globalization;
 using System.Windows.Forms;
 #endregion
 
@@ -62,7 +63,16 @@ public partial class DelayControl : UserControl, IFilterControl
     protected void TxtDelay_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtDelay.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDelay.Text);
+        // Avoid unnecessary Text assignment (which causes layout and events) and preserve caret position.
+        string current = this.txtDelay.Text ?? string.Empty;
+        string limited = InputValidator.LimitTo_ReasonableSizedNumber(current);
+        if (!string.Equals(limited, current, StringComparison.Ordinal))
+        {
+            int selStart = this.txtDelay.SelectionStart;
+            this.txtDelay.Text = limited;
+            // restore a sensible caret position
+            this.txtDelay.SelectionStart = Math.Min(selStart, limited.Length);
+        }
     }
     #endregion
 
@@ -70,8 +80,13 @@ public partial class DelayControl : UserControl, IFilterControl
     {
         try
         {
-            if (decimal.TryParse(this.txtDelay.Text, out decimal DelayInMS))
+            // Quick null/empty guard to avoid parsing overhead
+            var text = this.txtDelay.Text;
+            if (!string.IsNullOrWhiteSpace(text) &&
+                decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal DelayInMS))
+            {
                 this.Filter.Initialize(DelayInMS, Program.ASIO.SamplesPerChannel, Program.DSP_Info.InSampleRate);
+            }
         }
         catch (Exception ex)
         {
@@ -97,10 +112,14 @@ public partial class DelayControl : UserControl, IFilterControl
         {
             this.Filter = delay;
 
-            this.txtDelay.Text = delay.DelayInMS.ToString();
+            // Use invariant culture for stable formatting and to avoid culture allocations
+            this.txtDelay.Text = delay.DelayInMS.ToString(CultureInfo.InvariantCulture);
         }
     }
     #endregion
+
+    // Dispose is implemented in the designer partial class; the designer Dispose will be
+    // updated to unsubscribe from static events to avoid memory leaks.
 
     #region Error Handling
     protected void Error(Exception ex)

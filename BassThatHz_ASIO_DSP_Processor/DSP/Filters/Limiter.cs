@@ -65,99 +65,117 @@ public class Limiter : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        //Range of input is -1 to +1
+        // Range of input is -1 to +1
+        int len = input.Length;
+        if (len == 0)
+            return input;
 
-        //Calculate the Peak Amplitude 
-        double CurrentPeakValue = 0;
-        for (int i = 0; i < input.Length; i++)
-            if (Math.Abs(input[i]) > CurrentPeakValue)
-                CurrentPeakValue = Math.Abs(input[i]);
+        // Cache fields to locals for performance
+        double maxValue = this.MaxValue;
+        double threshold = this.Threshold;
+        double attackCoeff = this.AttackCoeff;
+        double releaseCoeff = this.ReleaseCoeff;
+        bool peakHoldAttackEnabled = this.PeakHoldAttackEnabled;
+        bool peakHoldReleaseEnabled = this.PeakHoldReleaseEnabled;
 
-        if (CurrentPeakValue > this.PeakValue)
-            this.PeakValue = CurrentPeakValue;
-
-        var GainReduction_Linear = 1d;
-        bool ApplySmoothng = true;
-        this.IsBrickwall = false;
-
-        //Near Brickwall section
-        if (CurrentPeakValue > this.MaxValue ||
-            this.Threshold == this.MaxValue 
-            && CurrentPeakValue > this.MaxValue - 0.8912509381 //-1db
-            && CurrentPeakValue < this.MaxValue) 
+        // Calculate the Peak Amplitude
+        double currentPeak = 0.0;
+        for (int i = 0; i < len; i++)
         {
-            this.IsBrickwall = true;
-            //Activate really aggressive compression
-
-            // Basic gain reduction factor
-            GainReduction_Linear = this.MaxValue / CurrentPeakValue;
-
-            // Modify gain reduction factor based on how close CurrentPeakValue is to 1
-            double closenessToMax = 1 - CurrentPeakValue;
-            GainReduction_Linear *= 1 - Math.Log(1 - closenessToMax + double.Epsilon);
-
-            // Clamp GainReduction_Linear to be between 0 and 1
-            GainReduction_Linear = Math.Max(0, Math.Min(GainReduction_Linear, 1));
+            double a = input[i];
+            double abs = a < 0 ? -a : a;
+            if (abs > currentPeak) currentPeak = abs;
         }
 
-        //Brickwall limiter section
-        if (this.PeakValue > this.MaxValue)
+        double peakValueLocal = this.PeakValue;
+        if (currentPeak > peakValueLocal)
+            peakValueLocal = currentPeak;
+
+        double gainReductionLinear = 1.0;
+        bool applySmoothing = true;
+        bool isBrickwall = false;
+
+        // Near-brickwall: aggressive compression when very close to max
+        if (currentPeak > maxValue || threshold == maxValue && currentPeak > maxValue - 0.8912509381 && currentPeak < maxValue)
         {
-            ApplySmoothng = false;
-            var ExcessDB =  Decibels.LinearToDecibels(this.MaxValue) - Decibels.LinearToDecibels(this.PeakValue);
-            var GainReduction_Linear2 = Decibels.DecibelsToLinear(ExcessDB);
-            this.CompressionApplied = GainReduction_Linear2;
-            this.Gain_Linear = GainReduction_Linear2;
+            isBrickwall = true;
+            gainReductionLinear = maxValue / currentPeak;
+            double closenessToMax = 1.0 - currentPeak;
+            gainReductionLinear *= 1.0 - Math.Log(1.0 - closenessToMax + double.Epsilon);
+            if (gainReductionLinear < 0) gainReductionLinear = 0;
+            else if (gainReductionLinear > 1) gainReductionLinear = 1;
+        }
+
+        // Brickwall limiter section
+        if (peakValueLocal > maxValue)
+        {
+            applySmoothing = false;
+            double excessDb = Decibels.LinearToDecibels(maxValue) - Decibels.LinearToDecibels(peakValueLocal);
+            double gainReductionLinear2 = Decibels.DecibelsToLinear(excessDb);
+            this.CompressionApplied = gainReductionLinear2;
+            this.Gain_Linear = gainReductionLinear2;
 
             // Apply a dynamic decay of the forced peak-hold
-            double decayFactor = 300000;
-            double closeness = Math.Abs(Decibels.LinearToDecibels(this.PeakValue) - Decibels.LinearToDecibels(CurrentPeakValue));
-            if (closeness > 35)
-                decayFactor = 100;
-            this.PeakValue *= Math.Exp(-1.0 / decayFactor);
+            double decayFactor = 300000.0;
+            double closeness = Math.Abs(Decibels.LinearToDecibels(peakValueLocal) - Decibels.LinearToDecibels(currentPeak));
+            if (closeness > 35.0) decayFactor = 100.0;
+            peakValueLocal *= Math.Exp(-1.0 / decayFactor);
 
-            GainReduction_Linear = GainReduction_Linear2;
+            gainReductionLinear = gainReductionLinear2;
 
-            //Has clipping prevention
-            if (GainReduction_Linear < 1)
-                for (int i = 0; i < input.Length; i++)
-                    input[i] = Math.Min(1 - double.Epsilon, input[i] * GainReduction_Linear2);
+            if (gainReductionLinear < 1.0)
+            {
+                double limit = 1.0 - double.Epsilon;
+                for (int i = 0; i < len; i++)
+                {
+                    double v = input[i] * gainReductionLinear2;
+                    input[i] = v < limit ? v : limit;
+                }
+            }
         }
 
-        if (ApplySmoothng)
+        if (applySmoothing)
         {
-            //Dynamic compression threshold
-            //If the threshold has been exceeded, start to compress the signal
-            if (this.Threshold < this.MaxValue && CurrentPeakValue > this.Threshold && CurrentPeakValue < this.MaxValue)
+            // Dynamic compression threshold
+            if (threshold < maxValue && currentPeak > threshold && currentPeak < maxValue)
             {
-                // Calculate the logarithmic decrease
-                double proximityToMax = Math.Max(0, (CurrentPeakValue - this.Threshold) / (this.MaxValue - this.Threshold));
-                GainReduction_Linear = 1 - Math.Log(proximityToMax + 1) / Math.Log(2);
-                // The +1 ensures the log argument is always > 0
-
-                GainReduction_Linear = Math.Min(1, Math.Max(0, GainReduction_Linear));
+                double proximityToMax = (currentPeak - threshold) / (maxValue - threshold);
+                if (proximityToMax < 0) proximityToMax = 0;
+                if (proximityToMax > 1) proximityToMax = 1;
+                gainReductionLinear = 1.0 - Math.Log(proximityToMax + 1.0) / Math.Log(2.0);
+                if (gainReductionLinear < 0) gainReductionLinear = 0;
+                else if (gainReductionLinear > 1) gainReductionLinear = 1;
             }
 
-            //Log Smoothing
-            if (GainReduction_Linear < this.Gain_Linear)
+            double gainLinearLocal = this.Gain_Linear;
+            if (gainReductionLinear < gainLinearLocal)
             {
-                if (this.PeakHoldAttackEnabled)
-                    this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+                if (peakHoldAttackEnabled)
+                    gainLinearLocal = attackCoeff * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
             }
             else
             {
-                if (this.PeakHoldReleaseEnabled)
-                    this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+                if (peakHoldReleaseEnabled)
+                    gainLinearLocal = releaseCoeff * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
             }
 
-            this.CompressionApplied = this.Gain_Linear;
+            this.CompressionApplied = gainLinearLocal;
 
-            if (this.Gain_Linear < 1)
-                //Compression every sample by the amount
-                //Has clipping prevention
-                for (int i = 0; i < input.Length; i++)
-                    input[i] = Math.Min(1 - double.Epsilon, input[i] * this.Gain_Linear);
+            if (gainLinearLocal < 1.0)
+            {
+                double limit = 1.0 - double.Epsilon;
+                for (int i = 0; i < len; i++)
+                {
+                    double v = input[i] * gainLinearLocal;
+                    input[i] = v < limit ? v : limit;
+                }
+            }
+
+            this.Gain_Linear = gainLinearLocal;
         }
+
+        this.IsBrickwall = isBrickwall;
+        this.PeakValue = peakValueLocal;
         return input;
     }
 

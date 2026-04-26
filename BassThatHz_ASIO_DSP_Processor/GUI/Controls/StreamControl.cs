@@ -6,6 +6,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -50,7 +51,7 @@ public partial class StreamControl : UserControl
     }
 
     #region Object Refs
-    protected REW_API REW_API = new REW_API();
+    protected readonly REW_API REW_API = new REW_API();
     #endregion
 
     #endregion
@@ -94,9 +95,12 @@ public partial class StreamControl : UserControl
     {
         try
         {
-            foreach (var item in this.FilterControls)
-                if (item != null && item.Get_chkEnabled.Enabled)
+            for (int i = 0; i < this.FilterControls.Count; i++)
+            {
+                var item = this.FilterControls[i];
+                if (item.Get_chkEnabled.Enabled)
                     item.Get_chkEnabled.Checked = true;
+            }
         }
         catch (Exception ex)
         {
@@ -109,9 +113,12 @@ public partial class StreamControl : UserControl
     {
         try
         {
-            foreach (var item in this.FilterControls)
-                if (item != null && item.Get_chkEnabled.Enabled)
+            for (int i = 0; i < this.FilterControls.Count; i++)
+            {
+                var item = this.FilterControls[i];
+                if (item.Get_chkEnabled.Enabled)
                     item.Get_chkEnabled.Checked = false;
+            }
         }
         catch (Exception ex)
         {
@@ -124,8 +131,11 @@ public partial class StreamControl : UserControl
     {
         try
         {
-            foreach (var item in this.FilterControls)
-                item?.CurrentFilterControl?.ApplySettings();
+            for (int i = 0; i < this.FilterControls.Count; i++)
+            {
+                var item = this.FilterControls[i];
+                item.CurrentFilterControl?.ApplySettings();
+            }
         }
         catch (Exception ex)
         {
@@ -180,7 +190,7 @@ public partial class StreamControl : UserControl
         inputFilterControl.BackColor = SystemColors.Control;
         this.FilterControls.Add(inputFilterControl);
         this.panel1.Controls.Add(inputFilterControl);
-        this.RefreshFilterCountLabel();
+        // Redraw and refresh once (RefreshFilterCountLabel called inside RedrawPanelItems)
         this.RedrawPanelItems();
 
         inputFilterControl.FilterDiscarded += (s1, e1) =>
@@ -195,8 +205,6 @@ public partial class StreamControl : UserControl
         {
             try
             {
-                var CurrentVerticalScrollValue = this.panel1.VerticalScroll.Value;
-
                 this.FilterDeleted?.Invoke(this, inputFilterControl);
                 this.panel1.Controls.Remove(inputFilterControl);
                 _ = this.FilterControls.Remove(inputFilterControl);
@@ -269,19 +277,19 @@ public partial class StreamControl : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void RedrawPanelItems()
     {
-        int i = 0;
-        foreach (var item in this.FilterControls)
+        var hScroll = -this.panel1.HorizontalScroll.Value;
+        var vBase = -this.panel1.VerticalScroll.Value + 3;
+        for (int i = 0; i < this.FilterControls.Count; i++)
         {
-            item.Location = new Point(-this.panel1.HorizontalScroll.Value,
-                                      -this.panel1.VerticalScroll.Value + i * item.Height + 3);
-            i++;
+            var item = this.FilterControls[i];
+            item.Location = new Point(hScroll, vBase + i * item.Height);
         }
         this.RefreshFilterCountLabel();
     }
 
     protected void RefreshFilterCountLabel()
     {
-        this.lblFilterCount.Text = this.FilterControls.Count.ToString();
+        this.lblFilterCount.Text = this.FilterControls.Count.ToString(CultureInfo.InvariantCulture);
     }
     #endregion
 
@@ -296,48 +304,47 @@ public partial class StreamControl : UserControl
 
             #region Compose REW Filters and TargetSettings
             int i = 0;
-            foreach (var item in this.FilterControls)
+            for (int idx = 0; idx < this.FilterControls.Count; idx++)
             {
-                if (item != null)
+                var item = this.FilterControls[idx];
+                if (item.CurrentFilterControl is BiQuadFilterControl bq)
                 {
-                    if (item.CurrentFilterControl is BiQuadFilterControl BiQuadFilterControl && BiQuadFilterControl != null)
+                    i++;
+                    double.TryParse(bq.Get_txtG.Text, out var gain);
+                    double.TryParse(bq.Get_txtF.Text, out var freq);
+                    double.TryParse(bq.Get_txtQ.Text, out var q);
+
+                    var Temp_REW_Filter = new REW_API.REW_Filter()
                     {
-                        i++;
-                        var Temp_REW_Filter = new REW_API.REW_Filter()
-                        {
-                            gaindB = double.Parse(BiQuadFilterControl.Get_txtG.Text),
-                            frequency = double.Parse(BiQuadFilterControl.Get_txtF.Text),
-                            enabled = item.Get_chkEnabled.Checked,
-                            isAuto = false,
-                            type = this.REW_API.FilterTypeToREW(BiQuadFilterControl.GetFilter.FilterType),
-                            index = i,
-                            q = double.Parse(BiQuadFilterControl.Get_txtQ.Text)
-                        };
+                        gaindB = gain,
+                        frequency = freq,
+                        enabled = item.Get_chkEnabled.Checked,
+                        isAuto = false,
+                        type = this.REW_API.FilterTypeToREW(bq.GetFilter.FilterType),
+                        index = i,
+                        q = q
+                    };
 
-                        if (
-                            BiQuadFilterControl.GetFilter.FilterType is FilterTypes.All_Pass
-                            ||
-                            BiQuadFilterControl.GetFilter.FilterType is FilterTypes.Adv_High_Pass
-                            ||
-                            BiQuadFilterControl.GetFilter.FilterType is FilterTypes.Adv_Low_Pass
-                            ||
-                            BiQuadFilterControl.GetFilter.FilterType is FilterTypes.Notch
-                           )
-                        {
-                            Temp_REW_Filter.gaindB = null;
-                        }
-
-                        REW_Filters.Add(Temp_REW_Filter);
-                    }
-                    else if (item.CurrentFilterControl is Basic_HPF_LPFControl Basic_HPF_LPFControl && Basic_HPF_LPFControl != null)
+                    if (bq.GetFilter.FilterType is FilterTypes.All_Pass
+                        || bq.GetFilter.FilterType is FilterTypes.Adv_High_Pass
+                        || bq.GetFilter.FilterType is FilterTypes.Adv_Low_Pass
+                        || bq.GetFilter.FilterType is FilterTypes.Notch)
                     {
-                        REW_TargetSettings.highPassCutoffHz = int.Parse(Basic_HPF_LPFControl.Get_txtHPFFreq.Text);
-                        REW_TargetSettings.lowPassCutoffHz = int.Parse(Basic_HPF_LPFControl.Get_txtLPFFreq.Text);
-
-                        REW_TargetSettings.lowPassCrossoverType = this.REW_API.FilterOrderToREW(Basic_HPF_LPFControl.Get_cboLPF.SelectedItem as Basic_HPF_LPF.FilterOrder?);
-                        REW_TargetSettings.highPassCrossoverType = this.REW_API.FilterOrderToREW(Basic_HPF_LPFControl.Get_cboHPF.SelectedItem as Basic_HPF_LPF.FilterOrder?);
-                        REW_TargetSettings.shape = item.Get_chkEnabled.Checked ? "Driver" : "None";
+                        Temp_REW_Filter.gaindB = null;
                     }
+
+                    REW_Filters.Add(Temp_REW_Filter);
+                }
+                else if (item.CurrentFilterControl is Basic_HPF_LPFControl xo)
+                {
+                    if (int.TryParse(xo.Get_txtHPFFreq.Text, out var hpf))
+                        REW_TargetSettings.highPassCutoffHz = hpf;
+                    if (int.TryParse(xo.Get_txtLPFFreq.Text, out var lpf))
+                        REW_TargetSettings.lowPassCutoffHz = lpf;
+
+                    REW_TargetSettings.lowPassCrossoverType = this.REW_API.FilterOrderToREW(xo.Get_cboLPF.SelectedItem as Basic_HPF_LPF.FilterOrder?);
+                    REW_TargetSettings.highPassCrossoverType = this.REW_API.FilterOrderToREW(xo.Get_cboHPF.SelectedItem as Basic_HPF_LPF.FilterOrder?);
+                    REW_TargetSettings.shape = item.Get_chkEnabled.Checked ? "Driver" : "None";
                 }
             }
             #endregion
@@ -373,9 +380,14 @@ public partial class StreamControl : UserControl
         {
             //Create the Fetched Filters if any
             if (REW_Filters != null && REW_Filters.Count > 0)
-                foreach (var REW_Filter in REW_Filters)
-                    if (REW_Filter != null && REW_Filter.type != string.Empty && REW_Filter.type != "None")
+            {
+                for (int i = 0; i < REW_Filters.Count; i++)
+                {
+                    var REW_Filter = REW_Filters[i];
+                    if (REW_Filter != null && !string.IsNullOrEmpty(REW_Filter.type) && REW_Filter.type != "None")
                         this.Create_BiquadFilter_FromREW(REW_Filter);
+                }
+            }
 
             //Create the Fetched Crossovers if any
             if (REW_TargetSettings != null)

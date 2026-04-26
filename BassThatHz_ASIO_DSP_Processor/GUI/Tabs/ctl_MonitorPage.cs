@@ -32,8 +32,13 @@ using System.Windows.Forms;
 public partial class ctl_MonitorPage : UserControl
 {
     #region Variables
-    public Thread? Form_Monitoring_Thread;
-    public Thread? Form_Align_Thread;
+    // Locks to protect thread/form lifecycle access from multiple threads
+    private readonly object monitorLock = new();
+    private readonly object alignLock = new();
+
+    // Keep thread references volatile to ensure latest value is observed across threads
+    private volatile Thread? Form_Monitoring_Thread;
+    private volatile Thread? Form_Align_Thread;
     #endregion
 
     #region Constructor
@@ -57,33 +62,58 @@ public partial class ctl_MonitorPage : UserControl
 
     protected void btn_Monitor_Click(object? sender, EventArgs e)
     {
-        if (this.Form_Monitoring_Thread == null || !this.Form_Monitoring_Thread.IsAlive)
+        lock (monitorLock)
         {
-            Program.Form_Monitoring = new();
+            if (this.Form_Monitoring_Thread == null || !this.Form_Monitoring_Thread.IsAlive)
+            {
+                Program.Form_Monitoring = new();
 
-            foreach (var item in Program.DSP_Info.Streams)
-                Program.Form_Monitoring.CreateStreamVolumeLevelControl(item);
+                // populate controls for the monitoring form
+                foreach (var item in Program.DSP_Info.Streams)
+                    Program.Form_Monitoring.CreateStreamVolumeLevelControl(item);
 
-            this.Form_Monitoring_Thread = new(() =>
-                                            Application.Run(Program.Form_Monitoring)
-                                          );
+                // ensure we clear references when the form closes to avoid leaks
+                Program.Form_Monitoring.FormClosed += (s, ev) =>
+                {
+                    lock (monitorLock)
+                    {
+                        this.Form_Monitoring_Thread = null;
+                    }
 
-            _ = this.Form_Monitoring_Thread.TrySetApartmentState(ApartmentState.STA);
-            this.Form_Monitoring_Thread.Start();
+                    try { Program.Form_Monitoring = null; } catch { }
+                };
+
+                this.Form_Monitoring_Thread = new(() => Application.Run(Program.Form_Monitoring));
+                this.Form_Monitoring_Thread.IsBackground = true;
+                _ = this.Form_Monitoring_Thread.TrySetApartmentState(ApartmentState.STA);
+                this.Form_Monitoring_Thread.Start();
+            }
         }
     }
 
     protected void btn_Align_Click(object sender, EventArgs e)
     {
-        if (this.Form_Align_Thread == null || !this.Form_Align_Thread.IsAlive)
+        lock (alignLock)
         {
-            Program.Form_Align = new();
-            this.Form_Align_Thread = new(() =>
-                                            Application.Run(Program.Form_Align)
-                                          );
+            if (this.Form_Align_Thread == null || !this.Form_Align_Thread.IsAlive)
+            {
+                Program.Form_Align = new();
 
-            _ = this.Form_Align_Thread.TrySetApartmentState(ApartmentState.STA);
-            this.Form_Align_Thread.Start();
+                Program.Form_Align.FormClosed += (s, ev) =>
+                {
+                    lock (alignLock)
+                    {
+                        this.Form_Align_Thread = null;
+                    }
+
+                    try { Program.Form_Align = null; } catch { }
+                };
+
+                this.Form_Align_Thread = new(() => Application.Run(Program.Form_Align));
+                this.Form_Align_Thread.IsBackground = true;
+                _ = this.Form_Align_Thread.TrySetApartmentState(ApartmentState.STA);
+                this.Form_Align_Thread.Start();
+            }
         }
     }   
 

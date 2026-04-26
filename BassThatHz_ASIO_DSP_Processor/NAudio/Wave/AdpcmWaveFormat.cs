@@ -11,11 +11,11 @@ namespace NAudio.Wave
     [StructLayout(LayoutKind.Sequential, Pack=2)]
     public class AdpcmWaveFormat : WaveFormat
     {
-        short samplesPerBlock;
-        short numCoeff;
+        readonly short samplesPerBlock;
+        readonly short numCoeff;
         // 7 pairs of coefficients
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 14)]
-        short[] coefficients;
+        readonly short[] coefficients;
 
         /// <summary>
         /// Empty constructor needed for marshalling from a pointer
@@ -44,18 +44,19 @@ namespace NAudio.Wave
         /// </summary>
         /// <param name="sampleRate">Sample Rate</param>
         /// <param name="channels">Channels</param>
-        public AdpcmWaveFormat(int sampleRate, int channels) :
-            base(sampleRate,0,channels)
+        public AdpcmWaveFormat(int sampleRate, int channels) : base(sampleRate,0,channels)
         {
-            this.waveFormatTag = WaveFormatEncoding.Adpcm;
-            
+            waveFormatTag = WaveFormatEncoding.Adpcm;
+
             // TODO: validate sampleRate, bitsPerSample
-            this.extraSize = 32;
-            switch(this.sampleRate)
+            extraSize = 32;
+
+            // determine block align based on requested sample rate
+            switch (sampleRate)
             {
-                case 8000: 
+                case 8000:
                 case 11025:
-                    blockAlign = 256; 
+                    blockAlign = 256;
                     break;
                 case 22050:
                     blockAlign = 512;
@@ -66,17 +67,20 @@ namespace NAudio.Wave
                     break;
             }
 
-            this.bitsPerSample = 4;
-            this.samplesPerBlock = (short) ((blockAlign - 7 * channels) * 8 / (bitsPerSample * channels) + 2);
-            this.averageBytesPerSecond =
-                this.SampleRate * blockAlign / samplesPerBlock;
+            bitsPerSample = 4;
 
-            // samplesPerBlock = blockAlign - (7 * channels)) * (2 / channels) + 2;
+            samplesPerBlock = (short)((blockAlign - 7 * channels) * 8 / (bitsPerSample * channels) + 2);
 
+            // compute average bytes per second using the original sampleRate parameter
+            averageBytesPerSecond = sampleRate * blockAlign / samplesPerBlock;
 
+            // number of coefficient pairs
             numCoeff = 7;
-            coefficients = new short[14] {
-                256,0,512,-256,0,0,192,64,240,0,460,-208,392,-232
+
+            // initialize coefficients array once per instance (readonly field)
+            coefficients = new short[14]
+            {
+                256, 0, 512, -256, 0, 0, 192, 64, 240, 0, 460, -208, 392, -232
             };
         }
 
@@ -89,9 +93,10 @@ namespace NAudio.Wave
             base.Serialize(writer);
             writer.Write(samplesPerBlock);
             writer.Write(numCoeff);
-            foreach (short coefficient in coefficients)
+            // use indexed loop for arrays (slightly faster than foreach)
+            for (int i = 0; i < coefficients.Length; i++)
             {
-                writer.Write(coefficient);
+                writer.Write(coefficients[i]);
             }
         }
 
@@ -100,8 +105,7 @@ namespace NAudio.Wave
         /// </summary>
         public override string ToString()
         {
-            return String.Format("Microsoft ADPCM {0} Hz {1} channels {2} bits per sample {3} samples per block",
-                this.SampleRate, this.channels, this.bitsPerSample, this.samplesPerBlock);
+            return $"Microsoft ADPCM {SampleRate} Hz {channels} channels {bitsPerSample} bits per sample {samplesPerBlock} samples per block";
         }
     }
 }

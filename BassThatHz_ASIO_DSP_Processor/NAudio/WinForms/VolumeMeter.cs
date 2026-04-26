@@ -12,7 +12,7 @@ namespace NAudio.Gui
     /// </summary>
     public partial class VolumeMeter : Control
     {
-        Brush? foregroundBrush;
+        private System.Drawing.SolidBrush? foregroundBrush;
 
         /// <summary>
         /// Basic volume meter
@@ -26,7 +26,14 @@ namespace NAudio.Gui
             Amplitude = 0;
             Orientation = Orientation.Vertical;
             InitializeComponent();
+            this.Disposed += VolumeMeter_Disposed;
             OnForeColorChanged(EventArgs.Empty);
+        }
+
+        private void VolumeMeter_Disposed(object? sender, EventArgs e)
+        {
+            foregroundBrush?.Dispose();
+            foregroundBrush = null;
         }
 
         /// <summary>
@@ -34,10 +41,16 @@ namespace NAudio.Gui
         /// </summary>
         protected override void OnForeColorChanged(EventArgs e)
         {
-            foregroundBrush = new SolidBrush(ForeColor);
+            // Create the new brush first then dispose the old one to avoid leaving the control
+            // without a brush if construction throws. Reuse SolidBrush type so we can dispose it.
+            var newBrush = new System.Drawing.SolidBrush(ForeColor);
+            var oldBrush = foregroundBrush;
+            foregroundBrush = newBrush;
+            oldBrush?.Dispose();
 
             base.OnForeColorChanged(e);
         }
+
 
         protected double amplitude;
 
@@ -78,46 +91,58 @@ namespace NAudio.Gui
         /// </summary>
         protected override void OnPaint(PaintEventArgs pe)
         {
-            //base.OnPaint(pe);
+            // draw border
+            var g = pe.Graphics;
+            int w = this.Width;
+            int h = this.Height;
+            g.DrawRectangle(Pens.Black, 0, 0, w - 1, h - 1);
 
-            pe.Graphics.DrawRectangle(Pens.Black, 0, 0, this.Width - 1, this.Height - 1);
-
-            double db = 20 * Math.Log10(Amplitude);
-            if (db < MinDb)
-                db = MinDb;
-            if (db > MaxDb)
-                db = MaxDb;
-            double percent = (db - MinDb) / (MaxDb - MinDb);
-
-            int width = this.Width - 2;
-            int height = this.Height - 2;
-            if (Orientation == Orientation.Horizontal)
+            // compute dB robustly (avoid Log10(0) -> -Infinity)
+            double db;
+            double amp = this.Amplitude;
+            if (amp <= 0.0 || double.IsNaN(amp) || double.IsInfinity(amp))
             {
-                width = (int)(width * percent);
-
-                if (foregroundBrush != null)
-                    pe.Graphics.FillRectangle(foregroundBrush, 1, 1, width, height);
+                db = MinDb;
             }
             else
             {
-                height = (int)(height * percent);
-                if (foregroundBrush != null)
-                    pe.Graphics.FillRectangle(foregroundBrush, 1, this.Height - 1 - height, width, height);
+                db = 20.0 * Math.Log10(amp);
             }
 
-            /*
-            StringFormat format = new StringFormat();
-            format.LineAlignment = StringAlignment.Center;
-            format.Alignment = StringAlignment.Center;
-            string dbValue = String.Format("{0:F2} dB", db);
-            if(Double.IsNegativeInfinity(db))
+            if (db < MinDb) db = MinDb;
+            if (db > MaxDb) db = MaxDb;
+
+            double range = MaxDb - MinDb;
+            double percent = range > 0.0 ? (db - MinDb) / range : 0.0;
+            if (double.IsNaN(percent) || percent <= 0.0)
             {
-                dbValue = "-\x221e db"; // -8 dB
+                percent = 0.0;
+            }
+            else if (percent > 1.0)
+            {
+                percent = 1.0;
             }
 
-            pe.Graphics.DrawString(dbValue, this.Font,
-                Brushes.Black, this.ClientRectangle, format);*/
+            int innerWidth = w - 2;
+            int innerHeight = h - 2;
 
+            var brush = foregroundBrush;
+            if (Orientation == Orientation.Horizontal)
+            {
+                int fillWidth = (int)(innerWidth * percent);
+                if (fillWidth > 0 && brush != null)
+                {
+                    g.FillRectangle(brush, 1, 1, fillWidth, innerHeight);
+                }
+            }
+            else
+            {
+                int fillHeight = (int)(innerHeight * percent);
+                if (fillHeight > 0 && brush != null)
+                {
+                    g.FillRectangle(brush, 1, h - 1 - fillHeight, innerWidth, fillHeight);
+                }
+            }
         }
     }
 }

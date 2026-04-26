@@ -7,6 +7,8 @@ using System;
 using System.ComponentModel;
 using System.Data;
 using System.Linq;
+using System.Text;
+using System.Globalization;
 using System.Windows.Forms;
 #endregion
 
@@ -53,12 +55,14 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
     {
         InitializeComponent();
 
-        this.cboHPF.Items.Clear();
-        this.cboLPF.Items.Clear();
-        var EnumArray = Enum.GetValues(typeof(Basic_HPF_LPF.FilterOrder)).Cast<object>().ToArray();
-        this.cboHPF.Items.AddRange(EnumArray);
+        // Create separate data sources for each ComboBox so their selection/currency
+        // managers are independent. If both controls share the same data source
+        // changing one would change the other.
+        var orders = Enum.GetValues(typeof(Basic_HPF_LPF.FilterOrder)).Cast<Basic_HPF_LPF.FilterOrder>().ToArray();
+        this.cboHPF.DataSource = orders;
         this.cboHPF.SelectedIndex = 0;
-        this.cboLPF.Items.AddRange(EnumArray);
+        // Use a separate copy of the array for the second ComboBox
+        this.cboLPF.DataSource = (Basic_HPF_LPF.FilterOrder[])orders.Clone();
         this.cboLPF.SelectedIndex = 0;
 
         this.txtHPFFreq.MaxLength = 9;
@@ -90,25 +94,32 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
     #region InputValidation
     protected void TxtHPFFreq_KeyPress(object? sender, KeyPressEventArgs e)
     {
+        // Validate input characters only. Avoid changing Text here to prevent caret jumps and extra allocations.
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtHPFFreq.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtHPFFreq.Text);
     }
 
     protected void TxtLPFFreq_KeyPress(object? sender, KeyPressEventArgs e)
     {
+        // Validate input characters only. Avoid changing Text here to prevent caret jumps and extra allocations.
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtLPFFreq.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtLPFFreq.Text);
     }
 
     protected void TxtLPFFreq_TextChanged(object? sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(this.txtLPFFreq.Text))
-            this.txtLPFFreq.Text = "1";
+        // Limit textual length/size first
+        this.txtLPFFreq.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtLPFFreq.Text);
 
-        if (double.TryParse(this.txtLPFFreq.Text, out double result))
+        if (string.IsNullOrWhiteSpace(this.txtLPFFreq.Text))
         {
-            if (result > Program.DSP_Info.InSampleRate * 0.5)
-                this.txtLPFFreq.Text = (Program.DSP_Info.InSampleRate * 0.5).ToString();
+            this.txtLPFFreq.Text = "1";
+            return;
+        }
+
+        if (double.TryParse(this.txtLPFFreq.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double result))
+        {
+            var nyquist = Program.DSP_Info.InSampleRate * 0.5;
+            if (result > nyquist)
+                this.txtLPFFreq.Text = nyquist.ToString(CultureInfo.InvariantCulture);
             else if (result == 0 || result <= double.Epsilon)
                 this.txtLPFFreq.Text = "0.01";
         }
@@ -116,14 +127,21 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
 
     protected void TxtHPFFreq_TextChanged(object? sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(this.txtHPFFreq.Text))
-            this.txtHPFFreq.Text = "1";
+        // Limit textual length/size first
+        this.txtHPFFreq.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtHPFFreq.Text);
 
-        if (double.TryParse(this.txtHPFFreq.Text, out double result))
+        if (string.IsNullOrWhiteSpace(this.txtHPFFreq.Text))
         {
-            if (result > Program.DSP_Info.InSampleRate * 0.5)
-                this.txtHPFFreq.Text = (Program.DSP_Info.InSampleRate * 0.5).ToString();
-            else if (result == 0|| result <= double.Epsilon)
+            this.txtHPFFreq.Text = "1";
+            return;
+        }
+
+        if (double.TryParse(this.txtHPFFreq.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double result))
+        {
+            var nyquist = Program.DSP_Info.InSampleRate * 0.5;
+            if (result > nyquist)
+                this.txtHPFFreq.Text = nyquist.ToString(CultureInfo.InvariantCulture);
+            else if (result == 0 || result <= double.Epsilon)
                 this.txtHPFFreq.Text = "0.01";
         }
     }
@@ -133,16 +151,27 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
     {
         try
         {
-            this.Filter.HPFFreq = double.Parse(this.txtHPFFreq.Text);
-            if (this.cboHPF.SelectedItem != null)
-                this.Filter.HPFFilter = (Basic_HPF_LPF.FilterOrder)this.cboHPF.SelectedItem;
+            if (!double.TryParse(this.txtHPFFreq.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double hpf))
+            {
+                // Invalid input - bail out gracefully
+                return;
+            }
 
-            this.Filter.LPFFreq = double.Parse(this.txtLPFFreq.Text);
+            if (!double.TryParse(this.txtLPFFreq.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double lpf))
+            {
+                // Invalid input - bail out gracefully
+                return;
+            }
+
+            this.Filter.HPFFreq = hpf;
+            if (this.cboHPF.SelectedItem != null)
+                this.Filter.HPFFilter = (Basic_HPF_LPF.FilterOrder)this.cboHPF.SelectedItem!;
+
+            this.Filter.LPFFreq = lpf;
             if (this.cboLPF.SelectedItem != null)
-                this.Filter.LPFFilter = (Basic_HPF_LPF.FilterOrder)this.cboLPF.SelectedItem;
+                this.Filter.LPFFilter = (Basic_HPF_LPF.FilterOrder)this.cboLPF.SelectedItem!;
 
             this.Filter.ApplySettings();
-
             this.ShowBiQuads();
         }
         catch (Exception ex)
@@ -161,29 +190,38 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
 
     protected void ShowBiQuads()
     {
-        this.txtBiQuads.Text = string.Empty;
+        var sb = new StringBuilder(1024);
         for (int i = 0; i < 8; i++)
         {
-            var BiQuad = this.Filter.BiQuads[i];
+            var biquad = this.Filter.BiQuads[i];
+            double normalized = (this.cboShowNormalized.Checked && biquad != null) ? biquad.aa0 : 1.0;
 
-            double Normalized = this.cboShowNormalized.Checked && BiQuad != null? BiQuad.aa0 : 1;
-
-            var a0 = "a0=" + (BiQuad?.aa0 / Normalized).ToString() + ",\r\n";
-            var a1 = "a1=" + (BiQuad?.aa1 / Normalized).ToString() + ",\r\n";
-            var a2 = "a2=" + (BiQuad?.aa2 / Normalized).ToString() + ",\r\n";
-            var b0 = "b0=" + (BiQuad?.b0 / Normalized).ToString() + ",\r\n";
-            var b1 = "b1=" + (BiQuad?.b1 / Normalized).ToString() + ",\r\n";
-            var b2 = "b2=" + (BiQuad?.b2 / Normalized).ToString() + ",\r\n";
+            double a0v = biquad != null ? biquad.aa0 / normalized : 0.0;
+            double a1v = biquad != null ? biquad.aa1 / normalized : 0.0;
+            double a2v = biquad != null ? biquad.aa2 / normalized : 0.0;
+            double b0v = biquad != null ? biquad.b0 / normalized : 0.0;
+            double b1v = biquad != null ? biquad.b1 / normalized : 0.0;
+            double b2v = biquad != null ? biquad.b2 / normalized : 0.0;
 
             double Q = i < 4 ? this.Filter.Q_Array_HPF[i] : this.Filter.Q_Array_LPF[i - 4];
-            this.txtBiQuads.Text += "biquad"+ (i + 1) + " "  + BiQuad?.SampleRate + " q" + Q + ",\r\n";
-            this.txtBiQuads.Text += a0;
-            this.txtBiQuads.Text += a1;
-            this.txtBiQuads.Text += a2;
-            this.txtBiQuads.Text += b0;
-            this.txtBiQuads.Text += b1;
-            this.txtBiQuads.Text += b2;
+
+            sb.Append("biquad");
+            sb.Append(i + 1);
+            sb.Append(' ');
+            sb.Append(biquad?.SampleRate.ToString(CultureInfo.InvariantCulture) ?? "");
+            sb.Append(" q");
+            sb.Append(Q.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\r\n");
+
+            sb.Append("a0="); sb.Append(a0v.ToString(CultureInfo.InvariantCulture)); sb.Append(",\r\n");
+            sb.Append("a1="); sb.Append(a1v.ToString(CultureInfo.InvariantCulture)); sb.Append(",\r\n");
+            sb.Append("a2="); sb.Append(a2v.ToString(CultureInfo.InvariantCulture)); sb.Append(",\r\n");
+            sb.Append("b0="); sb.Append(b0v.ToString(CultureInfo.InvariantCulture)); sb.Append(",\r\n");
+            sb.Append("b1="); sb.Append(b1v.ToString(CultureInfo.InvariantCulture)); sb.Append(",\r\n");
+            sb.Append("b2="); sb.Append(b2v.ToString(CultureInfo.InvariantCulture)); sb.Append(",\r\n");
         }
+
+        this.txtBiQuads.Text = sb.ToString();
     }
 
     #endregion
@@ -196,7 +234,6 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
     public void ApplySettings()
     {
         this.btnApply_Click(this, EventArgs.Empty);
-        this.Filter.ApplySettings();
     }
 
     public void SetDeepClonedFilter(IFilter input)

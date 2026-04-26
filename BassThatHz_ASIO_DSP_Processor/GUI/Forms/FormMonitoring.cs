@@ -37,8 +37,9 @@ using System.Windows.Forms;
 public partial class FormMonitoring : Form
 {
     #region Variables
-    protected List<BTH_VolumeLevelControl> VolControlList = [];
-    protected bool IsClosing = false;
+    // Use a readonly list to avoid accidental reassignments and slightly reduce overhead.
+    private readonly List<BTH_VolumeLevelControl> VolControlList = new();
+    private bool IsClosing = false;
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -119,16 +120,18 @@ public partial class FormMonitoring : Form
     {
         try
         {
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
-            this.timer_Refresh.Enabled = false;
 
-            //Refresh all of the Volume Level controls
+            // Stop timer to avoid reentrancy while updating controls.
+            this.timer_Refresh.Stop();
+
+            // Refresh all of the Volume Level controls
             this.RefreshVolumeLevels();
 
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
-            this.timer_Refresh.Enabled = true;
+            this.timer_Refresh.Start();
         }
         catch (Exception ex)
         {
@@ -145,7 +148,9 @@ public partial class FormMonitoring : Form
             if (string.IsNullOrEmpty(this.msb_RefreshInterval.Text) || this.msb_RefreshInterval.Text == "0")
                 this.msb_RefreshInterval.Text = "1";
 
-            this.timer_Refresh.Interval = Math.Max(1, int.Parse(this.msb_RefreshInterval.Text));
+            // Use TryParse to avoid exceptions from transient invalid input and clamp to reasonable range.
+            if (int.TryParse(this.msb_RefreshInterval.Text, out var val))
+                this.timer_Refresh.Interval = Math.Max(1, val);
         }
         catch (Exception ex)
         {
@@ -167,15 +172,21 @@ public partial class FormMonitoring : Form
     {
         try
         {
-            foreach (var item in this.VolControlList)
-            {
-                if (this.Disposing || this.IsDisposed || this.IsClosing)
-                    return;
-                item.Reset_ClipIndicator();
-            }
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
-            this.timer_Refresh.Enabled = true;
+
+            // Use indexed loop to avoid any enumerator overhead in case the collection type changes.
+            var list = this.VolControlList;
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (ShouldExit())
+                    return;
+                list[i].Reset_ClipIndicator();
+            }
+
+            if (ShouldExit())
+                return;
+            this.timer_Refresh.Start();
         }
         catch (Exception ex)
         {
@@ -189,12 +200,12 @@ public partial class FormMonitoring : Form
     {
         try
         {
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
             this.RelocateControls();
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
-            this.timer_Refresh.Enabled = true;
+            this.timer_Refresh.Start();
         }
         catch (Exception ex)
         {
@@ -212,13 +223,19 @@ public partial class FormMonitoring : Form
         {
             try
             {
-                if (this.Disposing || this.IsDisposed || this.IsClosing)
+                if (ShouldExit())
                     return;
+
                 var VolControl = new BTH_VolumeLevelControl();
+
+                // Compute new index without scanning the list (avoid IndexOf which is O(n)).
+                var newIndex = this.VolControlList.Count;
                 this.VolControlList.Add(VolControl);
-                VolControl.Get_btn_View.Text = "[" + (this.VolControlList.IndexOf(VolControl) + 1).ToString() + "] View";
+                VolControl.Get_btn_View.Text = "[" + (newIndex + 1).ToString() + "] View";
                 VolControl.Set_StreamInfo(stream);
-                this.PlaceControl(this.VolControlList.Count - 1, VolControl);
+
+                // Place control based on the index we just computed.
+                this.PlaceControl(newIndex, VolControl);
                 this.pnl_Main.Controls.Add(VolControl);
             }
             catch (Exception ex)
@@ -234,16 +251,28 @@ public partial class FormMonitoring : Form
         {
             try
             {
-                if (this.Disposing || this.IsDisposed || this.IsClosing)
+                if (ShouldExit())
                     return;
 
-                var FoundControl = this.VolControlList.FirstOrDefault(item => item.Stream == stream);
-                if (FoundControl != null)
+                // Find index using a simple loop to avoid allocating a LINQ iterator.
+                var list = this.VolControlList;
+                var foundIndex = -1;
+                for (var i = 0; i < list.Count; i++)
                 {
-                    if (this.Disposing || this.IsDisposed || this.IsClosing)
+                    if (list[i].Stream == stream)
+                    {
+                        foundIndex = i;
+                        break;
+                    }
+                }
+
+                if (foundIndex >= 0)
+                {
+                    if (ShouldExit())
                         return;
+                    var FoundControl = list[foundIndex];
                     this.pnl_Main.Controls.Remove(FoundControl);
-                    _ = this.VolControlList.Remove(FoundControl);
+                    list.RemoveAt(foundIndex);
                 }
             }
             catch (Exception ex)
@@ -259,14 +288,18 @@ public partial class FormMonitoring : Form
         {
             try
             {
-                foreach (var item in this.VolControlList)
+                var list = this.VolControlList;
+                for (var i = 0; i < list.Count; i++)
+                {
+                    var item = list[i];
                     if (item.Stream == stream)
                     {
-                        if (this.Disposing || this.IsDisposed || this.IsClosing)
+                        if (ShouldExit())
                             return;
                         item.Set_StreamInfo(stream);
                         break;
                     }
+                }
             }
             catch (Exception ex)
             {
@@ -278,33 +311,46 @@ public partial class FormMonitoring : Form
     #endregion
 
     #region Protected Functions
+    // Helper to centralize shutdown checks to avoid repeated property lookups.
+    private bool ShouldExit()
+    {
+        return this.Disposing || this.IsDisposed || this.IsClosing;
+    }
     protected void Set_Pause_States()
     {
-        this.timer_Refresh.Enabled = !this.Pause_CHK.Checked;
-        for (var i = 0; i < this.VolControlList.Count; i++)
+        var enabled = !this.Pause_CHK.Checked;
+        if (enabled)
+            this.timer_Refresh.Start();
+        else
+            this.timer_Refresh.Stop();
+
+        var list = this.VolControlList;
+        for (var i = 0; i < list.Count; i++)
         {
             if (this.IsDisposed)
                 return;
-            this.VolControlList[i].Get_timer_Refresh.Enabled = !this.Pause_CHK.Checked;
+            list[i].Get_timer_Refresh.Enabled = enabled;
         }
     }
     protected void RelocateControls()
     {
-        for (var i = 0; i < this.VolControlList.Count; i++)
+        var list = this.VolControlList;
+        for (var i = 0; i < list.Count; i++)
         {
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
-            this.PlaceControl(i, this.VolControlList[i]);
+            this.PlaceControl(i, list[i]);
         }
     }
 
     protected void RefreshVolumeLevels()
     {
-        for (var i = 0; i < this.VolControlList.Count; i++)
+        var list = this.VolControlList;
+        for (var i = 0; i < list.Count; i++)
         {
-            if (this.Disposing || this.IsDisposed || this.IsClosing)
+            if (ShouldExit())
                 return;
-            this.VolControlList[i].ComputeLevels();
+            list[i].ComputeLevels();
         }
     }
 
@@ -313,8 +359,10 @@ public partial class FormMonitoring : Form
         if (this.Disposing || this.IsDisposed || this.IsClosing)
             return;
 
-        var ElementsPerWidth = (int)Math.Max(1, Math.Floor((double)this.Width / input.Width));
-        var x = input.Width * (controlIndex % ElementsPerWidth);
+        // Protect against zero width on the control to avoid divide-by-zero.
+        var controlW = Math.Max(1, input.Width);
+        var ElementsPerWidth = Math.Max(1, this.Width / controlW);
+        var x = controlW * (controlIndex % ElementsPerWidth);
         var y = controlIndex / ElementsPerWidth * (input.Height + 1);
         input.Location = new Point(-this.pnl_Main.HorizontalScroll.Value + x, -this.pnl_Main.VerticalScroll.Value + y);
     }

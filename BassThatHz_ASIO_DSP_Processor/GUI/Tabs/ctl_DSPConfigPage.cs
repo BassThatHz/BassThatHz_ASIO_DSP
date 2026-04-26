@@ -55,8 +55,11 @@ public partial class ctl_DSPConfigPage : UserControl
     public void LoadConfigRefresh()
     {
         this.ResetTabPagesAndStreamControls();
-        foreach (var DSP_Stream in Program.DSP_Info.Streams)
+
+        var streams = Program.DSP_Info.Streams;
+        for (int s = 0; s < streams.Count; s++)
         {
+            var DSP_Stream = streams[s];
             if (DSP_Stream == null || DSP_Stream.InputSource == null || DSP_Stream.OutputDestination == null)
                 continue;
 
@@ -67,25 +70,42 @@ public partial class ctl_DSPConfigPage : UserControl
             var inputValue = DSP_Stream.InputSource;
             if (inputValue != null)
             {
-                var matchingInputItem = StreamControl.Get_cboInputStream.Items.Cast<object>()
-                    .FirstOrDefault(item => item.Equals(inputValue));
-                StreamControl.Get_cboInputStream.SelectedIndex = matchingInputItem != null
-                    ? StreamControl.Get_cboInputStream.Items.IndexOf(matchingInputItem)
-                    : -1;
+                // Avoid LINQ allocations by searching manually
+                int matchIndex = -1;
+                var items = StreamControl.Get_cboInputStream.Items;
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (object.Equals(items[i], inputValue))
+                    {
+                        matchIndex = i;
+                        break;
+                    }
+                }
+
+                StreamControl.Get_cboInputStream.SelectedIndex = matchIndex;
             }
 
             var outputValue = DSP_Stream.OutputDestination;
             if (outputValue != null)
             {
-                var matchingOutputItem = StreamControl.Get_cboOutputStream.Items.Cast<object>()
-                    .FirstOrDefault(item => item.Equals(outputValue));
-                StreamControl.Get_cboOutputStream.SelectedIndex = matchingOutputItem != null
-                    ? StreamControl.Get_cboOutputStream.Items.IndexOf(matchingOutputItem)
-                    : -1;
+                int matchIndex = -1;
+                var items = StreamControl.Get_cboOutputStream.Items;
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (object.Equals(items[i], outputValue))
+                    {
+                        matchIndex = i;
+                        break;
+                    }
+                }
+
+                StreamControl.Get_cboOutputStream.SelectedIndex = matchIndex;
             }
 
-            foreach (var Filter in DSP_Stream.Filters)
+            var filters = DSP_Stream.Filters;
+            for (int f = 0; f < filters.Count; f++)
             {
+                var Filter = filters[f];
                 if (Filter == null)
                     continue;
 
@@ -101,10 +121,9 @@ public partial class ctl_DSPConfigPage : UserControl
     #region Public Functions
     public void ResetAll_TabPage_Text()
     {
-        int i = -1;
-        foreach (var StreamControl in StreamControls)
+        for (int i = 0; i < this.StreamControls.Count; i++)
         {
-            i++;
+            var StreamControl = this.StreamControls[i];
             if (StreamControl == null)
                 continue;
 
@@ -126,30 +145,42 @@ public partial class ctl_DSPConfigPage : UserControl
             var inputValue = StreamControl.Get_cboInputStream.SelectedItem;
             var outputValue = StreamControl.Get_cboOutputStream.SelectedItem;
 
-            // Clear dropdowns
+            // Clear dropdowns and repopulate
             StreamControl.Get_cboInputStream.Items.Clear();
             StreamControl.Get_cboOutputStream.Items.Clear();
-
-            // Repopulate dropdowns
             CommonFunctions.Set_DropDownTargetLists(StreamControl.Get_cboInputStream, StreamControl.Get_cboOutputStream, false);
 
-            // Restore selected index based on matching item (if still present)
+            // Restore selected index based on matching item (if still present) - avoid LINQ allocations
             if (inputValue != null)
             {
-                var matchingInputItem = StreamControl.Get_cboInputStream.Items.Cast<object>()
-                    .FirstOrDefault(item => item.Equals(inputValue));
-                StreamControl.Get_cboInputStream.SelectedIndex = matchingInputItem != null
-                    ? StreamControl.Get_cboInputStream.Items.IndexOf(matchingInputItem)
-                    : -1;
+                int matchIndex = -1;
+                var items = StreamControl.Get_cboInputStream.Items;
+                for (int j = 0; j < items.Count; j++)
+                {
+                    if (object.Equals(items[j], inputValue))
+                    {
+                        matchIndex = j;
+                        break;
+                    }
+                }
+
+                StreamControl.Get_cboInputStream.SelectedIndex = matchIndex;
             }
 
             if (outputValue != null)
             {
-                var matchingOutputItem = StreamControl.Get_cboOutputStream.Items.Cast<object>()
-                    .FirstOrDefault(item => item.Equals(outputValue));
-                StreamControl.Get_cboOutputStream.SelectedIndex = matchingOutputItem != null
-                    ? StreamControl.Get_cboOutputStream.Items.IndexOf(matchingOutputItem)
-                    : -1;
+                int matchIndex = -1;
+                var items = StreamControl.Get_cboOutputStream.Items;
+                for (int j = 0; j < items.Count; j++)
+                {
+                    if (object.Equals(items[j], outputValue))
+                    {
+                        matchIndex = j;
+                        break;
+                    }
+                }
+
+                StreamControl.Get_cboOutputStream.SelectedIndex = matchIndex;
             }
         }
     }
@@ -190,8 +221,17 @@ public partial class ctl_DSPConfigPage : UserControl
     {
         try
         {
-            var HasAbstractBus = Program.DSP_Info.Streams.Any(
-                    s => s.InputSource.StreamType == StreamType.AbstractBus || s.OutputDestination.StreamType == StreamType.AbstractBus);
+            var HasAbstractBus = false;
+            var _streams_check = Program.DSP_Info.Streams;
+            for (int _i = 0; _i < _streams_check.Count; _i++)
+            {
+                var s = _streams_check[_i];
+                if (s.InputSource.StreamType == StreamType.AbstractBus || s.OutputDestination.StreamType == StreamType.AbstractBus)
+                {
+                    HasAbstractBus = true;
+                    break;
+                }
+            }
             if (HasAbstractBus)
             {
                 var Result = MessageBox.Show("AbstractBus Streams detected. Are you sure this add is safe?",
@@ -388,7 +428,8 @@ public partial class ctl_DSPConfigPage : UserControl
                 if (filterDirection.Filter?.CurrentFilterControl?.GetFilter != null)
                 {
                     var CurrentIndex = dsp_Stream.Filters.FindIndex(x => x == filterDirection.Filter.CurrentFilterControl.GetFilter);
-                    if (CurrentIndex + 1 < dsp_Stream.Filters.Count)
+                    // Ensure the current index is valid before removing/inserting
+                    if (CurrentIndex >= 0 && CurrentIndex + 1 < dsp_Stream.Filters.Count)
                     {
                         dsp_Stream.Filters.RemoveAt(CurrentIndex);
                         dsp_Stream.Filters.Insert(CurrentIndex + 1, filterDirection.Filter.CurrentFilterControl.GetFilter);
@@ -454,9 +495,18 @@ public partial class ctl_DSPConfigPage : UserControl
                     return;
                 }
 
-                var HasAbstractBus = Program.DSP_Info.Streams.Any(
-                    s => s.InputSource.StreamType == StreamType.AbstractBus || s.OutputDestination.StreamType == StreamType.AbstractBus);
-                if (HasAbstractBus)
+                        var HasAbstractBus = false;
+                        var _streams_check = Program.DSP_Info.Streams;
+                        for (int _i = 0; _i < _streams_check.Count; _i++)
+                        {
+                            var s = _streams_check[_i];
+                            if (s.InputSource.StreamType == StreamType.AbstractBus || s.OutputDestination.StreamType == StreamType.AbstractBus)
+                            {
+                                HasAbstractBus = true;
+                                break;
+                            }
+                        }
+                        if (HasAbstractBus)
                 {
                     var Result = MessageBox.Show("AbstractBus Streams detected. Are you sure the move is safe?", 
                                                  "Warning", MessageBoxButtons.YesNo);
@@ -582,24 +632,30 @@ public partial class ctl_DSPConfigPage : UserControl
         switch (dsp_Stream.OutputDestination.StreamType)
         {
             case StreamType.Bus:
-                foreach (var Stream in Program.DSP_Info.Streams)
                 {
-                    if (dsp_Stream != Stream && 
-                        Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == OutputChannelIndex)
+                    var streams = Program.DSP_Info.Streams;
+                    for (int i = 0; i < streams.Count; i++)
                     {
-                        MessageBox.Show("Bus in use. It must be unassigned before the source stream can be deleted.");
-                        return;
+                        var Stream = streams[i];
+                        if (dsp_Stream != Stream && Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == OutputChannelIndex)
+                        {
+                            MessageBox.Show("Bus in use. It must be unassigned before the source stream can be deleted.");
+                            return;
+                        }
                     }
                 }
                 break;
             case StreamType.AbstractBus:
-                foreach (var Stream in Program.DSP_Info.Streams)
                 {
-                    if (dsp_Stream != Stream && 
-                        Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == OutputChannelIndex)
+                    var streams = Program.DSP_Info.Streams;
+                    for (int i = 0; i < streams.Count; i++)
                     {
-                        MessageBox.Show("AbstractBus in use. It must be unassigned before the source stream can be deleted.");
-                        return;
+                        var Stream = streams[i];
+                        if (dsp_Stream != Stream && Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == OutputChannelIndex)
+                        {
+                            MessageBox.Show("AbstractBus in use. It must be unassigned before the source stream can be deleted.");
+                            return;
+                        }
                     }
                 }
                 break;

@@ -5,6 +5,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 #region Usings
 using NAudio.Dsp;
 using System;
+using System.Globalization;
 using System.ComponentModel;
 using System.Windows.Forms;
 #endregion
@@ -34,6 +35,9 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
 {
     #region Variables
     protected BiQuadFilter BiQuad = new();
+
+    // Suppresses TextChanged/KeyPress handlers when we update textboxes programmatically
+    private bool _suspendTextChangedEvents;
     #endregion
 
     #region Public Properties
@@ -96,36 +100,74 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
     protected void TxtF_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtF.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtF.Text);
+        // Limit size but avoid re-entrant TextChanged events
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtF.Text);
+        if (this.txtF.Text != limited)
+        {
+            try { this._suspendTextChangedEvents = true; this.txtF.Text = limited; }
+            finally { this._suspendTextChangedEvents = false; }
+        }
     }
     protected void TxtF_TextChanged(object? sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(this.txtF.Text))
-            this.txtF.Text = "1";
+        if (this._suspendTextChangedEvents)
+            return;
 
-        if (double.TryParse(this.txtF.Text, out double result))
+        try
         {
-            if (result > Program.DSP_Info.InSampleRate * 0.5)
-                this.txtF.Text = (Program.DSP_Info.InSampleRate * 0.5).ToString();
-            else if (result == 0 || result <= double.Epsilon)
-                this.txtF.Text = "0.01";
+            this._suspendTextChangedEvents = true;
+
+            if (string.IsNullOrEmpty(this.txtF.Text))
+            {
+                this.txtF.Text = "1";
+                return;
+            }
+
+            if (double.TryParse(this.txtF.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double result))
+            {
+                var max = Program.DSP_Info.InSampleRate * 0.5;
+                if (result > max)
+                    this.txtF.Text = max.ToString(CultureInfo.InvariantCulture);
+                else if (result == 0 || result <= double.Epsilon)
+                    this.txtF.Text = "0.01";
+            }
+        }
+        finally
+        {
+            this._suspendTextChangedEvents = false;
         }
     }
     protected void TxtG_TextChanged(object? sender, EventArgs e)
     {
-        //this.txtG.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtG.Text, true);
+        if (this._suspendTextChangedEvents)
+            return;
 
-        if (string.IsNullOrEmpty(this.txtG.Text))
-            this.txtG.Text = "0";
-
-        this.txtG.Text = this.txtG.Text.Trim();
-
-        if (double.TryParse(this.txtG.Text, out double result))
+        try
         {
-            if (result > 999999999) //Limit to 999 million
-                this.txtG.Text = "999999999";
-            else if (result < -999999999) //Limit to -999 million
-                this.txtG.Text = "-999999999";
+            this._suspendTextChangedEvents = true;
+
+            if (string.IsNullOrEmpty(this.txtG.Text))
+            {
+                this.txtG.Text = "0";
+                return;
+            }
+
+            var trimmed = this.txtG.Text.Trim();
+            if (this.txtG.Text != trimmed)
+                this.txtG.Text = trimmed;
+
+            if (double.TryParse(this.txtG.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double result))
+            {
+                const double limit = 999_999_999;
+                if (result > limit) //Limit to 999 million
+                    this.txtG.Text = limit.ToString(CultureInfo.InvariantCulture);
+                else if (result < -limit) //Limit to -999 million
+                    this.txtG.Text = (-limit).ToString(CultureInfo.InvariantCulture);
+            }
+        }
+        finally
+        {
+            this._suspendTextChangedEvents = false;
         }
     }
     protected void TxtG_KeyPress(object? sender, KeyPressEventArgs e)
@@ -134,23 +176,57 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
     }
     protected void TxtQ_TextChanged(object? sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(this.txtQ.Text))
-            this.txtQ.Text = "1";
+        if (this._suspendTextChangedEvents)
+            return;
+
+        try
+        {
+            this._suspendTextChangedEvents = true;
+
+            if (string.IsNullOrEmpty(this.txtQ.Text))
+                this.txtQ.Text = "1";
+        }
+        finally
+        {
+            this._suspendTextChangedEvents = false;
+        }
     }
     protected void TxtQ_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtQ.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtQ.Text);
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtQ.Text);
+        if (this.txtQ.Text != limited)
+        {
+            try { this._suspendTextChangedEvents = true; this.txtQ.Text = limited; }
+            finally { this._suspendTextChangedEvents = false; }
+        }
     }
     protected void TxtS_TextChanged(object? sender, EventArgs e)
     {
-        if (string.IsNullOrEmpty(this.txtS.Text))
-            this.txtS.Text = "1";
+        if (this._suspendTextChangedEvents)
+            return;
+
+        try
+        {
+            this._suspendTextChangedEvents = true;
+
+            if (string.IsNullOrEmpty(this.txtS.Text))
+                this.txtS.Text = "1";
+        }
+        finally
+        {
+            this._suspendTextChangedEvents = false;
+        }
     }
     protected void TxtS_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtS.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtS.Text);
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtS.Text);
+        if (this.txtS.Text != limited)
+        {
+            try { this._suspendTextChangedEvents = true; this.txtS.Text = limited; }
+            finally { this._suspendTextChangedEvents = false; }
+        }
     }
 
     protected void Txta0_KeyPress(object? sender, KeyPressEventArgs e)
@@ -182,71 +258,79 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
 
     protected void btnApplyCo_Click(object? sender, EventArgs e)
     {
-        try
+        // Use TryParse to avoid exception-based control flow for invalid input
+        if (!double.TryParse(this.txta0.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var a0)
+            || !double.TryParse(this.txta1.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var a1)
+            || !double.TryParse(this.txta2.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var a2)
+            || !double.TryParse(this.txtb0.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var b0)
+            || !double.TryParse(this.txtb1.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var b1)
+            || !double.TryParse(this.txtb2.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var b2))
         {
-            var a0 = double.Parse(this.txta0.Text);
-            var a1 = double.Parse(this.txta1.Text);
-            var a2 = double.Parse(this.txta2.Text);
-            var b0 = double.Parse(this.txtb0.Text);
-            var b1 = double.Parse(this.txtb1.Text);
-            var b2 = double.Parse(this.txtb2.Text);
-            this.BiQuad.SetCoefficients(a0, a1, a2, b0, b1, b2);
+            this.Error(new FormatException("One or more coefficient fields contain invalid numbers."));
+            return;
         }
-        catch (Exception ex)
-        {
-            this.Error(ex);
-        }
+
+        this.BiQuad.SetCoefficients(a0, a1, a2, b0, b1, b2);
     }
 
     protected void btnApply_Click(object? sender, System.EventArgs e)
     {
+        // Prefer TryParse to avoid exceptions, and use invariant culture for consistency
+        var r = (double)Program.DSP_Info.InSampleRate;
+        if (!double.TryParse(this.txtF.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var f)
+            || !double.TryParse(this.txtS.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var s)
+            || !double.TryParse(this.txtQ.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var q)
+            || !double.TryParse(this.txtG.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var g))
+        {
+            this.Error(new FormatException("One or more filter parameter fields contain invalid numbers."));
+            return;
+        }
+
+        switch (this.BiQuad.FilterType)
+        {
+            case FilterTypes.PEQ:
+                this.BiQuad.PeakingEQ(r, f, q, g);
+                break;
+            case FilterTypes.Adv_High_Pass:
+                this.BiQuad.HighPassFilter(r, f, q);
+                break;
+            case FilterTypes.Adv_Low_Pass:
+                this.BiQuad.LowPassFilter(r, f, q);
+                break;
+            case FilterTypes.Low_Shelf:
+                this.BiQuad.LowShelf(r, f, s, g);
+                break;
+            case FilterTypes.High_Shelf:
+                this.BiQuad.HighShelf(r, f, s, g);
+                break;
+            case FilterTypes.Notch:
+                this.BiQuad.NotchFilter(r, f, q);
+                break;
+            case FilterTypes.Band_Pass:
+                this.BiQuad.BandPassFilterConstantPeakGain(r, f, q);
+                break;
+            case FilterTypes.All_Pass:
+                this.BiQuad.AllPassFilter(r, f, q);
+                break;
+            default:
+                this.Error(new InvalidOperationException("FilterType not defined"));
+                return;
+        }
+
+        // Update coefficient textboxes without triggering change handlers
         try
         {
-            var r = (double)Program.DSP_Info.InSampleRate;
-            var f = double.Parse(this.txtF.Text);
-            var s = double.Parse(this.txtS.Text);
-            var q = double.Parse(this.txtQ.Text);
-            var g = double.Parse(this.txtG.Text);
-            switch (this.BiQuad.FilterType)
-            {
-                case FilterTypes.PEQ:
-                    this.BiQuad.PeakingEQ(r, f, q, g);
-                    break;
-                case FilterTypes.Adv_High_Pass:
-                    this.BiQuad.HighPassFilter(r, f, q);
-                    break;
-                case FilterTypes.Adv_Low_Pass:
-                    this.BiQuad.LowPassFilter(r, f, q);
-                    break;
-                case FilterTypes.Low_Shelf:
-                    this.BiQuad.LowShelf(r, f, s, g);
-                    break;
-                case FilterTypes.High_Shelf:
-                    this.BiQuad.HighShelf(r, f, s, g);
-                    break;
-                case FilterTypes.Notch:
-                    this.BiQuad.NotchFilter(r, f, q);
-                    break;
-                case FilterTypes.Band_Pass:
-                    this.BiQuad.BandPassFilterConstantPeakGain(r, f, q);
-                    break;
-                case FilterTypes.All_Pass:
-                    this.BiQuad.AllPassFilter(r, f, q);
-                    break;
-                default:
-                    throw new InvalidOperationException("FilterType not defined");
-            }
-
-            this.txta0.Text = this.BiQuad.aa0.ToString();
-            this.txta1.Text = this.BiQuad.aa1.ToString();
-            this.txta2.Text = this.BiQuad.aa2.ToString();
-            this.txtb0.Text = this.BiQuad.b0.ToString();
-            this.txtb1.Text = this.BiQuad.b1.ToString();
-            this.txtb2.Text = this.BiQuad.b2.ToString();
+            this._suspendTextChangedEvents = true;
+            this.txta0.Text = this.BiQuad.aa0.ToString(CultureInfo.InvariantCulture);
+            this.txta1.Text = this.BiQuad.aa1.ToString(CultureInfo.InvariantCulture);
+            this.txta2.Text = this.BiQuad.aa2.ToString(CultureInfo.InvariantCulture);
+            this.txtb0.Text = this.BiQuad.b0.ToString(CultureInfo.InvariantCulture);
+            this.txtb1.Text = this.BiQuad.b1.ToString(CultureInfo.InvariantCulture);
+            this.txtb2.Text = this.BiQuad.b2.ToString(CultureInfo.InvariantCulture);
         }
-        catch (Exception ex)
+        finally
         {
-            this.Error(ex);
+            this._suspendTextChangedEvents = false;
         }
     }
 
@@ -270,17 +354,27 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
         {
             this.BiQuad = biQuad;
 
-            this.txta0.Text = biQuad.aa0.ToString();
-            this.txta1.Text = biQuad.aa1.ToString();
-            this.txta2.Text = biQuad.aa2.ToString();
-            this.txtb0.Text = biQuad.b0.ToString();
-            this.txtb1.Text = biQuad.b1.ToString();
-            this.txtb2.Text = biQuad.b2.ToString();
+            // Bulk update UI fields while suppressing TextChanged events to avoid extra parsing and allocations
+            try
+            {
+                this._suspendTextChangedEvents = true;
 
-            this.txtF.Text = biQuad.Frequency.ToString();
-            this.txtS.Text = biQuad.Slope.ToString();
-            this.txtQ.Text = biQuad.Q.ToString();
-            this.txtG.Text = biQuad.Gain.ToString();
+                this.txta0.Text = biQuad.aa0.ToString(CultureInfo.InvariantCulture);
+                this.txta1.Text = biQuad.aa1.ToString(CultureInfo.InvariantCulture);
+                this.txta2.Text = biQuad.aa2.ToString(CultureInfo.InvariantCulture);
+                this.txtb0.Text = biQuad.b0.ToString(CultureInfo.InvariantCulture);
+                this.txtb1.Text = biQuad.b1.ToString(CultureInfo.InvariantCulture);
+                this.txtb2.Text = biQuad.b2.ToString(CultureInfo.InvariantCulture);
+
+                this.txtF.Text = biQuad.Frequency.ToString(CultureInfo.InvariantCulture);
+                this.txtS.Text = biQuad.Slope.ToString(CultureInfo.InvariantCulture);
+                this.txtQ.Text = biQuad.Q.ToString(CultureInfo.InvariantCulture);
+                this.txtG.Text = biQuad.Gain.ToString(CultureInfo.InvariantCulture);
+            }
+            finally
+            {
+                this._suspendTextChangedEvents = false;
+            }
         }
     }
     #endregion

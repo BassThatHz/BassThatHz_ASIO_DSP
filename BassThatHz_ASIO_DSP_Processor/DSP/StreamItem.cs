@@ -37,28 +37,42 @@ public interface IStreamItem
     #endregion
 }
 
-public enum StreamType
+public enum StreamType : byte
 {
     Channel,
     Stream,
     Bus,
     AbstractBus 
 }
-
-public class StreamItem : IStreamItem
+public sealed class StreamItem : IStreamItem
 {
     #region IStreamItem
-    public string Name { get; set; } = string.Empty;
-    public string DisplayMember { get; set; } = string.Empty;
+    // Backing fields so we can intern common strings and avoid duplicate allocations.
+    private string _name = string.Empty;
+    private string _displayMember = string.Empty;
+
+    public string Name
+    {
+        get => _name;
+        set => _name = string.IsNullOrEmpty(value) ? string.Empty : string.Intern(value!);
+    }
+
+    public string DisplayMember
+    {
+        get => _displayMember;
+        set => _displayMember = string.IsNullOrEmpty(value) ? string.Empty : string.Intern(value!);
+    }
+
     public int Index { get; set; } = -1;
     public StreamType StreamType { get; set; } = StreamType.Channel;
 
     public IStreamItem DeepClone()
     {
+        // Create a shallow clone; string interning on set will avoid duplicating string instances.
         return new StreamItem
         {
-            Name = this.Name,
-            DisplayMember = this.DisplayMember,
+            Name = this._name,
+            DisplayMember = this._displayMember,
             Index = this.Index,
             StreamType = this.StreamType
         };
@@ -83,8 +97,10 @@ public class StreamItem : IStreamItem
 
     public override int GetHashCode()
     {
-        // Combine StreamType and Index in a hash
-        // For example:
-        return HashCode.Combine(this.StreamType, this.Index);
+        // Combine StreamType and Index in a compact integer-based hash to avoid allocations.
+        unchecked
+        {
+            return ((int)this.StreamType * 397) ^ this.Index;
+        }
     }
 }

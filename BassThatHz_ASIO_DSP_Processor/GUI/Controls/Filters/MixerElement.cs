@@ -2,10 +2,13 @@
 
 namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls.Filters;
 
+
+using System;
 using System.ComponentModel;
 
 #region Usings
 using System.Windows.Forms;
+using System.Globalization;
 #endregion
 
 /// <summary>
@@ -31,6 +34,8 @@ using System.Windows.Forms;
 /// </summary>
 public partial class MixerElement : UserControl
 {
+    // Prevent re-entrant TextChanged handling when we programmatically update TextBox.Text
+    private bool _suppressTextChanged;
     #region Public Properties
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public TextBox Get_txtChAttenuation => this.txtChAttenuation;
@@ -69,12 +74,38 @@ public partial class MixerElement : UserControl
 
     protected void txtChAttenuation_TextChanged(object? sender, System.EventArgs e)
     {
-        if (double.TryParse(this.txtChAttenuation.Text, out double result) && result > 0)
-            this.txtChAttenuation.Text = "0";
+        if (this._suppressTextChanged)
+            return;
 
-        //Negative symbol must be at the start of the string
-        if (this.txtChAttenuation.Text.Contains("-") && !this.txtChAttenuation.Text.StartsWith("-"))
-            this.txtChAttenuation.Text = "-" + this.txtChAttenuation.Text.Replace("-", "");
+        var text = this.txtChAttenuation.Text;
+        // Empty or lone negative sign are allowed while typing
+        if (string.IsNullOrEmpty(text) || text == "-")
+            return;
+
+        // If positive numeric value entered, coerce to "0" (only update when necessary)
+        if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out double result) && result > 0)
+        {
+            if (text != "0")
+            {
+                try { this._suppressTextChanged = true; }
+                finally { this.txtChAttenuation.Text = "0"; this.txtChAttenuation.SelectionStart = this.txtChAttenuation.Text.Length; this._suppressTextChanged = false; }
+            }
+
+            return;
+        }
+
+        // Negative symbol must be at the start of the string
+        if (text.IndexOf('-') >= 0 && !text.StartsWith("-"))
+        {
+            var cleaned = text.Replace("-", "");
+            var newText = "-" + cleaned;
+            if (newText != text)
+            {
+                var sel = this.txtChAttenuation.SelectionStart;
+                try { this._suppressTextChanged = true; }
+                finally { this.txtChAttenuation.Text = newText; this.txtChAttenuation.SelectionStart = Math.Min(newText.Length, Math.Max(0, sel)); this._suppressTextChanged = false; }
+            }
+        }
     }
 
     protected void txtStreamAttenuation_KeyPress(object? sender, KeyPressEventArgs e)
@@ -84,12 +115,37 @@ public partial class MixerElement : UserControl
 
     protected void txtStreamAttenuation_TextChanged(object? sender, System.EventArgs e)
     {
-        if (double.TryParse(this.txtStreamAttenuation.Text, out double result) && result > 0)
-            this.txtStreamAttenuation.Text = "0";
+        if (this._suppressTextChanged)
+            return;
 
-        //Negative symbol must be at the start of the string
-        if (this.txtStreamAttenuation.Text.Contains("-") && !this.txtStreamAttenuation.Text.StartsWith("-"))
-            this.txtStreamAttenuation.Text = "-" + this.txtStreamAttenuation.Text.Replace("-", "");
+        var text = this.txtStreamAttenuation.Text;
+        // Empty or lone negative sign are allowed while typing
+        if (string.IsNullOrEmpty(text) || text == "-")
+            return;
+
+        if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out double result) && result > 0)
+        {
+            if (text != "0")
+            {
+                try { this._suppressTextChanged = true; }
+                finally { this.txtStreamAttenuation.Text = "0"; this.txtStreamAttenuation.SelectionStart = this.txtStreamAttenuation.Text.Length; this._suppressTextChanged = false; }
+            }
+
+            return;
+        }
+
+        // Negative symbol must be at the start of the string
+        if (text.IndexOf('-') >= 0 && !text.StartsWith("-"))
+        {
+            var cleaned = text.Replace("-", "");
+            var newText = "-" + cleaned;
+            if (newText != text)
+            {
+                var sel = this.txtStreamAttenuation.SelectionStart;
+                try { this._suppressTextChanged = true; }
+                finally { this.txtStreamAttenuation.Text = newText; this.txtStreamAttenuation.SelectionStart = Math.Min(newText.Length, Math.Max(0, sel)); this._suppressTextChanged = false; }
+            }
+        }
     }
     #endregion
 

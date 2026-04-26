@@ -51,6 +51,11 @@ public partial class BTH_VolumeLevelControl : UserControl
     protected double Output_RMS = 0;
     protected double Output_DB_Peak = 0;
     protected double Output_DB = 0;
+    // Last rendered values to avoid unnecessary UI updates
+    protected double Prev_Input_DB = double.NaN;
+    protected double Prev_Input_DB_Peak = double.NaN;
+    protected double Prev_Output_DB = double.NaN;
+    protected double Prev_Output_DB_Peak = double.NaN;
     #endregion
 
     #region Public Properties
@@ -187,16 +192,18 @@ public partial class BTH_VolumeLevelControl : UserControl
         // For input channels, apply the stream volume if available.
         double volume = isInput && this.Stream != null ? this.Stream.InputVolume : 1.0;
 
-        foreach (var sample in audioData)
+        // Use indexed loop to avoid enumerator allocation and use multiplication
+        // instead of Math.Pow for square to reduce CPU overhead.
+        int len = audioData.Length;
+        for (int i = 0; i < len; i++)
         {
-            // Multiply sample by volume if input
-            double level = sample * volume;
+            double level = audioData[i] * volume;
             double absLevel = Math.Abs(level);
 
             if (absLevel > peak)
                 peak = absLevel;
 
-            squareSum += Math.Pow(level, 2);
+            squareSum += level * level;
         }
 
         double rms = Math.Sqrt(squareSum / audioData.Length);
@@ -249,26 +256,68 @@ public partial class BTH_VolumeLevelControl : UserControl
 
     protected void Set_DB_Lables()
     {
-        this.lbl_Input_DB_Peak.Text = Math.Round(this.Input_DB_Peak, 0) + "dB";
-        this.lbl_Input_DB.Text = Math.Round(this.Input_DB, 0) + "dB";
+        // Prepare strings once and only update UI when the text actually changes
+        string inPeak = Math.Round(this.Input_DB_Peak, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
+        if (this.lbl_Input_DB_Peak.Text != inPeak)
+            this.lbl_Input_DB_Peak.Text = inPeak;
 
-        this.lbl_Output_DB_Peak.Text = Math.Round(this.Output_DB_Peak, 0) + "dB";
-        this.lbl_Output_DB.Text = Math.Round(this.Output_DB, 0) + "dB";
+        string inDb = Math.Round(this.Input_DB, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
+        if (this.lbl_Input_DB.Text != inDb)
+            this.lbl_Input_DB.Text = inDb;
+
+        string outPeak = Math.Round(this.Output_DB_Peak, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
+        if (this.lbl_Output_DB_Peak.Text != outPeak)
+            this.lbl_Output_DB_Peak.Text = outPeak;
+
+        string outDb = Math.Round(this.Output_DB, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
+        if (this.lbl_Output_DB.Text != outDb)
+            this.lbl_Output_DB.Text = outDb;
     }
 
     protected void Set_VolAndClipIndicators()
     {
-        this.vol_In.DB_Level = this.Input_DB;
-        this.vol_In.Refresh();
+        // Local refs to reduce repeated property access
+        var volIn = this.vol_In;
+        var volOut = this.vol_Out;
+        var pnlIn = this.pnl_InputClip;
+        var pnlOut = this.pnl_OutputClip;
 
-        if (this.Input_DB >= this.ClipLevel || this.Input_DB_Peak >= this.ClipLevel)
-            this.pnl_InputClip.BackColor = System.Drawing.Color.Red;
+        // Only update DB level if changed beyond a small threshold to avoid frequent redraws
+        const double threshold = 0.1; // dB
+        if (double.IsNaN(this.Prev_Input_DB) || Math.Abs(this.Input_DB - this.Prev_Input_DB) > threshold)
+        {
+            volIn.DB_Level = this.Input_DB;
+            volIn.Invalidate();
+            this.Prev_Input_DB = this.Input_DB;
+        }
 
-        this.vol_Out.DB_Level = this.Output_DB;
-        this.vol_Out.Refresh();
+        if (double.IsNaN(this.Prev_Input_DB_Peak) || Math.Abs(this.Input_DB_Peak - this.Prev_Input_DB_Peak) > threshold)
+        {
+            // If clip threshold reached, set to red. Only change color when different to avoid repaint churn.
+            if ((this.Input_DB >= this.ClipLevel || this.Input_DB_Peak >= this.ClipLevel) && pnlIn.BackColor != System.Drawing.Color.Red)
+                pnlIn.BackColor = System.Drawing.Color.Red;
+            else if (this.Input_DB < this.ClipLevel && this.Input_DB_Peak < this.ClipLevel && pnlIn.BackColor != System.Drawing.Color.Black)
+                pnlIn.BackColor = System.Drawing.Color.Black;
 
-        if (this.Output_DB >= this.ClipLevel || this.Output_DB_Peak >= this.ClipLevel)
-            this.pnl_OutputClip.BackColor = System.Drawing.Color.Red;
+            this.Prev_Input_DB_Peak = this.Input_DB_Peak;
+        }
+
+        if (double.IsNaN(this.Prev_Output_DB) || Math.Abs(this.Output_DB - this.Prev_Output_DB) > threshold)
+        {
+            volOut.DB_Level = this.Output_DB;
+            volOut.Invalidate();
+            this.Prev_Output_DB = this.Output_DB;
+        }
+
+        if (double.IsNaN(this.Prev_Output_DB_Peak) || Math.Abs(this.Output_DB_Peak - this.Prev_Output_DB_Peak) > threshold)
+        {
+            if ((this.Output_DB >= this.ClipLevel || this.Output_DB_Peak >= this.ClipLevel) && pnlOut.BackColor != System.Drawing.Color.Red)
+                pnlOut.BackColor = System.Drawing.Color.Red;
+            else if (this.Output_DB < this.ClipLevel && this.Output_DB_Peak < this.ClipLevel && pnlOut.BackColor != System.Drawing.Color.Black)
+                pnlOut.BackColor = System.Drawing.Color.Black;
+
+            this.Prev_Output_DB_Peak = this.Output_DB_Peak;
+        }
     }
     #endregion
 

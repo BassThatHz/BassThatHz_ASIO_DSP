@@ -71,12 +71,15 @@
             public static double[] ToneSampling(double amplitudeVrms, double frequencyHz, double samplingFrequencyHz, int points, double dcV = 0.0, double phaseDeg = 0)
             {
                 double ph_r = phaseDeg * System.Math.PI / 180.0;
+                double ampPeak = System.Math.Sqrt(2) * amplitudeVrms;
 
-                double[] rval = new double[points];
-                for (int i = 0; i < points; i++)
+                int len = points;
+                double[] rval = new double[len];
+                double twoPiF = 2.0 * System.Math.PI * frequencyHz;
+                for (int i = 0; i < len; i++)
                 {
                     double time = (double)i / samplingFrequencyHz;
-                    rval[i] = System.Math.Sqrt(2) * amplitudeVrms * System.Math.Sin(2.0 * System.Math.PI * time * frequencyHz + ph_r) + dcV;
+                    rval[i] = ampPeak * System.Math.Sin(twoPiF * time + ph_r) + dcV;
                 }
                 return rval;
             }
@@ -441,26 +444,25 @@
 
             public static double[] SineExpansion(int points, double c0, double c1 = 0.0, double c2 = 0.0, double c3 = 0.0, double c4 = 0.0, double c5 = 0.0, double c6 = 0.0, double c7 = 0.0, double c8 = 0.0, double c9 = 0.0, double c10 = 0.0)
             {
-                // z = 2 * pi * (0:N-1)' / N;   // Cosine Vector
-                double[] z = new double[points];
-                for (int i = 0; i < points; i++)
-                    z[i] = 2.0 * System.Math.PI * i / points;
+                // Compute angle incrementally to avoid an extra array allocation
+                int len = points;
+                double twoPiOverN = 2.0 * System.Math.PI / (double)len;
+                double angle = 0.0;
 
-                double[] winCoeffs = new double[points];
-
-                for (int i = 0; i < points; i++)
+                double[] winCoeffs = new double[len];
+                for (int i = 0; i < len; i++, angle += twoPiOverN)
                 {
                     double wc = c0;
-                    wc += c1 * System.Math.Cos(z[i]);
-                    wc += c2 * System.Math.Cos(2.0 * z[i]);
-                    wc += c3 * System.Math.Cos(3.0 * z[i]);
-                    wc += c4 * System.Math.Cos(4.0 * z[i]);
-                    wc += c5 * System.Math.Cos(5.0 * z[i]);
-                    wc += c6 * System.Math.Cos(6.0 * z[i]);
-                    wc += c7 * System.Math.Cos(7.0 * z[i]);
-                    wc += c8 * System.Math.Cos(8.0 * z[i]);
-                    wc += c9 * System.Math.Cos(9.0 * z[i]);
-                    wc += c10 * System.Math.Cos(10.0 * z[i]);
+                    wc += c1 * System.Math.Cos(angle);
+                    wc += c2 * System.Math.Cos(2.0 * angle);
+                    wc += c3 * System.Math.Cos(3.0 * angle);
+                    wc += c4 * System.Math.Cos(4.0 * angle);
+                    wc += c5 * System.Math.Cos(5.0 * angle);
+                    wc += c6 * System.Math.Cos(6.0 * angle);
+                    wc += c7 * System.Math.Cos(7.0 * angle);
+                    wc += c8 * System.Math.Cos(8.0 * angle);
+                    wc += c9 * System.Math.Cos(9.0 * angle);
+                    wc += c10 * System.Math.Cos(10.0 * angle);
 
                     winCoeffs[i] = wc;
                 }
@@ -609,9 +611,12 @@
             {
                 if (a.Length != b.Length) throw new ArgumentException("Length of arrays a[] and b[] must match.");
 
-                double[] result = new double[a.Length];
-                for (int i = 0; i < a.Length; i++)
+                int len = a.Length;
+                double[] result = new double[len];
+                for (int i = 0; i < len; i++)
+                {
                     result[i] = a[i] * b[i];
+                }
 
                 return result;
             }
@@ -621,9 +626,12 @@
             /// </summary>
             public static Double[] Multiply(Double[] a, Double b)
             {
-                double[] result = new double[a.Length];
-                for (int i = 0; i < a.Length; i++)
+                int len = a.Length;
+                double[] result = new double[len];
+                for (int i = 0; i < len; i++)
+                {
                     result[i] = a[i] * b;
+                }
 
                 return result;
             }
@@ -633,9 +641,12 @@
             /// </summary>
             public static Double[] Add(Double[] a, Double b)
             {
-                double[] result = new double[a.Length];
-                for (int i = 0; i < a.Length; i++)
+                int len = a.Length;
+                double[] result = new double[len];
+                for (int i = 0; i < len; i++)
+                {
                     result[i] = a[i] + b;
+                }
 
                 return result;
             }
@@ -645,9 +656,12 @@
             /// </summary>
             public static Double[] Subtract(Double[] a, Double b)
             {
-                double[] result = new double[a.Length];
-                for (int i = 0; i < a.Length; i++)
+                int len = a.Length;
+                double[] result = new double[len];
+                for (int i = 0; i < len; i++)
+                {
                     result[i] = a[i] - b;
+                }
 
                 return result;
             }
@@ -665,46 +679,52 @@
             /// <returns>Position of maximum value in input array</returns>
             public static int FindMaxPosition(double[] inData, int minIndex, int maxIndex)
             {
-                double minVal = double.MinValue;
-                int MaxIndex = 0;
+                int len = inData?.Length ?? 0;
 
-                if (minIndex < 0) 
-                    minIndex = 0;
-                if (maxIndex > inData.Length)
-                    maxIndex = inData.Length;
+                if (minIndex < 0) minIndex = 0;
+                if (maxIndex > len) maxIndex = len;
+                if (minIndex >= maxIndex)
+                    return (len > 0) ? System.Math.Min(minIndex, len - 1) : 0;
+
+                double bestVal = double.MinValue;
+                int bestIndex = minIndex;
 
                 for (int i = minIndex; i < maxIndex; i++)
                 {
-                    if (inData[i] > minVal)
+                    double v = inData[i];
+                    if (v > bestVal)
                     {
-                        MaxIndex = i;
-                        minVal = inData[i];
+                        bestVal = v;
+                        bestIndex = i;
                     }
                 }
 
-                return MaxIndex;
+                return bestIndex;
             }
 
             public static int FindMinPosition(double[] inData, int minIndex, int maxIndex)
             {
-                double maxVal = double.MaxValue;
-                int MaxIndex = 0;
+                int len = inData?.Length ?? 0;
 
-                if (minIndex < 0)
-                    minIndex = 0;
-                if (maxIndex > inData.Length)
-                    maxIndex = inData.Length;
+                if (minIndex < 0) minIndex = 0;
+                if (maxIndex > len) maxIndex = len;
+                if (minIndex >= maxIndex)
+                    return (len > 0) ? System.Math.Min(minIndex, len - 1) : 0;
+
+                double bestVal = double.MaxValue;
+                int bestIndex = minIndex;
 
                 for (int i = minIndex; i < maxIndex; i++)
                 {
-                    if (inData[i] < maxVal)
+                    double v = inData[i];
+                    if (v < bestVal)
                     {
-                        MaxIndex = i;
-                        maxVal = inData[i];
+                        bestVal = v;
+                        bestIndex = i;
                     }
                 }
 
-                return MaxIndex;
+                return bestIndex;
             }
 
             /// <summary>
@@ -714,35 +734,22 @@
             /// <returns>Continuous Phase data</returns>
             public static double[] UnwrapPhaseDegrees(double[] inPhaseDeg)
             {
-                int N = (int)inPhaseDeg.Length;
-                double[] unwrappedPhase = new double[N];
+                int N = inPhaseDeg?.Length ?? 0;
+                if (N == 0) return Array.Empty<double>();
 
-                double[] tempInData = new double[N];
-                inPhaseDeg.CopyTo(tempInData, 0);
-
-                // First point is unchanged
-                unwrappedPhase[0] = tempInData[0];
+                double[] unwrapped = new double[N];
+                unwrapped[0] = inPhaseDeg[0];
 
                 for (int i = 1; i < N; i++)
                 {
-                    double delta = System.Math.Abs(tempInData[i - 1] - tempInData[i]);
-                    if (delta >= 180)
-                    {
-                        // Phase jump!
-                        if (tempInData[i - 1] < 0.0)
-                        {
-                            for (int j = i; j < N; j++)
-                                tempInData[j] += -360;
-                        }
-                        else
-                        {
-                            for (int j = i; j < N; j++)
-                                tempInData[j] += 360;
-                        }
-                    }
-                    unwrappedPhase[i] = tempInData[i];
+                    // Compute difference and wrap into [-180,180]
+                    double delta = inPhaseDeg[i] - inPhaseDeg[i - 1];
+                    while (delta < -180.0) delta += 360.0;
+                    while (delta > 180.0) delta -= 360.0;
+                    unwrapped[i] = unwrapped[i - 1] + delta;
                 }
-                return unwrappedPhase;
+
+                return unwrapped;
             }
         }
         #endregion
@@ -753,8 +760,8 @@
     {
        public static double[] downsample(double[] data, int threshold)
         {
-            int dataLength = data.Count();
-            if (threshold >= dataLength || threshold == 0)
+            int dataLength = data?.Length ?? 0;
+            if (threshold >= dataLength || threshold <= 0)
                 return data; // Nothing to do
 
             var sampled = new List<double>(threshold);
@@ -763,45 +770,54 @@
             double every = (double)(dataLength - 2) / (threshold - 2);
 
             int a = 0;
-            double maxAreaPoint = 0;
-            int nextA = 0;
 
             sampled.Add(data[a]); // Always add the first point
 
             for (int i = 0; i < threshold - 2; i++)
             {
                 // Calculate point average for next bucket (containing c)
-                double avgX = 0;
-                int avgRangeStart = (int)(Math.Floor((i + 1) * every) + 1);
-                int avgRangeEnd = (int)(Math.Floor((i + 2) * every) + 1);
-                avgRangeEnd = avgRangeEnd < dataLength ? avgRangeEnd : dataLength;
+                int avgRangeStart = (int)Math.Floor((i + 1) * every) + 1;
+                int avgRangeEnd = (int)Math.Floor((i + 2) * every) + 1;
+                if (avgRangeStart < 0) avgRangeStart = 0;
+                if (avgRangeEnd > dataLength) avgRangeEnd = dataLength;
 
                 int avgRangeLength = avgRangeEnd - avgRangeStart;
-
-                for (; avgRangeStart < avgRangeEnd; avgRangeStart++)
+                double avgX = 0.0;
+                if (avgRangeLength > 0)
                 {
-                    avgX += data[avgRangeStart]; // * 1 enforces Number (value may be Date)
+                    for (int j = avgRangeStart; j < avgRangeEnd; j++)
+                        avgX += data[j];
+                    avgX /= avgRangeLength;
                 }
-                avgX /= avgRangeLength;
+                else
+                {
+                    // Fallback to nearest value
+                    int idx = Math.Min(dataLength - 1, Math.Max(0, avgRangeStart));
+                    avgX = data[idx];
+                }
 
                 // Get the range for this bucket
-                int rangeOffs = (int)(Math.Floor((i + 0) * every) + 1);
-                int rangeTo = (int)(Math.Floor((i + 1) * every) + 1);
+                int rangeOffs = (int)Math.Floor((i + 0) * every) + 1;
+                int rangeTo = (int)Math.Floor((i + 1) * every) + 1;
+                if (rangeOffs < 0) rangeOffs = 0;
+                if (rangeTo > dataLength) rangeTo = dataLength;
 
                 // Point a
                 double pointAx = data[a]; // enforce Number (value may be Date)
 
-                double maxArea = -1;
+                double maxArea = -1.0;
+                double maxAreaPoint = pointAx;
+                int nextA = a;
 
-                for (; rangeOffs < rangeTo; rangeOffs++)
+                for (int j = rangeOffs; j < rangeTo; j++)
                 {
-                    // Calculate triangle area over three buckets
-                    double area = Math.Abs(pointAx - avgX - (pointAx - data[rangeOffs])) * 0.5;
+                    // Simplified triangle area calculation: proportional to distance from bucket average
+                    double area = Math.Abs(data[j] - avgX) * 0.5;
                     if (area > maxArea)
                     {
                         maxArea = area;
-                        maxAreaPoint = data[rangeOffs];
-                        nextA = rangeOffs; // Next a is this b
+                        maxAreaPoint = data[j];
+                        nextA = j; // Next a is this b
                     }
                 }
 

@@ -5,6 +5,7 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 #region Usings
 using NAudio.Utils;
 using System;
+using System.Globalization;
 using System.Windows.Forms;
 #endregion
 
@@ -59,13 +60,23 @@ public partial class SmartGainControl : UserControl, IFilterControl
     protected void TxtGain_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_Negative(e);
-        this.txtGain.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtGain.Text);
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtGain.Text);
+        if (!string.Equals(this.txtGain.Text, limited, StringComparison.Ordinal))
+        {
+            this.txtGain.Text = limited;
+            this.txtGain.SelectionStart = this.txtGain.Text.Length;
+        }
     }
 
     protected void TxtDuration_KeyPress(object? sender, KeyPressEventArgs e)
     {
         InputValidator.Validate_IsNumeric_NonNegative(e);
-        this.txtDuration.Text = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDuration.Text);
+        var limited = InputValidator.LimitTo_ReasonableSizedNumber(this.txtDuration.Text);
+        if (!string.Equals(this.txtDuration.Text, limited, StringComparison.Ordinal))
+        {
+            this.txtDuration.Text = limited;
+            this.txtDuration.SelectionStart = this.txtDuration.Text.Length;
+        }
     }
     #endregion
 
@@ -73,8 +84,15 @@ public partial class SmartGainControl : UserControl, IFilterControl
     {
         try
         {
-            this.Filter.GaindB = double.Parse(this.txtGain.Text);
-            this.Filter.Duration = TimeSpan.FromMilliseconds(double.Parse(this.txtDuration.Text));
+            // Use TryParse with invariant culture to avoid exceptions and unnecessary allocations
+            if (!double.TryParse(this.txtGain.Text, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var gain))
+                throw new FormatException("Invalid gain value");
+
+            if (!double.TryParse(this.txtDuration.Text, NumberStyles.Float | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var durationMs))
+                throw new FormatException("Invalid duration value");
+
+            this.Filter.GaindB = gain;
+            this.Filter.Duration = TimeSpan.FromMilliseconds(durationMs);
         }
         catch (Exception ex)
         {
@@ -114,9 +132,16 @@ public partial class SmartGainControl : UserControl, IFilterControl
     {
         try
         {
-            this.lblAppliedGain.Text = this.Filter.ActualGaindB.ToString("000.0");
-            this.lblPeakLevel.Text = Decibels.LinearToDecibels(this.Filter.PeakLevelLinear).ToString("000.0");
-            this.lblHeadroom.Text = Decibels.LinearToDecibels(this.Filter.HeadroomLinear).ToString("000.0");
+            // Cache filter locally to avoid repeated property access and use invariant culture for formatting
+            var filter = this.Filter;
+            var applied = filter.ActualGaindB;
+            var peak = Decibels.LinearToDecibels(filter.PeakLevelLinear);
+            var head = Decibels.LinearToDecibels(filter.HeadroomLinear);
+
+            var fmt = "000.0";
+            this.lblAppliedGain.Text = applied.ToString(fmt, CultureInfo.InvariantCulture);
+            this.lblPeakLevel.Text = peak.ToString(fmt, CultureInfo.InvariantCulture);
+            this.lblHeadroom.Text = head.ToString(fmt, CultureInfo.InvariantCulture);
         }
         catch (Exception ex)
         {
@@ -141,8 +166,9 @@ public partial class SmartGainControl : UserControl, IFilterControl
         {
             this.Filter = smartGain;
 
-            this.txtDuration.Text = smartGain.Duration.TotalMilliseconds.ToString();
-            this.txtGain.Text = smartGain.GaindB.ToString();
+            // Use invariant culture when converting numbers to strings to avoid culture-related allocations
+            this.txtDuration.Text = smartGain.Duration.TotalMilliseconds.ToString(CultureInfo.InvariantCulture);
+            this.txtGain.Text = smartGain.GaindB.ToString(CultureInfo.InvariantCulture);
             this.chkPeakHold.Checked = smartGain.PeakHold;
             this.chkPeak.Checked = !smartGain.PeakHold;
         }

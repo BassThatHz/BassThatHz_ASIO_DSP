@@ -99,12 +99,18 @@ public partial class ctl_InputsConfigPage : UserControl
     {
         try
         {
-            string? SampleRateString = this.cboSampleRate.SelectedItem?.ToString();
-            if (!String.IsNullOrEmpty(SampleRateString) && int.TryParse(SampleRateString, out int SampleRate))
+            object? sel = this.cboSampleRate.SelectedItem;
+            int sampleRate = -1;
+            if (sel is int sr)
+                sampleRate = sr;
+            else if (sel is string ss && int.TryParse(ss, out int parsed))
+                sampleRate = parsed;
+
+            if (sampleRate > 0)
             {
                 Program.ASIO?.Stop();
-                Program.DSP_Info.InSampleRate = SampleRate;
-                SampleRateChangeNotifier.NotifySampleRateChange(SampleRate);
+                Program.DSP_Info.InSampleRate = sampleRate;
+                SampleRateChangeNotifier.NotifySampleRateChange(sampleRate);
             }
         }
         catch (Exception ex)
@@ -158,9 +164,9 @@ public partial class ctl_InputsConfigPage : UserControl
     #region Protected Functions
     protected void Populate_ASIO_Device_Names()
     {
-        var DriverNames = Program.ASIO.GetDriverNames();
-        if (DriverNames != null && DriverNames.Count() > 0) 
-            this.cboDevices.Items.AddRange(DriverNames);
+        var driverArray = Program.ASIO.GetDriverNames()?.ToArray();
+        if (driverArray != null && driverArray.Length > 0)
+            this.cboDevices.Items.AddRange(driverArray);
         else
             _ = MessageBox.Show("Cannot find any ASIO drivers or devices, application may not run correctly.");
     }
@@ -222,14 +228,15 @@ public partial class ctl_InputsConfigPage : UserControl
     protected void DisplaySupportedSampleRates()
     {
         this.cboSampleRate.Items.Clear();
-        var SupportedSampleRates = this.GetSupportedSampleRates();
-        if (SupportedSampleRates.Count > 0)
+        var supportedSampleRates = this.GetSupportedSampleRates();
+        if (supportedSampleRates.Count > 0)
         {
-            this.cboSampleRate.Items.AddRange(SupportedSampleRates.ToArray());
+            // Box ints to object[] for AddRange
+            this.cboSampleRate.Items.AddRange(supportedSampleRates.Cast<object>().ToArray());
 
             this.Select_Existing_SampleRate();
 
-            //Otherwise just select the first sample rate listed
+            // Otherwise just select the first sample rate listed
             if (this.cboSampleRate.SelectedIndex == -1)
                 this.cboSampleRate.SelectedIndex = 0;
         }
@@ -249,20 +256,26 @@ public partial class ctl_InputsConfigPage : UserControl
 
     protected void Select_Existing_SampleRate()
     {
-        //Select the previous matching sample rate
-        foreach (var SampleRate in this.cboSampleRate.Items)
+        // Select the previous matching sample rate (items stored as ints to avoid repeated string allocs)
+        foreach (var sampleObj in this.cboSampleRate.Items)
         {
-            if (SampleRate.ToString() == Program.DSP_Info.InSampleRate.ToString())
+            if (sampleObj is int rate && rate == Program.DSP_Info.InSampleRate)
             {
-                this.cboSampleRate.SelectedItem = SampleRate;
+                this.cboSampleRate.SelectedItem = sampleObj;
+                break;
+            }
+            // fallback: handle string items if any (defensive)
+            if (sampleObj is string s && int.TryParse(s, out int parsed) && parsed == Program.DSP_Info.InSampleRate)
+            {
+                this.cboSampleRate.SelectedItem = sampleObj;
                 break;
             }
         }
     }
 
-    protected List<string> GetSupportedSampleRates()
+    protected List<int> GetSupportedSampleRates()
     {
-        var ReturnValue = new List<string>();
+        var ReturnValue = new List<int>();
 
         string? DeviceName = this.cboDevices.SelectedItem?.ToString();
         if (!String.IsNullOrEmpty(DeviceName))
@@ -279,10 +292,10 @@ public partial class ctl_InputsConfigPage : UserControl
                                 192000
                             };
 
-            //Add only the supported rates to the list
+            // Add only the supported rates to the list
             foreach (var SampleRate in SampleRates)
                 if (Program.ASIO.IsSampleRateSupported(DeviceName, SampleRate))
-                    ReturnValue.Add(SampleRate.ToString());
+                    ReturnValue.Add(SampleRate);
         }
         return ReturnValue;
     }

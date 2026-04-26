@@ -61,25 +61,46 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
     {
         try
         {
+            // Use BeginUpdate/EndUpdate to reduce UI redraws during bulk changes
+            this.SimpleBus_LSB.BeginUpdate();
+            this.AbstractBuses_LSB.BeginUpdate();
+            this.AbstractBuses_SubList_LSB.BeginUpdate();
+
             this.SimpleBus_LSB.Items.Clear();
             this.AbstractBuses_LSB.Items.Clear();
+            // Clear once here - populate sublist only for the first abstract bus to avoid repeated clears
             this.AbstractBuses_SubList_LSB.Items.Clear();
+
             var DSP_Info = Program.DSP_Info;
             if (DSP_Info.Buses.Count > 0)
+            {
                 foreach (var Bus in DSP_Info.Buses)
                     this.SimpleBus_LSB.Items.Add(Bus);
+            }
+
             if (DSP_Info.AbstractBuses.Count > 0)
+            {
+                int idx = 0;
                 foreach (var AbstractBus in DSP_Info.AbstractBuses)
                 {
                     this.AbstractBuses_LSB.Items.Add(AbstractBus);
-                    this.AbstractBuses_SubList_LSB.Items.Clear();
-                    foreach (var Mapping in AbstractBus.Mappings)
-                        this.AbstractBuses_SubList_LSB.Items.Add(Mapping);
+                    // Populate sublist only for the first abstract bus (index 0) so UI reflects a valid selection
+                    if (idx == 0)
+                    {
+                        foreach (var Mapping in AbstractBus.Mappings)
+                            this.AbstractBuses_SubList_LSB.Items.Add(Mapping);
+                    }
+                    idx++;
                 }
+            }
 
             this.SelectListboxIndexIfExists(this.SimpleBus_LSB, 0);
             this.SelectListboxIndexIfExists(this.AbstractBuses_LSB, 0);
             this.SelectListboxIndexIfExists(this.AbstractBuses_SubList_LSB, 0);
+
+            this.SimpleBus_LSB.EndUpdate();
+            this.AbstractBuses_LSB.EndUpdate();
+            this.AbstractBuses_SubList_LSB.EndUpdate();
         }
         catch (Exception ex)
         {
@@ -106,9 +127,9 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
             var TempBus = new DSP_Bus();
             TempBus.Name = this.SimpleBusName_TXT.Text;
             TempBus.IsBypassed = this.Bus_Bypass_CHK.Checked;
-
-            var Buses = Program.DSP_Info.Buses;
-            var AbstractBuses = Program.DSP_Info.AbstractBuses;
+            var dsp = Program.DSP_Info;
+            var Buses = dsp.Buses;
+            var AbstractBuses = dsp.AbstractBuses;
             //Check for duplicates without creating it or changing the direct memory ref
             if (Buses.Any(m => m.Equals(TempBus))
                 ||
@@ -118,12 +139,12 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 MessageBox.Show("Already exists. Cannot create duplicates.");
                 return;
             }
-
-
-            Program.DSP_Info.Buses.Add(TempBus);
+            dsp.Buses.Add(TempBus);
+            // minimize redraw while updating the listbox
+            this.SimpleBus_LSB.BeginUpdate();
             this.SimpleBus_LSB.Items.Add(TempBus);
-
             this.SelectListboxIndexIfExists(this.SimpleBus_LSB, this.SimpleBus_LSB.Items.Count - 1);
+            this.SimpleBus_LSB.EndUpdate();
             this.RefreshAbstractBusComboBoxes();
             this.ResetAll_TabPage_Text();
             this.ResetAll_StreamDropDownLists();
@@ -138,7 +159,8 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
     {
         try
         {
-            var Buses = Program.DSP_Info.Buses;
+            var dsp = Program.DSP_Info;
+            var Buses = dsp.Buses;
             int SelectedIndex = this.SimpleBus_LSB.SelectedIndex;
             if (SelectedIndex < 0 || SelectedIndex >= Buses.Count || SelectedIndex >= SimpleBus_LSB.Items.Count)
                 return;
@@ -167,9 +189,12 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 TempBus.Name = NewName;
             }
 
+            // minimize redraw when replacing the item
+            this.SimpleBus_LSB.BeginUpdate();
             this.SimpleBus_LSB.Items.RemoveAt(SelectedIndex);
             this.SimpleBus_LSB.Items.Insert(SelectedIndex, TempBus);
             this.SimpleBus_LSB.SelectedIndex = SelectedIndex;
+            this.SimpleBus_LSB.EndUpdate();
 
             this.RefreshAbstractBusComboBoxes();
             this.ResetAll_TabPage_Text();
@@ -199,8 +224,11 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 }
             }
 
-            Program.DSP_Info.Buses.RemoveAt(SelectedIndex);
+            var dsp = Program.DSP_Info;
+            dsp.Buses.RemoveAt(SelectedIndex);
+            this.SimpleBus_LSB.BeginUpdate();
             this.RemoveSelectedListboxItem(this.SimpleBus_LSB, SelectedIndex);
+            this.SimpleBus_LSB.EndUpdate();
             this.RefreshAbstractBusComboBoxes();
         }
         catch (Exception ex)
@@ -238,8 +266,9 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
             TempAbstractBus.IsBypassed = this.AbstractBus_Bypass_CHK.Checked;
             TempAbstractBus.Name = this.AbstractBusName_TXT.Text;
 
-            var Buses = Program.DSP_Info.Buses;
-            var AbstractBuses = Program.DSP_Info.AbstractBuses;
+            var dsp = Program.DSP_Info;
+            var Buses = dsp.Buses;
+            var AbstractBuses = dsp.AbstractBuses;
             //Check for duplicates without creating it or changing the direct memory ref
             if (AbstractBuses.Any(m => m.Equals(TempAbstractBus))
                 ||
@@ -251,8 +280,10 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
             }
 
             AbstractBuses.Add(TempAbstractBus);
+            this.AbstractBuses_LSB.BeginUpdate();
             int index = this.AbstractBuses_LSB.Items.Add(TempAbstractBus);
             this.AbstractBuses_LSB.SelectedIndex = index;
+            this.AbstractBuses_LSB.EndUpdate();
 
             this.ResetAll_TabPage_Text();
             this.ResetAll_StreamDropDownLists();
@@ -307,9 +338,11 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 TempAbstractBus.Name = NewName;
             }
 
+            this.AbstractBuses_LSB.BeginUpdate();
             this.AbstractBuses_LSB.Items.RemoveAt(SelectedIndex);
             this.AbstractBuses_LSB.Items.Insert(SelectedIndex, TempAbstractBus);
             this.AbstractBuses_LSB.SelectedIndex = SelectedIndex;
+            this.AbstractBuses_LSB.EndUpdate();
 
             this.ResetAll_TabPage_Text();
             this.ResetAll_StreamDropDownLists();
@@ -338,10 +371,16 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 }
             }
 
-            Program.DSP_Info.AbstractBuses.RemoveAt(SelectedIndex);
+            var dsp = Program.DSP_Info;
+            dsp.AbstractBuses.RemoveAt(SelectedIndex);
+            this.AbstractBuses_LSB.BeginUpdate();
             this.RemoveSelectedListboxItem(this.AbstractBuses_LSB, SelectedIndex);
+            this.AbstractBuses_LSB.EndUpdate();
+
+            this.AbstractBuses_SubList_LSB.BeginUpdate();
             this.AbstractBuses_SubList_LSB.Items.Clear();
             this.SelectListboxIndexIfExists(this.AbstractBuses_SubList_LSB, 0);
+            this.AbstractBuses_SubList_LSB.EndUpdate();
 
             this.RefreshAbstractBusComboBoxes();
         }
@@ -415,10 +454,12 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
             }
 
             AbstractBus.Mappings.Add(TempAbstractBusMapping);
+            this.AbstractBuses_SubList_LSB.BeginUpdate();
             int index = this.AbstractBuses_SubList_LSB.Items.Add(TempAbstractBusMapping);
+            this.AbstractBuses_SubList_LSB.SelectedIndex = index;
+            this.AbstractBuses_SubList_LSB.EndUpdate();
 
             this.RefreshAbstractBusComboBoxes();
-            this.AbstractBuses_SubList_LSB.SelectedIndex = index;
             this.ResetAll_TabPage_Text();
             this.ResetAll_StreamDropDownLists();
         }
@@ -470,8 +511,10 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
             var TempAbstractBusMapping = AbstractBus.Mappings[AbstractBusMapping_SelectedIndex];
             TempAbstractBusMapping.IsBypassed = this.AbstractBus_SubItem_Bypass_CHK.Checked;
 
+            this.AbstractBuses_SubList_LSB.BeginUpdate();
             this.AbstractBuses_SubList_LSB.Items.RemoveAt(AbstractBusMapping_SelectedIndex);
             this.AbstractBuses_SubList_LSB.Items.Insert(AbstractBusMapping_SelectedIndex, TempAbstractBusMapping);
+            this.AbstractBuses_SubList_LSB.EndUpdate();
 
             //Check for duplicates without creating it or changing the direct memory ref
             var TempMapping = new DSP_AbstractBusMappings()
@@ -544,7 +587,9 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
             AbstractBus.Mappings.RemoveAt(AbstractBusMapping_SelectedIndex);
 
             this.RefreshAbstractBusComboBoxes();
+            this.AbstractBuses_SubList_LSB.BeginUpdate();
             this.RemoveSelectedListboxItem(this.AbstractBuses_SubList_LSB, AbstractBusMapping_SelectedIndex);
+            this.AbstractBuses_SubList_LSB.EndUpdate();
         }
         catch (Exception ex)
         {
@@ -613,6 +658,10 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
 
     protected void RefreshAbstractBusComboBoxes()
     {
+        // Reduce redraws while repopulating the combo boxes
+        this.AbstractBusSource_CBO.BeginUpdate();
+        this.AbstractBusDestination_CBO.BeginUpdate();
+
         this.AbstractBusSource_CBO.Items.Clear();
         this.AbstractBusDestination_CBO.Items.Clear();
         CommonFunctions.Set_DropDownTargetLists(this.AbstractBusSource_CBO, this.AbstractBusDestination_CBO, true);
@@ -622,6 +671,9 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
 
         if (this.AbstractBusDestination_CBO.Items.Count > 0)
             this.AbstractBusDestination_CBO.SelectedIndex = 0;
+
+        this.AbstractBusSource_CBO.EndUpdate();
+        this.AbstractBusDestination_CBO.EndUpdate();
     }
     #endregion
 

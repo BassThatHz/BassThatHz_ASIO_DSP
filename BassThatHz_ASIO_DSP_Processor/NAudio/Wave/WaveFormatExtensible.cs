@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using NAudio.Dmo;
 
 namespace NAudio.Wave
@@ -11,9 +12,10 @@ namespace NAudio.Wave
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 2)]	
     public class WaveFormatExtensible : WaveFormat
     {
-        short wValidBitsPerSample; // bits of precision, or is wSamplesPerBlock if wBitsPerSample==0
-        int dwChannelMask; // which channels are present in stream
-        Guid subFormat;
+        // fields kept sequential for interop layout
+        private readonly short wValidBitsPerSample; // bits of precision, or is wSamplesPerBlock if wBitsPerSample==0
+        private readonly int dwChannelMask; // which channels are present in stream
+        private readonly Guid subFormat;
 
         /// <summary>
         /// Parameterless constructor for marshalling
@@ -30,21 +32,11 @@ namespace NAudio.Wave
         {
             waveFormatTag = WaveFormatEncoding.Extensible;
             extraSize = 22;
-            wValidBitsPerSample = (short) bits;
-            for (int n = 0; n < channels; n++)
-            {
-                dwChannelMask |= 1 << n;
-            }
-            if (bits == 32)
-            {
-                // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-                subFormat = AudioMediaSubtypes.MEDIASUBTYPE_IEEE_FLOAT;
-            }
-            else
-            {
-                // KSDATAFORMAT_SUBTYPE_PCM
-                subFormat = AudioMediaSubtypes.MEDIASUBTYPE_PCM;
-            }
+            wValidBitsPerSample = (short)bits;
+            // set low 'channels' bits. Avoid loop for performance. If channels >= 32, set all bits.
+            dwChannelMask = (channels >= 32) ? -1 : ((1 << channels) - 1);
+            // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT for 32-bit samples, otherwise PCM
+            subFormat = (bits == 32) ? AudioMediaSubtypes.MEDIASUBTYPE_IEEE_FLOAT : AudioMediaSubtypes.MEDIASUBTYPE_PCM;
 
         }
 
@@ -54,12 +46,13 @@ namespace NAudio.Wave
         /// Returns the WaveFormat unchanged for non PCM or IEEE float
         /// </summary>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public WaveFormat ToStandardWaveFormat()
         {
             if (subFormat == AudioMediaSubtypes.MEDIASUBTYPE_IEEE_FLOAT && bitsPerSample == 32)
                 return CreateIeeeFloatWaveFormat(sampleRate, channels);
             if (subFormat == AudioMediaSubtypes.MEDIASUBTYPE_PCM)
-                return new WaveFormat(sampleRate,bitsPerSample,channels);
+                return new WaveFormat(sampleRate, bitsPerSample, channels);
             return this;
             //throw new InvalidOperationException("Not a recognised PCM or IEEE float format");
         }
@@ -78,8 +71,10 @@ namespace NAudio.Wave
             base.Serialize(writer);
             writer.Write(wValidBitsPerSample);
             writer.Write(dwChannelMask);
-            byte[] guid = subFormat.ToByteArray();
-            writer.Write(guid, 0, guid.Length);
+            // avoid allocating a managed byte[] for the Guid by writing directly from a stack span
+            Span<byte> guidBytes = stackalloc byte[16];
+            subFormat.TryWriteBytes(guidBytes);
+            writer.Write(guidBytes);
         }
 
         /// <summary>
@@ -87,12 +82,7 @@ namespace NAudio.Wave
         /// </summary>
         public override string ToString()
         {
-            return String.Format("{0} wBitsPerSample:{1} dwChannelMask:{2} subFormat:{3} extraSize:{4}",
-                base.ToString(),
-                wValidBitsPerSample,
-                dwChannelMask,
-                subFormat,
-                extraSize);
+            return $"{base.ToString()} wBitsPerSample:{wValidBitsPerSample} dwChannelMask:{dwChannelMask} subFormat:{subFormat} extraSize:{extraSize}";
         }
     }
 }

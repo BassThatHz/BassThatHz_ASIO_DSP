@@ -43,21 +43,47 @@ public class Basic_HPF_LPF : IFilter
     protected double SampleRate = (double)Program.DSP_Info.InSampleRate;
     #endregion
 
+    public Basic_HPF_LPF()
+    {
+        for (int i = 0; i < this.BiQuads.Length; i++)
+        {
+            this.BiQuads[i] = new BiQuadFilter();
+            this.BiQuads[i].FilterEnabled = false;
+        }
+    }
+
     #region Public Functions
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        if (this.HPFFilter != FilterOrder.None || this.LPFFilter != FilterOrder.None)
-        {
-            if (this.HPFFilter != FilterOrder.None)
-                for (int j = 0; j < 4; j++) //Only 4 BiQuads are supported (up to 48db/oct)
-                    if (this.BiQuads[j] != null)
-                        input = this.BiQuads[j].Transform(input, currentStream);
+        // Fast-path: if no filters enabled, return input unchanged
+        var hpf = this.HPFFilter;
+        var lpf = this.LPFFilter;
+        if (hpf == FilterOrder.None && lpf == FilterOrder.None)
+            return input;
 
-            if (this.LPFFilter != FilterOrder.None)
-                for (int j = 4; j < 8; j++) //Only 4 BiQuads are supported (up to 48db/oct)
-                    if (this.BiQuads[j] != null)
-                        input = this.BiQuads[j].Transform(input, currentStream);
+        // Process in-place using spans to avoid repeated array assignments
+        var span = input.AsSpan();
+        var biquads = this.BiQuads;
+
+        if (hpf != FilterOrder.None)
+        {
+            for (int j = 0; j < 4; j++)
+            {
+                var b = biquads[j];
+                if (b != null && b.FilterEnabled)
+                    b.TransformInPlace(span, currentStream);
+            }
+        }
+
+        if (lpf != FilterOrder.None)
+        {
+            for (int j = 4; j < 8; j++)
+            {
+                var b = biquads[j];
+                if (b != null && b.FilterEnabled)
+                    b.TransformInPlace(span, currentStream);
+            }
         }
 
         return input;
@@ -171,114 +197,84 @@ public class Basic_HPF_LPF : IFilter
 
         this.ProcessFilterOrders(this.HPFFilter, this.Q_Array_HPF);
 
+        var bi = this.BiQuads;
         switch (this.HPFFilter)
         {
             case FilterOrder.LR_12db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[2] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2].PhaseInvertFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = true; bi[2].PhaseInvertFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.LR_24db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2] = null;
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = false;
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.LR_48db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[2] = new BiQuadFilter();
-                this.BiQuads[3] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
-                this.BiQuads[3].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = true; bi[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
+                bi[3].FilterEnabled = true; bi[3].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
                 break;
 
             case FilterOrder.BW_6db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1] = null;
-                this.BiQuads[2] = null;
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = false;
+                bi[2].FilterEnabled = false;
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_12db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].PhaseInvertFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2] = null;
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].PhaseInvertFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = false;
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_18db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2] = null;
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = false;
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_24db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2] = null;
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = false;
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_30db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[2] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
-                this.BiQuads[3] = null;
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = true; bi[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
+                bi[3].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_36db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[2] = new BiQuadFilter();
-                this.BiQuads[3] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
-                this.BiQuads[3].PhaseInvertFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = true; bi[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
+                bi[3].FilterEnabled = true; bi[3].PhaseInvertFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
                 break;
 
             case FilterOrder.BW_42db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[2] = new BiQuadFilter();
-                this.BiQuads[3] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
-                this.BiQuads[3].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter1st(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = true; bi[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
+                bi[3].FilterEnabled = true; bi[3].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
                 break;
 
             case FilterOrder.BW_48db:
-                this.BiQuads[0] = new BiQuadFilter();
-                this.BiQuads[1] = new BiQuadFilter();
-                this.BiQuads[2] = new BiQuadFilter();
-                this.BiQuads[3] = new BiQuadFilter();
-                this.BiQuads[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
-                this.BiQuads[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
-                this.BiQuads[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
-                this.BiQuads[3].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
+                bi[0].FilterEnabled = true; bi[0].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[0]);
+                bi[1].FilterEnabled = true; bi[1].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[1]);
+                bi[2].FilterEnabled = true; bi[2].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[2]);
+                bi[3].FilterEnabled = true; bi[3].HighPassFilter(this.SampleRate, this.HPFFreq, this.Q_Array_HPF[3]);
                 break;
 
             default:
@@ -293,111 +289,76 @@ public class Basic_HPF_LPF : IFilter
 
         this.ProcessFilterOrders(this.LPFFilter, this.Q_Array_LPF);
 
+        var bi = this.BiQuads;
         switch (this.LPFFilter)
         {
             case FilterOrder.LR_12db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6] = null;
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = false; bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.LR_24db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6] = null;
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = false; bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.LR_48db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[6] = new BiQuadFilter();
-                this.BiQuads[7] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
-                this.BiQuads[7].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[3]);
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = true; bi[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
+                bi[7].FilterEnabled = true; bi[7].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[3]);
                 break;
 
             case FilterOrder.BW_6db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5] = null;
-                this.BiQuads[6] = null;
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = false; bi[6].FilterEnabled = false; bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_12db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5] = null;
-                this.BiQuads[6] = null;
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = false; bi[6].FilterEnabled = false; bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_18db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6] = null;
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = false; bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_24db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6] = null;
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = false; bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_30db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[6] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = true; bi[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
+                bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_36db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[6] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
-                this.BiQuads[7] = null;
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = true; bi[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
+                bi[7].FilterEnabled = false;
                 break;
 
             case FilterOrder.BW_42db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[6] = new BiQuadFilter();
-                this.BiQuads[7] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
-                this.BiQuads[7].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[3]);
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter1st(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = true; bi[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
+                bi[7].FilterEnabled = true; bi[7].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[3]);
                 break;
 
             case FilterOrder.BW_48db:
-                this.BiQuads[4] = new BiQuadFilter();
-                this.BiQuads[5] = new BiQuadFilter();
-                this.BiQuads[6] = new BiQuadFilter();
-                this.BiQuads[7] = new BiQuadFilter();
-                this.BiQuads[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
-                this.BiQuads[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
-                this.BiQuads[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
-                this.BiQuads[7].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[3]);
+                bi[4].FilterEnabled = true; bi[4].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[0]);
+                bi[5].FilterEnabled = true; bi[5].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[1]);
+                bi[6].FilterEnabled = true; bi[6].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[2]);
+                bi[7].FilterEnabled = true; bi[7].LowPassFilter(this.SampleRate, this.LPFFreq, this.Q_Array_LPF[3]);
                 break;
 
             default:

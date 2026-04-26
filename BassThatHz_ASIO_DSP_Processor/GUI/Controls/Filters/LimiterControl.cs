@@ -33,6 +33,7 @@ public partial class LimiterControl : UserControl, IFilterControl
 {
     #region Variables
     protected Limiter Filter = new();
+    private const double BrickwallCutoff = 0.99885051990500184d;
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -56,25 +57,21 @@ public partial class LimiterControl : UserControl, IFilterControl
     #region Event Handlers
     protected void Mask_Release_TextChanged(object? sender, EventArgs e)
     {
-        try
+        // Use TryParse to avoid exceptions on invalid input (expensive)
+        if (int.TryParse(this.mask_Release.Text, out var val) && val != this.Filter.PeakHoldRelease)
         {
-            this.Filter.PeakHoldRelease = int.Parse(this.mask_Release.Text);
+            this.Filter.PeakHoldRelease = val;
             this.ApplyCoeffs();
-        }
-        catch
-        {
         }
     }
 
     protected void Mask_Decay_TextChanged(object? sender, EventArgs e)
     {
-        try
+        // Avoid exceptions and unnecessary work when the value hasn't changed
+        if (int.TryParse(this.mask_Attack.Text, out var val) && val != this.Filter.PeakHoldAttack)
         {
-            this.Filter.PeakHoldAttack = int.Parse(this.mask_Attack.Text);
+            this.Filter.PeakHoldAttack = val;
             this.ApplyCoeffs();
-        }
-        catch
-        {
         }
     }
 
@@ -82,8 +79,9 @@ public partial class LimiterControl : UserControl, IFilterControl
     {
         try
         {
-            this.ApplyCoeffs();
+            // Update state first, then recalculate coefficients once
             this.Filter.PeakHoldReleaseEnabled = this.chk_PeakHoldRelease.Checked;
+            this.ApplyCoeffs();
         }
         catch (Exception ex)
         {
@@ -95,8 +93,8 @@ public partial class LimiterControl : UserControl, IFilterControl
     {
         try
         {
-            this.ApplyCoeffs();
             this.Filter.PeakHoldAttackEnabled = this.chk_PeakHoldAttack.Checked;
+            this.ApplyCoeffs();
         }
         catch (Exception ex)
         {
@@ -108,32 +106,21 @@ public partial class LimiterControl : UserControl, IFilterControl
     {
         try
         {
-            this.CompressionApplied.Volume = this.Filter.CompressionApplied;
-            if (this.Filter.IsBrickwall)
+            // Cache locally to avoid repeated property access
+            var applied = this.Filter.CompressionApplied;
+            var isBrick = this.Filter.IsBrickwall;
+            this.CompressionApplied.Volume = applied;
+
+            // Choose colors based on brickwall state and cutoff
+            if (applied < BrickwallCutoff)
             {
-                if (this.Filter.CompressionApplied < 0.99885051990500184d)
-                {
-                    this.CompressionApplied.TextColor = Color.White;
-                    this.CompressionApplied.SliderColor = Brushes.Firebrick;
-                }
-                else
-                {
-                    this.CompressionApplied.TextColor = Color.Black;
-                    this.CompressionApplied.SliderColor = Brushes.LightGreen;
-                }
+                this.CompressionApplied.TextColor = Color.White;
+                this.CompressionApplied.SliderColor = isBrick ? Brushes.Firebrick : Brushes.DarkBlue;
             }
             else
             {
-                if (this.Filter.CompressionApplied < 0.99885051990500184d)
-                {
-                    this.CompressionApplied.TextColor = Color.White;
-                    this.CompressionApplied.SliderColor = Brushes.DarkBlue;
-                }
-                else
-                {
-                    this.CompressionApplied.TextColor = Color.Black;
-                    this.CompressionApplied.SliderColor = Brushes.LightGreen;
-                }
+                this.CompressionApplied.TextColor = Color.Black;
+                this.CompressionApplied.SliderColor = Brushes.LightGreen;
             }
         }
         catch (Exception ex)
@@ -146,7 +133,8 @@ public partial class LimiterControl : UserControl, IFilterControl
     {
         try
         {
-            if (this.Threshold.Volume >= this.Limit.Volume || Math.Abs(this.Limit.VolumedB - this.Threshold.VolumedB) < 0)
+            // If threshold exceeds the limit, align it to the limit
+            if (this.Threshold.Volume >= this.Limit.Volume)
                 this.Threshold.VolumedB = this.Limit.VolumedB;
 
             this.Filter.MaxValue = this.Limit.Volume;
@@ -161,10 +149,13 @@ public partial class LimiterControl : UserControl, IFilterControl
     {
         try
         {
-            if (this.Threshold.Volume >= this.Limit.Volume || Math.Abs(this.Limit.VolumedB - this.Threshold.VolumedB) < 0d)
+            if (this.Threshold.Volume >= this.Limit.Volume)
                 this.Threshold.VolumedB = this.Limit.VolumedB;
+
+            // Cap threshold to -1 dB maximum
             if (this.Threshold.VolumedB > -1d)
                 this.Threshold.VolumedB = -1d;
+
             this.Filter.Threshold = this.Threshold.Volume;
         }
         catch (Exception ex)

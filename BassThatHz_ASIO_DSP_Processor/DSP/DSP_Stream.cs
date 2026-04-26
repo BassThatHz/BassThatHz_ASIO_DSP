@@ -31,14 +31,29 @@ using Windows.Foundation.Metadata;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 [Serializable]
-public class DSP_Stream 
+public sealed class DSP_Stream 
 {
     [XmlIgnoreAttribute]
-    public double[]? AbstractBusBuffer;
+    private double[]? _abstractBusBuffer;
     [XmlIgnoreAttribute]
-    public double[][]? AuxBuffer;
+    public double[] AbstractBusBuffer
+    {
+        get => _abstractBusBuffer ??= Array.Empty<double>();
+        set => _abstractBusBuffer = value ?? Array.Empty<double>();
+    }
+
     [XmlIgnoreAttribute]
-    public readonly int NumberOfAuxBuffers = 256;
+    private double[][]? _auxBuffer;
+    [XmlIgnoreAttribute]
+    public double[][] AuxBuffer
+    {
+        get => _auxBuffer ??= Array.Empty<double[]>();
+        set => _auxBuffer = value ?? Array.Empty<double[]>();
+    }
+
+    // Use const to avoid per-instance storage for this fixed limit.
+    [XmlIgnoreAttribute]
+    public const int NumberOfAuxBuffers = 256;
 
     #region Legacy - Remove these eventually
     [XmlIgnoreAttribute]
@@ -56,33 +71,35 @@ public class DSP_Stream
     public int OutputChannelIndex = -1;
     #endregion
 
-    protected IStreamItem _inputSource = new StreamItem();
+    // Lazily initialize stream item instances to avoid allocating StreamItem when defaults are not used.
+    protected IStreamItem? _inputSource;
     public IStreamItem InputSource
     {
-        get => _inputSource;
+        get => _inputSource ??= new StreamItem();
         set
         {
             if (value.StreamType == StreamType.Stream)
                 throw new InvalidOperationException("Stream type is not allowed as a Stream InputSource.");
-            _inputSource = value;
+            _inputSource = value ?? new StreamItem();
         }
     }
 
-    protected IStreamItem _outputDestination = new StreamItem();
+    protected IStreamItem? _outputDestination;
     public IStreamItem OutputDestination
     {
-        get => _outputDestination;
+        get => _outputDestination ??= new StreamItem();
         set
         {
             if (value.StreamType == StreamType.Stream)
                 throw new InvalidOperationException("Stream type is not allowed as a Stream OutputDestination.");
-            _outputDestination = value;
+            _outputDestination = value ?? new StreamItem();
         }
     }
 
+    // Use auto-properties for primitive values (cheap) and lazy-init collection for filters.
+    public double InputVolume { get; set; }
+    public double OutputVolume { get; set; }
 
-    public double InputVolume = 0;
-    public double OutputVolume = 0;
-
-    public List<IFilter> Filters = new();
+    private List<IFilter>? _filters;
+    public List<IFilter> Filters => _filters ??= new List<IFilter>(4);
 }

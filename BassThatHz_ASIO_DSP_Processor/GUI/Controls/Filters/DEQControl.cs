@@ -8,6 +8,8 @@ using System.Linq;
 using System.Windows.Forms;
 #endregion
 
+
+
 /// <summary>
 ///  BassThatHz ASIO DSP Processor Engine
 ///  Copyright (c) 2026 BassThatHz
@@ -31,6 +33,18 @@ using System.Windows.Forms;
 /// </summary>
 public partial class DEQControl : UserControl, IFilterControl
 {
+    // Cache enum item arrays to avoid reallocating them for every control instance.
+    private static readonly object[] s_deqTypeItems;
+    private static readonly object[] s_biquadTypeItems;
+    private static readonly object[] s_thresholdTypeItems;
+
+    static DEQControl()
+    {
+        // Build object arrays once to reduce allocations per instance.
+        s_deqTypeItems = Enum.GetValues(typeof(DEQ.DEQType)).Cast<object>().ToArray();
+        s_biquadTypeItems = Enum.GetValues(typeof(DEQ.BiquadType)).Cast<object>().ToArray();
+        s_thresholdTypeItems = Enum.GetValues(typeof(DEQ.ThresholdType)).Cast<object>().ToArray();
+    }
     #region Variables
     protected DEQ Filter = new();
     #endregion
@@ -40,17 +54,15 @@ public partial class DEQControl : UserControl, IFilterControl
     {
         InitializeComponent();
 
-        var EnumArray = Enum.GetValues(typeof(DEQ.DEQType)).Cast<object>().ToArray();
-        this.cboDEQType.Items.AddRange(EnumArray);
-        this.cboDEQType.SelectedIndex = this.cboDEQType.Items.IndexOf(DEQ.DEQType.BoostBelow);
+        // Reuse cached enum arrays to reduce allocations.
+        this.cboDEQType.Items.AddRange(s_deqTypeItems);
+        this.cboDEQType.SelectedItem = DEQ.DEQType.BoostBelow;
 
-        var EnumArray2 = Enum.GetValues(typeof(DEQ.BiquadType)).Cast<object>().ToArray();
-        this.cboBiquadType.Items.AddRange(EnumArray2);
-        this.cboBiquadType.SelectedIndex = this.cboBiquadType.Items.IndexOf(DEQ.BiquadType.PEQ);
+        this.cboBiquadType.Items.AddRange(s_biquadTypeItems);
+        this.cboBiquadType.SelectedItem = DEQ.BiquadType.PEQ;
 
-        var EnumArray3 = Enum.GetValues(typeof(DEQ.ThresholdType)).Cast<object>().ToArray();
-        this.cboThresholdType.Items.AddRange(EnumArray3);
-        this.cboThresholdType.SelectedIndex = this.cboThresholdType.Items.IndexOf(DEQ.ThresholdType.Peak); 
+        this.cboThresholdType.Items.AddRange(s_thresholdTypeItems);
+        this.cboThresholdType.SelectedItem = DEQ.ThresholdType.Peak;
 
         this.DynamicsApplied.ReadOnly = true;
         this.MapEventHandlers();
@@ -58,6 +70,8 @@ public partial class DEQControl : UserControl, IFilterControl
 
     public void MapEventHandlers()
     {
+        // Subscribe to global sample-rate notifications. Make sure to unsubscribe on dispose to
+        // avoid leaking this control via the static event delegate.
         SampleRateChangeNotifier.SampleRateChanged += SampleRateChangeNotifier_SampleRateChanged;
     }
     #endregion
@@ -68,7 +82,9 @@ public partial class DEQControl : UserControl, IFilterControl
     {
         try
         {
-            this.DynamicsApplied.VolumedB = this.Filter.GainApplied;
+            // Read into a local to avoid repeated property access and potential side-effects.
+            var gain = this.Filter.GainApplied;
+            this.DynamicsApplied.VolumedB = gain;
         }
         catch (Exception ex)
         {
@@ -107,52 +123,59 @@ public partial class DEQControl : UserControl, IFilterControl
 
     public void ApplySettings()
     {
-        if (this.cboDEQType.SelectedItem != null)
-            this.Filter.DEQ_Type = (DEQ.DEQType)this.cboDEQType.SelectedItem;
-        if (this.cboBiquadType.SelectedItem != null)
-            this.Filter.Biquad_Type = (DEQ.BiquadType)this.cboBiquadType.SelectedItem;
-        if (this.cboThresholdType.SelectedItem != null)
-            this.Filter.Threshold_Type = (DEQ.ThresholdType)this.cboThresholdType.SelectedItem;
+        if (this.cboDEQType.SelectedItem is DEQ.DEQType deqType)
+            this.Filter.DEQ_Type = deqType;
+        if (this.cboBiquadType.SelectedItem is DEQ.BiquadType biquadType)
+            this.Filter.Biquad_Type = biquadType;
+        if (this.cboThresholdType.SelectedItem is DEQ.ThresholdType thresholdType)
+            this.Filter.Threshold_Type = thresholdType;
 
-        this.Filter.TargetFrequency = double.Parse(this.txtF.Text);
-        this.Filter.TargetGain_dB = double.Parse(this.txtG.Text);
-        this.Filter.TargetQ = double.Parse(this.txtQ.Text);
-        this.Filter.TargetSlope = double.Parse(this.txtS.Text);
+        if (double.TryParse(this.txtF.Text, out var tf))
+            this.Filter.TargetFrequency = tf;
+        if (double.TryParse(this.txtG.Text, out var tg))
+            this.Filter.TargetGain_dB = tg;
+        if (double.TryParse(this.txtQ.Text, out var tq))
+            this.Filter.TargetQ = tq;
+        if (double.TryParse(this.txtS.Text, out var ts))
+            this.Filter.TargetSlope = ts;
 
         this.Filter.Threshold_dB = this.Threshold.VolumedB;
 
-        var TempAttackTime_ms = double.Parse(this.mask_Attack.Text);
-        if (TempAttackTime_ms < 1)
+        if (!double.TryParse(this.mask_Attack.Text, out var tempAttack))
+            tempAttack = this.Filter.AttackTime_ms;
+        if (tempAttack < 1)
         {
-            TempAttackTime_ms = 1;
+            tempAttack = 1;
             this.mask_Attack.Text = "1";
         }
-        this.Filter.AttackTime_ms = TempAttackTime_ms;
+        this.Filter.AttackTime_ms = tempAttack;
 
-        var TempReleaseTime_ms = double.Parse(this.mask_Release.Text);
-        if (TempReleaseTime_ms < 1)
+        if (!double.TryParse(this.mask_Release.Text, out var tempRelease))
+            tempRelease = this.Filter.ReleaseTime_ms;
+        if (tempRelease < 1)
         {
-            TempReleaseTime_ms = 1;
+            tempRelease = 1;
             this.mask_Release.Text = "1";
         }
-        this.Filter.ReleaseTime_ms = TempReleaseTime_ms;
+        this.Filter.ReleaseTime_ms = tempRelease;
 
-        var TempRatio = double.Parse(this.msb_CompressionRatio.Text);
-        if (TempRatio < 11)
+        if (!double.TryParse(this.msb_CompressionRatio.Text, out var tempRatio))
+            tempRatio = this.Filter.Ratio;
+        if (tempRatio < 11)
         {
-            TempRatio = 11;
+            tempRatio = 11;
             this.msb_CompressionRatio.Text = "11";
         }
-        this.Filter.Ratio = TempRatio;
+        this.Filter.Ratio = tempRatio;
 
-        var TempKneeWidth_dB = double.Parse(this.msb_KneeWidth_db.Text);
-        if (TempKneeWidth_dB < 1)
+        if (!double.TryParse(this.msb_KneeWidth_db.Text, out var tempKnee))
+            tempKnee = this.Filter.KneeWidth_dB;
+        if (tempKnee < 1)
         {
-            TempKneeWidth_dB = 1;
+            tempKnee = 1;
             this.msb_KneeWidth_db.Text = "1";
         }
-        this.Filter.KneeWidth_dB = TempKneeWidth_dB;
-
+        this.Filter.KneeWidth_dB = tempKnee;
 
         this.Filter.UseSoftKnee = this.chkSoftKnee.Checked;
 

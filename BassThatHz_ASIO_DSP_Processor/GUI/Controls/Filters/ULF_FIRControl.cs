@@ -4,7 +4,8 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 
 #region Usings
 using System;
-using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Windows.Forms;
 #endregion
 
@@ -55,46 +56,88 @@ public partial class ULF_FIRControl : UserControl, IFilterControl
 
     protected void btnApply_Click(object? sender, System.EventArgs e)
     {
+        // Perform parsing/assignment synchronously and with minimal allocations
+        var previousEnabled = this.Filter.FilterEnabled;
+        this.Filter.FilterEnabled = false;
+
         try
         {
-            var FilterState = (bool)this.Filter.FilterEnabled;
-            this.Filter.FilterEnabled = false;
+            var inSampleRate = Program.DSP_Info.InSampleRate;
+            var tapsSampleRateIndex = this.comboTapsSampleRate.SelectedIndex;
 
-            switch (this.comboTapsSampleRate.SelectedIndex)
+            switch (tapsSampleRateIndex)
             {
                 case 0:
-                    this.Filter.TapsSampleRate = Program.DSP_Info.InSampleRate / 10;
+                    this.Filter.TapsSampleRate = inSampleRate / 10;
                     break;
                 case 1:
-                    this.Filter.TapsSampleRate = Program.DSP_Info.InSampleRate / 100;
+                    this.Filter.TapsSampleRate = inSampleRate / 100;
                     break;
                 case 2:
-                    this.Filter.TapsSampleRate = Program.DSP_Info.InSampleRate / 1000;
+                    this.Filter.TapsSampleRate = inSampleRate / 1000;
                     break;
                 case 3:
-                    this.Filter.TapsSampleRate = int.Parse(this.txtTapsSampleRate.Text);
+                    if (!int.TryParse(this.txtTapsSampleRate.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var customRate))
+                        customRate = this.Filter.TapsSampleRate;
+                    this.Filter.TapsSampleRate = customRate;
                     break;
-            };
-            this.txtTapsSampleRate.Text = this.Filter.TapsSampleRate.ToString();
-
-            this.Filter.FFTSize = int.Parse(this.txtFFTSize.Text);
-            var TapsString = this.txtTaps.Text.Trim();
-            if (!string.IsNullOrEmpty(TapsString))
-            {
-                var Task_Convert = Task.Run(() => Array.ConvertAll
-                                    (
-                                        TapsString.Split('\n'),
-                                        Double.Parse
-                                    ));
-
-                Task_Convert.Wait();
-                this.Filter.SetTaps(Task_Convert.Result);
+                default:
+                    // keep existing
+                    break;
             }
-            this.Filter.FilterEnabled = FilterState;
+
+            this.txtTapsSampleRate.Text = this.Filter.TapsSampleRate.ToString(CultureInfo.InvariantCulture);
+
+            if (!int.TryParse(this.txtFFTSize.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fftSize))
+                fftSize = this.Filter.FFTSize;
+            this.Filter.FFTSize = fftSize;
+
+            var tapsText = this.txtTaps.Text;
+            if (!string.IsNullOrWhiteSpace(tapsText))
+            {
+                // Parse lines with ReadOnlySpan to reduce temporary string allocations
+                var span = tapsText.AsSpan();
+                var taps = new List<double>();
+
+                int pos = 0;
+                while (pos < span.Length)
+                {
+                    var slice = span[pos..];
+                    int nl = slice.IndexOf('\n');
+                    ReadOnlySpan<char> lineSpan;
+                    if (nl == -1)
+                    {
+                        lineSpan = slice.Trim();
+                        pos = span.Length; // done
+                    }
+                    else
+                    {
+                        lineSpan = slice.Slice(0, nl).Trim();
+                        pos += nl + 1;
+                    }
+
+                    if (lineSpan.Length == 0)
+                        continue;
+
+                    if (double.TryParse(lineSpan, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var value))
+                        taps.Add(value);
+                    else
+                        // ignore malformed lines rather than throwing; could log if needed
+                        continue;
+                }
+
+                if (taps.Count > 0)
+                    this.Filter.SetTaps(taps.ToArray());
+            }
         }
         catch (Exception ex)
         {
             this.Error(ex);
+        }
+        finally
+        {
+            // Always restore previous enabled state
+            this.Filter.FilterEnabled = previousEnabled;
         }
     }
 

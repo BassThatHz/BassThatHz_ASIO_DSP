@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 #endregion
 
@@ -37,48 +38,55 @@ public class REW_API
 {
     public string REW_baseUrl = "http://localhost:4735";
 
+    // Reuse HttpClient and JsonSerializerOptions to reduce allocations and improve perf
+    private static readonly HttpClient s_httpClient = new HttpClient();
+    private static readonly JsonSerializerOptions s_jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     public async Task PostToREW_API(string REW_ID, REW_TargetSettings REW_TargetSettings, List<REW_Filter> REW_Filters)
     {
-        using HttpClient client = new();
-        var TargetSettings_JSONContent = JsonSerializer.Serialize(REW_TargetSettings);
-        var targetSettingsContent = new StringContent(TargetSettings_JSONContent, Encoding.UTF8, "application/json");
-        var TargetSettingsResponse = await client.PostAsync($"{REW_baseUrl}/measurements/{REW_ID}/target-settings", targetSettingsContent);
-        _ = TargetSettingsResponse.IsSuccessStatusCode;
+        // Serialize using shared options and reuse static HttpClient
+        var targetSettingsJson = JsonSerializer.Serialize(REW_TargetSettings, s_jsonOptions);
+        using var targetSettingsContent = new StringContent(targetSettingsJson, Encoding.UTF8, "application/json");
+        var targetSettingsResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings"), targetSettingsContent).ConfigureAwait(false);
+        _ = targetSettingsResponse.IsSuccessStatusCode;
 
-        var Filters_JSONContent = JsonSerializer.Serialize(REW_Filters);
-        Filters_JSONContent = "{\"filters\":" + Filters_JSONContent + "}";
-        var Filters_Content = new StringContent(Filters_JSONContent, Encoding.UTF8, "application/json");
-        var FiltersResponse = await client.PostAsync($"{REW_baseUrl}/measurements/{REW_ID}/filters", Filters_Content);
-        _ = FiltersResponse.IsSuccessStatusCode;
+        // Wrap filters into an object to avoid manual string concatenation
+        var filtersWrapper = new { filters = REW_Filters };
+        var filtersJson = JsonSerializer.Serialize(filtersWrapper, s_jsonOptions);
+        using var filtersContent = new StringContent(filtersJson, Encoding.UTF8, "application/json");
+        var filtersResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters"), filtersContent).ConfigureAwait(false);
+        _ = filtersResponse.IsSuccessStatusCode;
     }
 
     public async Task<REW_TargetSettings?> GetTargetSettingsFromREW_API(string REW_ID)
     {
-        using HttpClient client = new();
-        var TargetSettingsResponse = await client.GetAsync($"{REW_baseUrl}/measurements/{REW_ID}/target-settings");
-        if (TargetSettingsResponse.IsSuccessStatusCode)
+        var targetSettingsResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings")).ConfigureAwait(false);
+        if (targetSettingsResponse.IsSuccessStatusCode)
         {
-            string JSONContent = await TargetSettingsResponse.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<REW_TargetSettings>(JSONContent);
+            string jsonContent = await targetSettingsResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return JsonSerializer.Deserialize<REW_TargetSettings>(jsonContent, s_jsonOptions);
         }
         else
         {
-            throw new Exception("REW target-settings Error Response Code: " + TargetSettingsResponse.StatusCode.ToString());
+            throw new Exception("REW target-settings Error Response Code: " + targetSettingsResponse.StatusCode.ToString());
         }
     }
 
     public async Task<List<REW_Filter>?> GetFiltersFromREW_API(string REW_ID)
     {
-        using HttpClient client = new();
-        var FiltersResponse = await client.GetAsync($"{REW_baseUrl}/measurements/{REW_ID}/filters");
-        if (FiltersResponse.IsSuccessStatusCode)
+        var filtersResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters")).ConfigureAwait(false);
+        if (filtersResponse.IsSuccessStatusCode)
         {
-            string JSONContent = await FiltersResponse.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<REW_Filter>>(JSONContent);
+            string jsonContent = await filtersResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            return JsonSerializer.Deserialize<List<REW_Filter>>(jsonContent, s_jsonOptions);
         }
         else
         {
-            throw new Exception("REW target-settings Error Response Code: " + FiltersResponse.StatusCode.ToString());
+            throw new Exception("REW target-settings Error Response Code: " + filtersResponse.StatusCode.ToString());
         }
     }
 

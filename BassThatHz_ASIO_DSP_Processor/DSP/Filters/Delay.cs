@@ -69,44 +69,48 @@ public class Delay : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        for (int i = 0; i < input.Length; i++)
-        {
-            double Result = input[i];
-            if (this.DelayBuffer != null)
-            {
-                if (this.ReadIndex >= this.DelayBufferLength)
-                    this.ReadIndex = 0;
-
-                //WriteIndex starts with an index offset of Delay_InSamples, but then wraps around to 0
-                //i.e. it is always ahead of the ReadIndex by that many samples
-                if (this.WriteIndex >= this.DelayBufferLength)
-                    this.WriteIndex = 0;
-
-                try
-                {
-                    //Save the current input in the delayed position
-                    this.DelayBuffer[this.WriteIndex] = input[i];
-                    //Read the current value from the (now delayed) read position
-                    Result = this.DelayBuffer[this.ReadIndex];
-
-                    //Increment the indexes
-                    this.WriteIndex++;
-                    this.ReadIndex++;
-                }
-                catch (Exception ex)
-                {
-                    //This might happen if the user has changed the
-                    //sample rate or buffer size while the DSP is running.
-                    //i.e. a very rare case.
-                    //A lock and bounds checks are not performed for performance reasons.
-                    //The indexes are reset to 0 by the ResizeBuffer function in this case.
-                    //You can set a breakpoint here to debug it if you want/need
-                    _ = ex;
-                }
-            }
-            input[i] = Result;
-        }
+        // Forward to span-based in-place implementation (zero-copy)
+        TransformInPlace(input.AsSpan(), currentStream);
         return input;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+    public void TransformInPlace(Span<double> input, DSP_Stream currentStream)
+    {
+        var buf = this.DelayBuffer;
+        int bufLen = this.DelayBufferLength;
+
+        if (buf == null || bufLen <= 0)
+            return;
+
+        int ri = this.ReadIndex;
+        int wi = this.WriteIndex;
+
+        int n = input.Length;
+        for (int i = 0; i < n; i++)
+        {
+            if (ri >= bufLen) ri -= bufLen;
+            if (wi >= bufLen) wi -= bufLen;
+
+            double inSample = input[i];
+
+            // write current sample into write index (to be read later)
+            buf[wi] = inSample;
+
+            // read delayed sample from read index
+            double outSample = buf[ri];
+
+            input[i] = outSample;
+
+            wi++;
+            ri++;
+        }
+
+        // store indices back (keep within range)
+        if (ri >= bufLen) ri -= bufLen;
+        if (wi >= bufLen) wi -= bufLen;
+        this.ReadIndex = ri;
+        this.WriteIndex = wi;
     }
 
     public void ResetSampleRate(int sampleRate)
@@ -156,7 +160,8 @@ public class Delay : IFilter
     protected void Reset_DelayAndBufferSize()
     {
         //Rounds the delay to the nearest sample
-        this.Delay_InSamples = (int)(this.SampleRate / 1000 * this.DelayInMS);
+        //Use double math for accuracy and performance (DelayInMS is decimal)
+        this.Delay_InSamples = (int)((double)this.SampleRate * (double)this._DelayInMS / 1000.0);
 
         this.ResizeBuffer();
     }
@@ -165,15 +170,24 @@ public class Delay : IFilter
     {
         lock (this.ResizeBufferLockObject) //The array is only resized via one thread
         {
-            this.DelayBufferLength = this.Delay_InSamples + this.BufferSize;
-            this.DelayBuffer = new double[this.DelayBufferLength];
+            int desired = this.Delay_InSamples + this.BufferSize;
 
-            //Zero the array
-            Array.Clear(this.DelayBuffer, 0, this.DelayBufferLength); 
+            // If existing buffer is large enough, reuse it to avoid allocation.
+            if (this.DelayBuffer == null || this.DelayBuffer.Length < desired)
+            {
+                this.DelayBuffer = new double[desired];
+            }
+            else if (this.DelayBuffer.Length >= desired)
+            {
+                // Clear only the used portion to reset state
+                Array.Clear(this.DelayBuffer, 0, desired);
+            }
 
-            //Reset the Indexes
+            this.DelayBufferLength = desired;
+
+            // Reset the Indexes
             this.ReadIndex = 0;
-            //The index of the first intial sample that was delayed
+            // The index of the first initial sample that was delayed
             this.WriteIndex = this.Delay_InSamples;
         }
     }

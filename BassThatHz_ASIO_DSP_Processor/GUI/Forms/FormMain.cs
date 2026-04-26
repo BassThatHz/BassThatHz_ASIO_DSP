@@ -47,11 +47,11 @@ public partial class FormMain : Form
 
     protected void TabControl1_SelectedIndexChanged(object? sender, EventArgs e)
     {
-        var SelectedTab = this.tabControl1.SelectedTab;
-        if (SelectedTab != null && SelectedTab.Controls.Count > 0 &&
-            SelectedTab.Controls[0] is IHasFocus FocusItem)
+        var selectedTab = this.tabControl1.SelectedTab;
+        if (selectedTab != null && selectedTab.Controls.Count > 0 &&
+            selectedTab.Controls[0] is IHasFocus focusItem)
         {
-            FocusItem.HasFocus();
+            focusItem.HasFocus();
         }
     }
     #endregion
@@ -67,17 +67,28 @@ public partial class FormMain : Form
     {
         if (!string.IsNullOrEmpty(xml))
         {
-            this.SafeInvoke(() =>
-            {
-                Program.DSP_Info = new ExtendedXmlSerialization.ExtendedXmlSerializer().Deserialize<DSP_Info>(xml);
-
-                //Fixes Legacy Channel Index Mappings for backwards support
-                CommonFunctions.FixLegacyChannelIndexMappings();
-
-                Application.DoEvents();
-                this.LoadConfigRefresh();
-            });
+            var serializer = new ExtendedXmlSerialization.ExtendedXmlSerializer();
+            var info = serializer.Deserialize<DSP_Info>(xml);
+            this.ApplyXMLConfig(info);
         }
+    }
+
+    // Overload that accepts an already-deserialized DSP_Info to avoid redundant deserialization
+    public void ApplyXMLConfig(DSP_Info info)
+    {
+        if (info is null)
+            return;
+
+        this.SafeInvoke(() =>
+        {
+            Program.DSP_Info = info;
+
+            // Fixes Legacy Channel Index Mappings for backwards support
+            CommonFunctions.FixLegacyChannelIndexMappings();
+
+            // Refresh configuration UI once after all pages have been updated
+            this.LoadConfigRefresh();
+        });
     }
     #endregion
 
@@ -91,13 +102,14 @@ public partial class FormMain : Form
     {
         try
         {
-            var FilePath = string.Concat(AppContext.BaseDirectory, "DSP.xml");
-            if (File.Exists(FilePath))
+            var filePath = Path.Combine(AppContext.BaseDirectory, "DSP.xml");
+            if (File.Exists(filePath))
             {
-                var XML = File.ReadAllText(FilePath);
-                XML = CommonFunctions.RemoveDeprecatedXMLInputTags(XML);
-                var temp = new ExtendedXmlSerialization.ExtendedXmlSerializer().Deserialize<DSP_Info>(XML);
-                //Perform StartUp Delay (this gives the ASIO driver time to load for auto-startup appliances)
+                var xml = File.ReadAllText(filePath);
+                xml = CommonFunctions.RemoveDeprecatedXMLInputTags(xml);
+                var temp = new ExtendedXmlSerialization.ExtendedXmlSerializer().Deserialize<DSP_Info>(xml);
+
+                // Perform StartUp Delay (gives the ASIO driver time to load for auto-startup appliances)
                 if (temp.StartUpDelay > 0)
                 {
                     this.Enabled = false;
@@ -105,20 +117,20 @@ public partial class FormMain : Form
                     this.Enabled = true;
                 }
 
-                //Perform startup using DSP file settings
+                // Perform startup using DSP file settings
                 this.tabControl1.SelectedTab = this.InputsConfigPage;
-                Application.DoEvents();
-                this.ApplyXMLConfig(XML);
+                // Apply already-deserialized config to avoid re-parsing the XML
+                this.ApplyXMLConfig(temp);
 
-                //Place filename into the General Config tab text
-                var GeneralConfigTab = this.tabControl1.TabPages[0];
-                if (GeneralConfigTab != null)
-                    GeneralConfigTab.Text = "General Config (DSP.xml)";
+                // Place filename into the General Config tab text
+                var generalConfigTab = this.tabControl1.TabPages[0];
+                if (generalConfigTab != null)
+                    generalConfigTab.Text = "General Config (DSP.xml)";
             }
             else
-            { 
+            {
                 this.tabControl1.SelectedTab = this.InputsConfigPage;
-            }                
+            }
         }
         catch (AsioException ex)
         {
@@ -136,20 +148,17 @@ public partial class FormMain : Form
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void LoadConfigRefresh()
     {
-        Application.DoEvents();
+        // Refresh all configuration pages once without repeated Application.DoEvents calls
+        // to minimize UI thread churn and allocations.
         this.ctl_GeneralConfigPage1.LoadConfigRefresh();
-        Application.DoEvents();
         this.ctl_BusesPage1.LoadConfigRefresh();
-        Application.DoEvents();
         this.ctl_DSPConfigPage1.LoadConfigRefresh();
-        //Application.DoEvents();
-        //this.ctl_MonitorPage1.LoadConfigRefresh();
-        Application.DoEvents();
+        // this.ctl_MonitorPage1.LoadConfigRefresh();
         this.ctl_OutputsConfigPage1.LoadConfigRefresh();
-        Application.DoEvents();
         this.ctl_InputsConfigPage1.LoadConfigRefresh();
-        Application.DoEvents();
         this.ctl_StatsPage1.LoadConfigRefresh();
+
+        // Single UI pulse after bulk updates
         Application.DoEvents();
     }
     #endregion

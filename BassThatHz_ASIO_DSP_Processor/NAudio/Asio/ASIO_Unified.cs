@@ -9,9 +9,6 @@ namespace NAudio.Wave
     using System.Runtime.InteropServices;
     using System.Text;
     using Microsoft.Win32;
-    using System.Buffers.Binary;
-    using System.Threading.Tasks;
-    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// Original Contributor: Mark Heath 

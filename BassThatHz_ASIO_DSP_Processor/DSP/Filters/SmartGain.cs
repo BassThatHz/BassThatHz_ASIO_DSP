@@ -72,56 +72,85 @@ public class SmartGain : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        for (int i = 0; i < input.Length; i++)
+        int len = input.Length;
+        if (len == 0)
+            return input;
+
+        // Cache frequently used fields to locals
+        double requestedGain = this.RequestedGainLinear;
+        double gaindB = this.GaindB;
+        bool peakHold = this.PeakHold;
+        TimeSpan duration = this.Duration;
+
+        double peakLevel = this.PeakLevelLinear;
+        DateTime startPeak = this.StartPeakDuration;
+
+        // Sample-local working variables
+        double headroomLinear = this.HeadroomLinear;
+        double actualGainLinear = this.ActualGainLinear;
+        double actualGaindB = this.ActualGaindB;
+        double maxAllowedLinearGain = this.MaxAllowedLinearGain;
+
+        // Read current time once per block to reduce system calls
+        DateTime now = DateTime.UtcNow;
+
+        // If not peak-holding and duration expired, apply a gentle decay once per block
+        if (!peakHold && now - startPeak > duration)
         {
-            //Range of input is -1 to +1
-            this.InputAbs = Math.Abs(input[i]);
-
-            //Reset the peak level if the seek duration has expired and we aren't Peak-Holding
-            if (!this.PeakHold &&
-                DateTime.Now - this.StartPeakDuration > this.Duration)
-            {
-                //If the headroom is sufficient then allow the PeakLevel to be lowered over time
-                if (this.HeadroomLinear * 0.707d > this.RequestedGainLinear)
-                    this.PeakLevelLinear *= 0.9999d;
-                this.StartPeakDuration = DateTime.Now;
-            }
-
-            //Record the Peak level
-            if (this.InputAbs > this.PeakLevelLinear)
-            {
-                this.PeakLevelLinear = this.InputAbs;
-                this.StartPeakDuration = DateTime.Now;
-            }
-
-            //Calculate how close to clipping the input has been/is
-            this.MaxAllowedLinearGain = 1 / this.PeakLevelLinear;
-
-            //Adjust the Actual Gain according to the input level and the Requested Gain
-            if (this.RequestedGainLinear > this.MaxAllowedLinearGain) //Clip avoidance
-            {
-                this.ActualGaindB = Decibels.LinearToDecibels(this.MaxAllowedLinearGain);
-                this.ActualGainLinear = this.MaxAllowedLinearGain;
-            }
-            else //won't clip
-            {
-                this.ActualGaindB = this.GaindB;
-                this.ActualGainLinear = this.RequestedGainLinear;
-            }
-
-            //Apply the gain
-            var Result = input[i] * this.ActualGainLinear;
-
-            //Calculate the Headroom available
-            var ReturnValueAbs = Math.Abs(Result);
-            this.HeadroomLinear = 1 / ReturnValueAbs;
-
-            //Ensure we haven't done anything stupid, i.e. ensure the output doesn't hard clip
-            if (ReturnValueAbs >= 0.999d)
-                Result = Math.Sign(Result) * 0.707d;
-
-            input[i] = Result;
+            if (headroomLinear * 0.707d > requestedGain)
+                peakLevel *= 0.9999d;
+            startPeak = now;
         }
+
+        // Main processing loop
+        for (int i = 0; i < len; i++)
+        {
+            double sample = input[i];
+            double instAbs = sample < 0 ? -sample : sample;
+
+            // Update peak and timestamp
+            if (instAbs > peakLevel)
+            {
+                peakLevel = instAbs;
+                startPeak = now;
+            }
+
+            // Max allowed gain to avoid clipping
+            maxAllowedLinearGain = peakLevel > 0 ? 1.0 / peakLevel : double.PositiveInfinity;
+
+            // Choose actual gain based on clipping avoidance
+            if (requestedGain > maxAllowedLinearGain)
+            {
+                actualGaindB = Decibels.LinearToDecibels(maxAllowedLinearGain);
+                actualGainLinear = maxAllowedLinearGain;
+            }
+            else
+            {
+                actualGaindB = gaindB;
+                actualGainLinear = requestedGain;
+            }
+
+            // Apply gain
+            double result = sample * actualGainLinear;
+
+            // Headroom and soft clipping prevention
+            double rvAbs = result < 0 ? -result : result;
+            headroomLinear = rvAbs > 0 ? 1.0 / rvAbs : double.PositiveInfinity;
+            if (rvAbs >= 0.999d)
+                result = Math.Sign(result) * 0.707d;
+
+            input[i] = result;
+        }
+
+        // Write back state once per block
+        this.InputAbs = Math.Abs(input[len - 1]);
+        this.PeakLevelLinear = peakLevel;
+        this.StartPeakDuration = startPeak;
+        this.HeadroomLinear = headroomLinear;
+        this.ActualGainLinear = actualGainLinear;
+        this.ActualGaindB = actualGaindB;
+        this.MaxAllowedLinearGain = maxAllowedLinearGain;
+
         return input;
     }
 

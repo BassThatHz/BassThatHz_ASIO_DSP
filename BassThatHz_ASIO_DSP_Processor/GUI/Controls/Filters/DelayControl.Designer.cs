@@ -17,6 +17,8 @@
             if (disposing && (components != null))
             {
                 components.Dispose();
+                // Unsubscribe from static events to avoid leaking this control instance.
+                SampleRateChangeNotifier.SampleRateChanged -= this.SampleRateChangeNotifier_SampleRateChanged;
             }
             base.Dispose(disposing);
         }

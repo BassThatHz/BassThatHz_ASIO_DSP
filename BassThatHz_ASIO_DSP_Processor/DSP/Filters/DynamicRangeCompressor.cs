@@ -5,6 +5,7 @@ namespace BassThatHz_ASIO_DSP_Processor;
 #region Usings
 using NAudio.Utils;
 using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Xml.Serialization;
@@ -92,82 +93,153 @@ public class DynamicRangeCompressor : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        double InverseRatioFactor = 10D / this.Ratio;
+        // Forward to Span-based in-place implementation for zero-allocation processing
+        TransformInPlace(input.AsSpan(), currentStream);
+        return input;
+    }
 
-        for (int i = 0; i < input.Length; i++)
+    [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+    public void TransformInPlace(Span<double> input, DSP_Stream currentStream)
+    {
+        int len = input.Length;
+        if (len == 0)
+            return;
+
+        double inverseRatioFactor = 10D / this.Ratio;
+
+        // Cache locals
+        double attack = this.AttackCoeff;
+        double release = this.ReleaseCoeff;
+        double thresholdDb = this.Threshold_dB;
+        double kneeDb = this.KneeWidth_dB;
+        bool useSoft = this.UseSoftKnee;
+
+        // Use stackalloc for small buffers to avoid renting
+        const int StackallocLimit = 512;
+        double[]? rented = null;
+        Span<double> tmpSpan = default;
+        if (len > StackallocLimit)
         {
-            double GainReduction_Linear = 0;
-            bool ThresholdExceeded = false;
-            // A small value (1e-99) is added to avoid taking the logarithm of zero.
-            double Input_dB = Decibels.LinearToDecibels(Math.Abs(input[i]) + 1e-99);
+            rented = ArrayPool<double>.Shared.Rent(len);
+            tmpSpan = rented.AsSpan(0, len);
+        }
 
-            // Check if soft knee is enabled and if the input is within the knee region.
-            if (this.UseSoftKnee && Input_dB > this.Threshold_dB - this.KneeWidth_dB * 0.5D 
-                                 && Input_dB < this.Threshold_dB + this.KneeWidth_dB * 0.5D)
+        // Two code paths: small buffers use stackalloc, large buffers use ArrayPool
+        double gainLinearLocal = this.Gain_Linear;
+        double thresholdLinear = Decibels.DecibelsToLinear(thresholdDb);
+
+        if (len <= StackallocLimit)
+        {
+            Span<double> tmp = stackalloc double[StackallocLimit];
+            tmp = tmp.Slice(0, len);
+
+            for (int i = 0; i < len; i++)
+                tmp[i] = Math.Abs(input[i]);
+
+            double runningMax = tmp[len - 1];
+            for (int i = len - 1; i >= 0; i--)
             {
-                ThresholdExceeded = true;
-                // Calculate the start and end points of the knee region in dB.
-                double KneeStart_dB = this.Threshold_dB - this.KneeWidth_dB * 0.5D;
-                double KneeEnd_dB = this.Threshold_dB + this.KneeWidth_dB * 0.5D;
-
-                // Calculate the ratio of how far the input is into the knee region.
-                double Ratio = (Input_dB - KneeStart_dB) / this.KneeWidth_dB;
-
-                // Calculate an adjusted threshold based on the ratio,
-                // creating a smooth transition through the knee region.
-                double AdjustedThreshold_dB = KneeStart_dB + Ratio * (KneeEnd_dB - KneeStart_dB);
-
-                // Calculate the gain reduction factor for this adjusted threshold.
-                GainReduction_Linear = Decibels.DecibelsToLinear(AdjustedThreshold_dB - Input_dB);
-            }
-            // If soft knee is not used or input is above the knee region.
-            else if (Input_dB > this.Threshold_dB)
-            {
-                ThresholdExceeded = true;
-                // Calculate the desired reduction in dB based on the compressor's ratio.
-                double DesiredReduction_dB = this.Threshold_dB + (Input_dB - this.Threshold_dB) * InverseRatioFactor;
-
-                // Calculate the gain reduction factor needed to achieve this reduction.
-                GainReduction_Linear = Decibels.DecibelsToLinear(DesiredReduction_dB - Input_dB);
-
-                // Look-ahead processing
-                double PeakValue = 0;
-                //Calculate the Peak Amplitude look-ahead
-                for (int j = i; j < input.Length; j++)
-                    if (Math.Abs(input[j]) > PeakValue)
-                        PeakValue = Math.Abs(input[j]);
-
-                var Threshold_Linear = Decibels.DecibelsToLinear(this.Threshold_dB);
-                if (PeakValue > Threshold_Linear)
-                    GainReduction_Linear = Math.Max(GainReduction_Linear, PeakValue - Threshold_Linear);
+                if (tmp[i] > runningMax) runningMax = tmp[i];
+                tmp[i] = runningMax;
             }
 
-            if (ThresholdExceeded)
+            for (int i = 0; i < len; i++)
             {
-                // Smoothing the gain changes
-                // This part of the code ensures that changes in gain (compression level) are applied smoothly over time,
-                // rather than abruptly, to avoid unnatural sounding artifacts.
-                if (GainReduction_Linear < this.Gain_Linear)
+                double peakSuffix = tmp[i];
+                double instAbs = Math.Abs(input[i]);
+                double inputDb = Decibels.LinearToDecibels(instAbs + 1e-99);
+
+                double gainReductionLinear = 0;
+                bool thresholdExceeded = false;
+
+                if (useSoft && inputDb > thresholdDb - kneeDb * 0.5 && inputDb < thresholdDb + kneeDb * 0.5)
                 {
-                    // Attack phase: If the calculated gain reduction is less than the current gain level (Gain_Linear),
-                    // it indicates that the signal level has increased and more compression is needed.
-                    // The gain is reduced (i.e., more compression is applied) using the attack coefficient.
-                    // This creates a smooth transition during the attack phase of the compression.
-                    this.Gain_Linear = this.AttackCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+                    thresholdExceeded = true;
+                    double kneeStart = thresholdDb - kneeDb * 0.5;
+                    double ratio = (inputDb - kneeStart) / kneeDb;
+                    double adjustedThreshold = kneeStart + ratio * kneeDb;
+                    gainReductionLinear = Decibels.DecibelsToLinear(adjustedThreshold - inputDb);
                 }
-                else
+                else if (inputDb > thresholdDb)
                 {
-                    // Release phase: If the calculated gain reduction is greater than the current gain level (Gain_Linear),
-                    // it indicates that the signal level has decreased and less compression is needed.
-                    // The gain is increased (i.e., less compression is applied) using the release coefficient.
-                    // This creates a smooth transition during the release phase of the compression.
-                    this.Gain_Linear = this.ReleaseCoeff * (this.Gain_Linear - GainReduction_Linear) + GainReduction_Linear;
+                    thresholdExceeded = true;
+                    double desiredReductionDb = thresholdDb + (inputDb - thresholdDb) * inverseRatioFactor;
+                    gainReductionLinear = Decibels.DecibelsToLinear(desiredReductionDb - inputDb);
+                    if (peakSuffix > thresholdLinear)
+                        gainReductionLinear = Math.Max(gainReductionLinear, peakSuffix - thresholdLinear);
                 }
-                this.CompressionApplied = this.Gain_Linear;
-                input[i] *= this.Gain_Linear;
+
+                if (thresholdExceeded)
+                {
+                    if (gainReductionLinear < gainLinearLocal)
+                        gainLinearLocal = attack * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
+                    else
+                        gainLinearLocal = release * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
+
+                    input[i] *= gainLinearLocal;
+                }
             }
         }
-        return input;
+        else
+        {
+            try
+            {
+                for (int i = 0; i < len; i++)
+                    tmpSpan[i] = Math.Abs(input[i]);
+
+                double runningMax = tmpSpan[len - 1];
+                for (int i = len - 1; i >= 0; i--)
+                {
+                    if (tmpSpan[i] > runningMax) runningMax = tmpSpan[i];
+                    tmpSpan[i] = runningMax;
+                }
+
+                for (int i = 0; i < len; i++)
+                {
+                    double peakSuffix = tmpSpan[i];
+                    double instAbs = Math.Abs(input[i]);
+                    double inputDb = Decibels.LinearToDecibels(instAbs + 1e-99);
+
+                    double gainReductionLinear = 0;
+                    bool thresholdExceeded = false;
+
+                    if (useSoft && inputDb > thresholdDb - kneeDb * 0.5 && inputDb < thresholdDb + kneeDb * 0.5)
+                    {
+                        thresholdExceeded = true;
+                        double kneeStart = thresholdDb - kneeDb * 0.5;
+                        double ratio = (inputDb - kneeStart) / kneeDb;
+                        double adjustedThreshold = kneeStart + ratio * kneeDb;
+                        gainReductionLinear = Decibels.DecibelsToLinear(adjustedThreshold - inputDb);
+                    }
+                    else if (inputDb > thresholdDb)
+                    {
+                        thresholdExceeded = true;
+                        double desiredReductionDb = thresholdDb + (inputDb - thresholdDb) * inverseRatioFactor;
+                        gainReductionLinear = Decibels.DecibelsToLinear(desiredReductionDb - inputDb);
+                        if (peakSuffix > thresholdLinear)
+                            gainReductionLinear = Math.Max(gainReductionLinear, peakSuffix - thresholdLinear);
+                    }
+
+                    if (thresholdExceeded)
+                    {
+                        if (gainReductionLinear < gainLinearLocal)
+                            gainLinearLocal = attack * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
+                        else
+                            gainLinearLocal = release * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
+
+                        input[i] *= gainLinearLocal;
+                    }
+                }
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<double>.Shared.Return(rented, clearArray: false);
+            }
+        }
+
+        this.Gain_Linear = gainLinearLocal;
+        this.CompressionApplied = gainLinearLocal;
     }
 
     public void ResetSampleRate(int sampleRate)

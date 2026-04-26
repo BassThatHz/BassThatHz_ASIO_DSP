@@ -5,7 +5,6 @@ namespace BassThatHz_ASIO_DSP_Processor;
 #region Usings
 using NAudio.Utils;
 using System;
-using System.Linq;
 using System.Runtime.CompilerServices;
 #endregion
 
@@ -53,61 +52,69 @@ public class Floor : IFilter
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
         // Range of input is -1 to +1
+        int len = input.Length;
+        if (len == 0)
+            return input;
 
-        // Iterate over each sample in the input block
-        foreach (var i in Enumerable.Range(0, input.Length))
+        // Cache frequently used fields to locals to avoid repeated field access
+        double minValue = this.MinValue;
+        double ratio = this.Ratio;
+        TimeSpan hold = this.HoldInMS;
+
+        // Use local state variables and write back at the end
+        DateTime lastDetection = this.LastDetection;
+        DateTime startTime = this.StartTime;
+        bool isActive = this.IsActive;
+
+        for (int i = 0; i < len; i++)
         {
             double currentSample = input[i];
-            double returnValue = currentSample;
+            double outSample = currentSample;
 
-            // Detection Logic - checks if the sample is within the floor range
-            bool isInFloorRange = currentSample > 0 && currentSample < MinValue || currentSample < 0 && currentSample > -MinValue;
+            // compute now once per sample
+            DateTime now = DateTime.UtcNow;
 
-            // Update detection timestamp if sample is within floor range
-            if (isInFloorRange)
+            // Detection: sample inside floor range (exclude exact zero)
+            bool detected = (currentSample != 0.0) && (Math.Abs(currentSample) < minValue);
+            if (detected)
             {
-                this.LastDetection = DateTime.Now;
-                this.IsDetected = true;
+                lastDetection = now;
             }
 
-            // Initialization Logic - activate the filter on first detection
-            if (this.IsDetected && !this.IsActive)
+            // Activate on first detection
+            if (detected && !isActive)
             {
-                this.StartTime = DateTime.Now;
-                this.IsActive = true;
+                startTime = now;
+                isActive = true;
             }
 
-            // Update total active duration
-            this.CurrentTotalDuration = DateTime.Now - this.StartTime;
-
-            // DSP (based on Attack/Hold/Release logic)
-            // Apply compression if active and within hold duration
-            if (this.IsActive && DateTime.Now - this.LastDetection < this.HoldInMS)
+            // Only process when active and within hold window
+            if (isActive && (now - lastDetection) < hold)
             {
-                if (this.IsDetected) // Only process applicable samples
+                if (detected)
                 {
-                    // Calculate the amount by which the input exceeds the threshold in dB
-                    var excessDB = Math.Abs(Decibels.LinearToDecibels(DC_OFFSET + this.MinValue / Math.Abs(currentSample)));
-                    // Calculate compression amount in dB (negative value)
-                    var compressionRatioDB = -excessDB * (this.Ratio - 1) / this.Ratio;
-                    // Convert compression dB to a linear scale
-                    var inputCompressionAmount = Decibels.DecibelsToLinear(compressionRatioDB) - DC_OFFSET;
-                    // Apply compression to the input sample
-                    returnValue = currentSample * (double)inputCompressionAmount;
+                    // Compute compression based on distance from floor
+                    double absSample = Math.Abs(currentSample);
+                    // avoid division by zero; DC_OFFSET guards
+                    double excessDB = Math.Abs(Decibels.LinearToDecibels(DC_OFFSET + minValue / absSample));
+                    double compressionRatioDB = -excessDB * (ratio - 1.0) / ratio;
+                    double inputCompressionAmount = Decibels.DecibelsToLinear(compressionRatioDB) - DC_OFFSET;
+                    outSample = currentSample * inputCompressionAmount;
                 }
             }
             else
             {
-                // Reset active state if hold duration expired
-                this.IsActive = false;
+                isActive = false;
             }
 
-            // Reset detection state for next sample
-            this.IsDetected = false;
-
-            // Store processed sample back in input array
-            input[i] = returnValue;
+            input[i] = outSample;
         }
+
+        // Write back state
+        this.LastDetection = lastDetection;
+        this.StartTime = startTime;
+        this.IsActive = isActive;
+        this.CurrentTotalDuration = isActive ? (DateTime.UtcNow - startTime) : TimeSpan.Zero;
 
         return input;
     }

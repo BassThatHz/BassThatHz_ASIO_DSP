@@ -28,30 +28,31 @@ using System;
 /// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 [Serializable]
-public enum FilterTypes
+// Use a compact underlying type to reduce memory when many enum values are stored.
+public enum FilterTypes : byte
 {
-    PEQ,
-    Basic_HPF_LPF,
-    Low_Shelf,
-    High_Shelf,
-    Notch,
-    Band_Pass,
-    All_Pass,
-    Adv_High_Pass,
-    Adv_Low_Pass,
-    Polarity,
-    Delay,
-    Floor,
-    Limiter,
-    SmartGain,
-    FIR,
-    Anti_DC,
-    Mixer,
-    DynamicRangeCompressor,
-    ClassicLimiter,
-    DEQ,
-    AuxSet,
-    AuxGet,
-    ULF_FIR,
-    GPEQ
+    PEQ = 0,
+    Basic_HPF_LPF = 1,
+    Low_Shelf = 2,
+    High_Shelf = 3,
+    Notch = 4,
+    Band_Pass = 5,
+    All_Pass = 6,
+    Adv_High_Pass = 7,
+    Adv_Low_Pass = 8,
+    Polarity = 9,
+    Delay = 10,
+    Floor = 11,
+    Limiter = 12,
+    SmartGain = 13,
+    FIR = 14,
+    Anti_DC = 15,
+    Mixer = 16,
+    DynamicRangeCompressor = 17,
+    ClassicLimiter = 18,
+    DEQ = 19,
+    AuxSet = 20,
+    AuxGet = 21,
+    ULF_FIR = 22,
+    GPEQ = 23
 }

@@ -4,7 +4,6 @@ namespace BassThatHz_ASIO_DSP_Processor.DSP.Filters;
 
 #region Usings
 using System;
-using System.Linq;
 using System.Runtime.CompilerServices;
 #endregion
 
@@ -41,22 +40,53 @@ public class AuxSet : IFilter
     [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
     public double[] Transform(double[] input, DSP_Stream currentStream)
     {
-        var NumberOfAuxBuffers = currentStream.NumberOfAuxBuffers;
+        TransformInPlace(input.AsSpan(), currentStream);
+        return input;
+    }
 
-        if (currentStream.AuxBuffer == null || currentStream.AuxBuffer.Length != NumberOfAuxBuffers ||
-            currentStream.AuxBuffer.Any(innerArray => innerArray.Length != input.Length))
+    [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+    public void TransformInPlace(Span<double> input, DSP_Stream currentStream)
+    {
+        if (currentStream == null)
+            return;
+
+        var numAux = DSP_Stream.NumberOfAuxBuffers;
+        int idx = this.AuxSetIndex;
+
+        if (idx < 0 || idx >= numAux)
+            return;
+
+        var auxBuffers = currentStream.AuxBuffer;
+
+        // Ensure top-level aux buffer array exists and has expected length. Try to reuse existing inner arrays where possible.
+        if (auxBuffers == null || auxBuffers.Length != numAux)
         {
-            currentStream.AuxBuffer = new double[NumberOfAuxBuffers][]; 
-            for (int i = 0; i < NumberOfAuxBuffers; i++)
-                currentStream.AuxBuffer[i] = new double[input.Length];
+            var newAux = new double[numAux][];
+            if (auxBuffers != null)
+            {
+                int copyLen = Math.Min(auxBuffers.Length, newAux.Length);
+                for (int i = 0; i < copyLen; i++)
+                    newAux[i] = auxBuffers[i];
+            }
+            currentStream.AuxBuffer = newAux;
+            auxBuffers = newAux;
         }
 
-        Array.Copy(input, currentStream.AuxBuffer[this.AuxSetIndex], input.Length);            
+        // Ensure the specific aux row exists and is the right length. Allocate only if necessary.
+        var row = auxBuffers[idx];
+        if (row == null || row.Length != input.Length)
+        {
+            row = new double[input.Length];
+            auxBuffers[idx] = row;
+        }
+
+        // Copy input into aux buffer using Span.CopyTo (optimized)
+        input.CopyTo(row.AsSpan());
 
         if (this.MuteAfter)
-            Array.Clear(input);
-
-        return input;
+        {
+            input.Clear();
+        }
     }
 
     public void ApplySettings()

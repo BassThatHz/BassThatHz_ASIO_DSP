@@ -37,7 +37,7 @@ using System.Diagnostics;
 //This is converted to and from an XML based file.
 //All object references must either be serializable types or excluded from serialization via XmlIgnoreAttribute attribute tags
 [Serializable]
-public class DSP_Info
+public sealed class DSP_Info
 {
     #region Application
     public int StartUpDelay { get; set; } = 0;
@@ -71,14 +71,30 @@ public class DSP_Info
     #endregion
 
     #region Streams
-    public ObservableCollection<DSP_Stream> Streams { get; set; } = new();
+    // Lazy-initialize collections to avoid allocating ObservableCollection instances when not needed.
+    private ObservableCollection<DSP_Stream>? _streams;
+    public ObservableCollection<DSP_Stream> Streams
+    {
+        get => _streams ??= new ObservableCollection<DSP_Stream>();
+        set => _streams = value ?? new ObservableCollection<DSP_Stream>();
+    }
     #endregion
 
     #region Buses
-    public ObservableCollection<DSP_Bus> Buses { get; set; } = new();
+    private ObservableCollection<DSP_Bus>? _buses;
+    public ObservableCollection<DSP_Bus> Buses
+    {
+        get => _buses ??= new ObservableCollection<DSP_Bus>();
+        set => _buses = value ?? new ObservableCollection<DSP_Bus>();
+    }
     #endregion
 
     #region AbstractBuses
-    public ObservableCollection<DSP_AbstractBus> AbstractBuses { get; set; } = new();
+    private ObservableCollection<DSP_AbstractBus>? _abstractBuses;
+    public ObservableCollection<DSP_AbstractBus> AbstractBuses
+    {
+        get => _abstractBuses ??= new ObservableCollection<DSP_AbstractBus>();
+        set => _abstractBuses = value ?? new ObservableCollection<DSP_AbstractBus>();
+    }
     #endregion
 }

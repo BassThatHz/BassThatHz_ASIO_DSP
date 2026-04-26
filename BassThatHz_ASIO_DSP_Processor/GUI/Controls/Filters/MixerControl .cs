@@ -9,6 +9,8 @@ using System.Linq;
 using System.Windows.Forms;
 #endregion
 
+
+
 /// <summary>
 ///  BassThatHz ASIO DSP Processor Engine
 ///  Copyright (c) 2026 BassThatHz
@@ -34,14 +36,32 @@ public partial class MixerControl : UserControl, IFilterControl
 {
     #region Variables
     protected Mixer Filter = new();
-    protected FormMixer MixerForm = new();
+    // Lazy-create the mixer form to avoid allocating a potentially heavy form
+    // until the user actually requests configuration. Keep the field private
+    // so we can control its lifecycle and dispose it when the control is disposed.
+    private FormMixer? _mixerForm;
+    private FormMixer MixerForm => _mixerForm ??= CreateMixerForm();
+    #endregion
+
+    #region Helpers
+    private FormMixer CreateMixerForm()
+    {
+        var fm = new FormMixer();
+        // Attach callbacks so the form and control interact correctly
+        AttachMixerFormCallbacks(fm);
+        // When the form is disposed we should release our reference so it can be GC'd
+        fm.Disposed += (s, e) => _mixerForm = null;
+        return fm;
+    }
+
     #endregion
 
     #region Constructor
     public MixerControl()
     {
         InitializeComponent();
-        this.Create_MixerFormCallbacks();
+        // Ensure any lazily created form is disposed when this control is disposed.
+        this.Disposed += (s, e) => { _mixerForm?.Dispose(); _mixerForm = null; };
     }
     #endregion
 
@@ -60,26 +80,53 @@ public partial class MixerControl : UserControl, IFilterControl
     #region Protected Functions
     protected void Create_MixerFormCallbacks()
     {
-        this.MixerForm.ClearAllFilterElements = () =>
-                    this.Filter.MixerInputs.Clear();
+        // Call AttachMixerFormCallbacks when the form is created. This method intentionally
+        // does not reference the MixerForm to avoid creating it during control construction.
+    }
 
-        this.MixerForm.AddRangeOfFilterElements = (MixerInputs) =>
+    private void AttachMixerFormCallbacks(FormMixer form)
+    {
+        // Clear cached filter elements
+        form.ClearAllFilterElements = () => this.Filter.MixerInputs.Clear();
+
+        // Add a range of elements. Optimize to minimize allocations and UI updates.
+        form.AddRangeOfFilterElements = (MixerInputs) =>
         {
-            //Apply only the Enabled Mixer Inputs for DSP
-            this.Filter.MixerInputs = MixerInputs.Where(item => item.Enabled).Select(item => new MixerInput
-            {
-                Attenuation = item.Attenuation,
-                StreamAttenuation = item.StreamAttenuation,
-                Enabled = item.Enabled,
-                ChannelIndex = item.ChannelIndex,
-                ChannelName = item.ChannelName
-            }).ToList();
-
-            //Refresh the listbox items
-            this.listBox1.Items.Clear();
+            // Build the enabled list with a single pass and reuse capacity where possible.
+            var enabledList = new System.Collections.Generic.List<MixerInput>();
             foreach (var item in MixerInputs)
-                if (item.Enabled)
-                    this.listBox1.Items.Add($"({item.ChannelIndex}) {item.ChannelName} : {item.Attenuation} | {item.StreamAttenuation}");
+            {
+                if (!item.Enabled)
+                    continue;
+
+                enabledList.Add(new MixerInput
+                {
+                    Attenuation = item.Attenuation,
+                    StreamAttenuation = item.StreamAttenuation,
+                    Enabled = item.Enabled,
+                    ChannelIndex = item.ChannelIndex,
+                    ChannelName = item.ChannelName
+                });
+            }
+
+            // Replace filter inputs with the filtered list
+            this.Filter.MixerInputs = enabledList;
+
+            // Refresh the listbox in a single update to avoid repeated UI work
+            if (this.listBox1 != null)
+            {
+                this.listBox1.BeginUpdate();
+                try
+                {
+                    this.listBox1.Items.Clear();
+                    if (enabledList.Count > 0)
+                    {
+                        var display = enabledList.Select(item => $"({item.ChannelIndex}) {item.ChannelName} : {item.Attenuation} | {item.StreamAttenuation}").ToArray();
+                        this.listBox1.Items.AddRange(display);
+                    }
+                }
+                finally { this.listBox1.EndUpdate(); }
+            }
         };
     }
     #endregion

@@ -22,3 +22,10 @@
 /BassThatHz_ASIO_DSP_Processor/Properties/PublishProfiles
 /BassThatHz_ASIO_DSP_Processor/bin
 /Test_Project_1/bin/Release/net10.0-windows10.0.26100.0/win-x64
+/.localpilot
+/Test_Project_1/bin/Release/net10.0-windows10.0.26100.0
+/WpfApp1/bin
+/WpfApp1/obj
+/WpfControlLibrary1/obj
+/copilot.exe
+/AGENTS.md

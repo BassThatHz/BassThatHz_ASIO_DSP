@@ -119,8 +119,21 @@ public partial class BTH_VolumeSliderControl : UserControl
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Color TextColor { get; set; } = Color.Black;
+
+    private Brush _sliderColor = Brushes.LightGreen;
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public Brush SliderColor { get; set; } = Brushes.LightGreen;
+    public Brush SliderColor
+    {
+        get => _sliderColor;
+        set
+        {
+            // Avoid null and avoid unnecessary assignments
+            if (value is null)
+                return;
+            if (!object.ReferenceEquals(_sliderColor, value))
+                _sliderColor = value;
+        }
+    }
     #endregion
 
     #region Events
@@ -142,9 +155,9 @@ public partial class BTH_VolumeSliderControl : UserControl
         if (double.TryParse(this.txtDB.Text, out double result))
         {
             if (result > this.MaxDb)
-                this.txtDB.Text = this.MaxDb.ToString();
+                this.txtDB.Text = this.MaxDb.ToString("F2");
             else if (result < this.MinDb)
-                this.txtDB.Text = this.MinDb.ToString();
+                this.txtDB.Text = this.MinDb.ToString("F2");
         }
     }
     #endregion
@@ -154,10 +167,20 @@ public partial class BTH_VolumeSliderControl : UserControl
         double db = this.VolumedB;
         double percent = this.RestPosition - db / this.MinDb;
 
-        //Draw Rect
-        this.lblDB.ForeColor = this.TextColor;
+        // Guard against invalid values and clamp to [0,1]
+        if (double.IsNaN(percent) || double.IsInfinity(percent))
+            percent = 0d;
+        percent = Math.Min(1d, Math.Max(0d, percent));
+
+        // Draw Rect
+        if (this.lblDB.ForeColor != this.TextColor)
+            this.lblDB.ForeColor = this.TextColor;
+
         pe.Graphics.DrawRectangle(Pens.Black, 0, 0, this.Width - 1, this.Height - 1);
-        pe.Graphics.FillRectangle(this.SliderColor, 1, 1, (int)((this.Width - 1.99) * percent), this.Height - 2);
+
+        int fillWidth = (int)((this.Width - 1.99) * percent);
+        if (fillWidth > 0)
+            pe.Graphics.FillRectangle(this.SliderColor, 1, 1, fillWidth, this.Height - 2);
 
         this.CenterControl(this.lblDB);
     }
@@ -232,12 +255,12 @@ public partial class BTH_VolumeSliderControl : UserControl
             if (result > this.MaxDb)
             {
                 result = this.MaxDb;
-                this.txtDB.Text = this.MaxDb.ToString();
+                this.txtDB.Text = this.MaxDb.ToString("F2");
             }
             else if (result < this.MinDb)
             {
                 result = this.MinDb;
-                this.txtDB.Text = this.MinDb.ToString();
+                this.txtDB.Text = this.MinDb.ToString("F2");
             }
             this.VolumedB = result;
         }
@@ -250,9 +273,16 @@ public partial class BTH_VolumeSliderControl : UserControl
     }
     protected void SetVolumeFromMouse(int x)
     {
-        // linear Volume = (float) x / this.Width;
+        // If click is at or past leftmost edge, set linear volume to 0
+        if (x <= 0)
+        {
+            this.Volume = 0;
+            return;
+        }
+
+        // Compute dB based on mouse position and set via VolumedB to avoid extra conversions
         double dbVolume = (1 - (double)x / this.Width) * this.MinDb;
-        this.Volume = x <= 0 ? 0 : Math.Pow(10, dbVolume / 20);
+        this.VolumedB = dbVolume;
     }
 
     protected void CenterControl(Control input)

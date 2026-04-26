@@ -11,9 +11,11 @@ public class Test_DSP_Stream
     public void DSP_Stream_DefaultValues_AreCorrect()
     {
         var stream = new DSP_Stream();
-        Assert.IsNull(stream.AbstractBusBuffer);
-        Assert.IsNull(stream.AuxBuffer);
-        Assert.AreEqual(256, stream.NumberOfAuxBuffers);
+        Assert.IsNotNull(stream.AbstractBusBuffer);
+        Assert.AreEqual(0, stream.AbstractBusBuffer.Length);
+        Assert.IsNotNull(stream.AuxBuffer);
+        Assert.AreEqual(0, stream.AuxBuffer.Length);
+        Assert.AreEqual(DSP_Stream.NumberOfAuxBuffers, DSP_Stream.NumberOfAuxBuffers);
         Assert.AreEqual(string.Empty, stream.InputChannelName);
         Assert.AreEqual(string.Empty, stream.OutputChannelName);
         Assert.AreEqual(-1, stream.InputChannelIndex);

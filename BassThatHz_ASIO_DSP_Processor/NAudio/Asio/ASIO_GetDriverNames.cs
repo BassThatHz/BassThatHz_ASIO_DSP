@@ -5,26 +5,26 @@ namespace NAudio.Wave;
 #region Usings
 using Microsoft.Win32;
 using System;
+using System.Runtime.CompilerServices;
 #endregion
 
-public class ASIO_GetDriverNames : IASIO_GetDriverNames
+public sealed class ASIO_GetDriverNames : IASIO_GetDriverNames
 {
     /// <summary>
     /// Gets the ASIO driver names installed.
     /// </summary>
     /// <returns>a list of driver names. Use this name to GetAsioDriverByName</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string[] GetDriverNames()
     {
-        var names = Array.Empty<string>();
-        var regKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\ASIO");
-
-        if (regKey != null)
+        using var regKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\ASIO");
+        if (regKey is null)
         {
-            names = regKey.GetSubKeyNames();
-            regKey.Close();
+            return Array.Empty<string>();
         }
 
-        return names;
+        // RegistryKey.GetSubKeyNames returns a string[]; return it directly to avoid extra allocations.
+        return regKey.GetSubKeyNames();
     }
 }
 
