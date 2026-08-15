@@ -11,6 +11,7 @@ using System.Windows.Forms;
 namespace Test_Project_1
 {
     [TestClass]
+    [DoNotParallelize]
     public class Test_GPEQControl
     {
         private TestableGPEQControl _control;

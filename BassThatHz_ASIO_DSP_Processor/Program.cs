@@ -33,7 +33,13 @@ using System.Windows.Forms;
 public static class Program
 {
     public static DSP_Info DSP_Info = new();
-    public readonly static ASIO_Engine ASIO = new();
+    public static ASIO_Engine ASIO = new();
+
+    // Test-only seam: allows the test suite to substitute a mock ASIO_Engine
+    // without relying on reflection against an initonly field, which breaks
+    // under parallel test execution once the static ctor has fully run.
+    // Production code must not call this.
+    internal static void SetAsioForTesting(ASIO_Engine engine) => ASIO = engine;
     public static FormMain? Form_Main;
     public static FormMonitoring? Form_Monitoring;
     public static FormAlign? Form_Align;

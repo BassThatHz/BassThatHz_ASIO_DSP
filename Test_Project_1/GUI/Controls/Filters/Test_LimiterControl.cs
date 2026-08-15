@@ -251,37 +251,20 @@ namespace Test_Project_1
     }
 
     [DesignerCategory("Code")]
-    public class LimiterMockVolumeControl : UserControl
+    public class LimiterMockVolumeControl : BTH_VolumeSliderControl
     {
-        private double _volume;
-        private double _volumeDb;
-        private Color _textColor;
-        private Brush _sliderBrush;
-        
-        public event EventHandler VolumeChanged;
-
-        public void SetVolume(double value) => _volume = value;
-        public void SetVolumeDb(double value) => _volumeDb = value;
-        public double GetVolume() => _volume;
-        public double GetVolumeDb() => _volumeDb;
-        public Color GetTextColor() => _textColor;
-        public Brush GetSliderBrush() => _sliderBrush;
-
-        [DefaultValue(typeof(Color), "Black")]
-        public Color TextColor
-        {
-            set => _textColor = value;
-        }
-
-        [DefaultValue(typeof(Brush), null)]
-        public Brush SliderColor
-        {
-            set => _sliderBrush = value;
-        }
+        public void SetVolume(double value) => this.Volume = value;
+        public void SetVolumeDb(double value) => this.VolumedB = value;
+        public double GetVolume() => this.Volume;
+        public double GetVolumeDb() => this.VolumedB;
+        public Color GetTextColor() => this.TextColor;
+        public Brush GetSliderBrush() => this.SliderColor;
 
         public void OnVolumeChanged()
         {
-            VolumeChanged?.Invoke(this, EventArgs.Empty);
+            var field = typeof(BTH_VolumeSliderControl).GetField("VolumeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
+            var handler = field?.GetValue(this) as EventHandler;
+            handler?.Invoke(this, EventArgs.Empty);
         }
     }
 

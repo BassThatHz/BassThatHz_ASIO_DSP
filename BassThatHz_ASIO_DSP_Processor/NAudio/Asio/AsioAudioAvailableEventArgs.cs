@@ -3,7 +3,6 @@ namespace NAudio.Wave
     using System;
     using System.Buffers.Binary;
     using System.Runtime.CompilerServices;
-    using System.Threading.Tasks;
     using NAudio.Wave.Asio;
 
     // Merged copy of AsioAudioAvailableEventArgs to coexist in ASIO_Unified compilation unit.
@@ -107,7 +106,13 @@ namespace NAudio.Wave
                     {
                         for (int ch = 0; ch < OutputChannels; ch++)
                         {
-                            *((int*)OutputBuffers[ch] + n) = (int)(outputSamples[index++] * Int32LSB_MaxValue);
+                            // (float)Int32.MaxValue rounds UP to 2147483648f (2^31, one past int.MaxValue) because
+                            // a 32-bit float can't represent 2147483647 exactly. At full-scale (+1.0f) input the
+                            // scaled value hits 2147483648f, and casting that to int is an overflow (undefined/
+                            // implementation-defined in .NET, typically wraps to int.MinValue) instead of clamping
+                            // to int.MaxValue. Clamp explicitly before the cast to avoid that silent overflow.
+                            float scaled = outputSamples[index++] * Int32LSB_MaxValue;
+                            *((int*)OutputBuffers[ch] + n) = scaled >= (float)int.MaxValue ? int.MaxValue : scaled <= (float)int.MinValue ? int.MinValue : (int)scaled;
                         }
                     }
                 }
@@ -171,83 +176,99 @@ namespace NAudio.Wave
             var LocalSamplesPerBuffer = SamplesPerBuffer;
             if (AsioSampleType == AsioSampleType.Int32LSB)
             {
-                _ = Parallel.For(0, InputChannels, (ch) =>
+                // Use a simple for loop to avoid Task/ThreadPool allocations from Parallel.For
+                for (int ch = 0; ch < InputChannels; ch++)
                 {
                     unsafe
                     {
+                        var src = (int*)InputBuffers[ch];
+                        var dst = inputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
-                            inputSamples[ch][n] = *((int*)InputBuffers[ch] + n) * Int32MaxValueReciprocal;
+                        {
+                            dst[n] = src[n] * Int32MaxValueReciprocal;
+                        }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Float64LSB)
             {
-                _ = Parallel.For(0, InputChannels, (ch) =>
+                for (int ch = 0; ch < InputChannels; ch++)
                 {
                     unsafe
                     {
-                        var SamplePointer = (double*)InputBuffers[ch];
+                        var src = (double*)InputBuffers[ch];
+                        var dst = inputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
-                            inputSamples[ch][n] = *(SamplePointer + n);
+                        {
+                            dst[n] = src[n];
+                        }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Float64MSB)
             {
-                _ = Parallel.For(0, InputChannels, (ch) =>
+                for (int ch = 0; ch < InputChannels; ch++)
                 {
                     unsafe
                     {
-                        var SamplePointer = (double*)InputBuffers[ch];
-                        var OutBuffer = inputSamples[ch];
+                        var samplePtr = (double*)InputBuffers[ch];
+                        var outBuf = inputSamples[ch];
+                        // process each sample
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            ulong bits = *((ulong*)SamplePointer + n);
+                            ulong bits = *((ulong*)samplePtr + n);
                             bits = BinaryPrimitives.ReverseEndianness(bits);
-                            OutBuffer[n] = BitConverter.Int64BitsToDouble((long)bits);
+                            outBuf[n] = BitConverter.Int64BitsToDouble((long)bits);
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Int16LSB)
             {
-                _ = Parallel.For(0, InputChannels, (ch) =>
+                for (int ch = 0; ch < InputChannels; ch++)
                 {
                     unsafe
                     {
-                        var SamplePointer = (short*)InputBuffers[ch];
+                        var src = (short*)InputBuffers[ch];
+                        var dst = inputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
-                            inputSamples[ch][n] = *(SamplePointer + n) * Int16MaxValueReciprocal;
+                        {
+                            dst[n] = src[n] * Int16MaxValueReciprocal;
+                        }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Int24LSB)
             {
-                _ = Parallel.For(0, InputChannels, (ch) =>
+                for (int ch = 0; ch < InputChannels; ch++)
                 {
                     unsafe
                     {
-                        var SamplePointer = (byte*)InputBuffers[ch];
+                        var samplePtr = (byte*)InputBuffers[ch];
+                        var dst = inputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            byte* InputpSample = SamplePointer + n * 3;
-                            int InputSample = InputpSample[0] | (InputpSample[1] << 8) | ((sbyte)InputpSample[2] << 16);
-                            inputSamples[ch][n] = InputSample * Int24LSBMaxValueReciprocal;
+                            byte* inSample = samplePtr + n * 3;
+                            int val = inSample[0] | (inSample[1] << 8) | ((sbyte)inSample[2] << 16);
+                            dst[n] = val * Int24LSBMaxValueReciprocal;
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Float32LSB)
             {
-                _ = Parallel.For(0, InputChannels, (ch) =>
+                for (int ch = 0; ch < InputChannels; ch++)
                 {
                     unsafe
                     {
-                        var SamplePointer = (float*)InputBuffers[ch];
-                        for (int n = 0; n < SamplesPerBuffer; n++)
-                            inputSamples[ch][n] = *(SamplePointer + n);
+                        var src = (float*)InputBuffers[ch];
+                        var dst = inputSamples[ch];
+                        for (int n = 0; n < LocalSamplesPerBuffer; n++)
+                        {
+                            dst[n] = src[n];
+                        }
                     }
-                });
+                }
             }
             else
             {
@@ -270,22 +291,33 @@ namespace NAudio.Wave
                 throw new InvalidOperationException("outputSamples[x] cannot be smaller than SamplesPerBuffer. Channels must be initalized");
 
             var LocalSamplesPerBuffer = SamplesPerBuffer;
+            // NOTE: previously used Parallel.For per channel here, which allocates a closure plus
+            // Task/ThreadPool work items on every single ASIO buffer-switch callback (the hottest
+            // loop in the app). Converted to plain sequential for-loops (matching GetAsJaggedSamples,
+            // which already avoided this) to eliminate that per-callback GC pressure. Channel counts
+            // here are small (a handful of I/O channels), so the parallelism was never worth its
+            // allocation cost anyway.
             if (AsioSampleType == AsioSampleType.Int32LSB)
             {
-                _ = Parallel.For(0, OutputChannels, (ch) =>
+                for (int ch = 0; ch < OutputChannels; ch++)
                 {
                     unsafe
                     {
+                        var SamplePointer = (int*)OutputBuffers[ch];
+                        var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            *((int*)OutputBuffers[ch] + n) = (int)(outputSamples[ch][n] * Int32LSB_MaxValue);
+                            // See SetAsInterleavedSamples for why this clamp is required: (float)Int32.MaxValue
+                            // rounds up to 2^31, so a full-scale (+1.0) sample would otherwise overflow the cast.
+                            double scaled = OutSamples[n] * Int32LSB_MaxValue;
+                            SamplePointer[n] = scaled >= int.MaxValue ? int.MaxValue : scaled <= int.MinValue ? int.MinValue : (int)scaled;
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Float64LSB)
             {
-                _ = Parallel.For(0, OutputChannels, (ch) =>
+                for (int ch = 0; ch < OutputChannels; ch++)
                 {
                     unsafe
                     {
@@ -293,14 +325,14 @@ namespace NAudio.Wave
                         var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            *(SamplePointer + n) = (double)OutSamples[n];
+                            SamplePointer[n] = OutSamples[n];
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Float64MSB)
             {
-                _ = Parallel.For(0, OutputChannels, (ch) =>
+                for (int ch = 0; ch < OutputChannels; ch++)
                 {
                     unsafe
                     {
@@ -311,15 +343,14 @@ namespace NAudio.Wave
                             long bits = BitConverter.DoubleToInt64Bits(OutSamples[n]);
                             ulong ubits = (ulong)bits;
                             ubits = BinaryPrimitives.ReverseEndianness(ubits);
-                            *(SamplePointer + n) = BitConverter.Int64BitsToDouble((long)ubits);
+                            SamplePointer[n] = BitConverter.Int64BitsToDouble((long)ubits);
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Int16LSB)
             {
-                float MaxValue = (float)Int16.MaxValue;
-                _ = Parallel.For(0, OutputChannels, (ch) =>
+                for (int ch = 0; ch < OutputChannels; ch++)
                 {
                     unsafe
                     {
@@ -327,14 +358,14 @@ namespace NAudio.Wave
                         var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            *(SamplePointer + n) = (short)(OutSamples[n] * MaxValue);
+                            SamplePointer[n] = (short)(OutSamples[n] * Int16MaxValue);
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Int24LSB)
             {
-                _ = Parallel.For(0, OutputChannels, (ch) =>
+                for (int ch = 0; ch < OutputChannels; ch++)
                 {
                     unsafe
                     {
@@ -349,11 +380,11 @@ namespace NAudio.Wave
                             SamplePointer[n * 3 + 2] = (byte)((sampleValue >> 16) & 0xFF);
                         }
                     }
-                });
+                }
             }
             else if (AsioSampleType == AsioSampleType.Float32LSB)
             {
-                _ = Parallel.For(0, OutputChannels, (ch) =>
+                for (int ch = 0; ch < OutputChannels; ch++)
                 {
                     unsafe
                     {
@@ -361,10 +392,10 @@ namespace NAudio.Wave
                         var OutSamples = outputSamples[ch];
                         for (int n = 0; n < LocalSamplesPerBuffer; n++)
                         {
-                            *(SamplePointer + n) = (float)OutSamples[n];
+                            SamplePointer[n] = (float)OutSamples[n];
                         }
                     }
-                });
+                }
             }
             else
             {

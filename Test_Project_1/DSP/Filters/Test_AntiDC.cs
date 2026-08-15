@@ -86,15 +86,19 @@ public class Test_AntiDC
     public void AntiDC_Events_CanBeSubscribed()
     {
         var filter = new AntiDC();
+        using var outputMutedSignal = new System.Threading.ManualResetEventSlim(false);
+        using var clipEventSignal = new System.Threading.ManualResetEventSlim(false);
         bool outputMutedRaised = false;
         bool clipEventRaised = false;
-        filter.OutputMutedEvent += (s, e) => outputMutedRaised = true;
-        filter.ClipEvent += (s, e) => clipEventRaised = true;
+        filter.OutputMutedEvent += (s, e) => { outputMutedRaised = true; outputMutedSignal.Set(); };
+        filter.ClipEvent += (s, e) => { clipEventRaised = true; clipEventSignal.Set(); };
         // Use reflection to invoke protected methods
         typeof(AntiDC).GetMethod("RaiseOutputMutedEvent", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(filter, null);
         typeof(AntiDC).GetMethod("ReportClipEvents", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(filter, null);
-        // Allow async event to complete
-        System.Threading.Thread.Sleep(10);
+        // Both events are raised via fire-and-forget Task.Run internally; wait deterministically
+        // instead of relying on a fixed sleep duration.
+        Assert.IsTrue(outputMutedSignal.Wait(2000), "Timed out waiting for OutputMutedEvent");
+        Assert.IsTrue(clipEventSignal.Wait(2000), "Timed out waiting for ClipEvent");
         Assert.IsTrue(outputMutedRaised);
         Assert.IsTrue(clipEventRaised);
     }

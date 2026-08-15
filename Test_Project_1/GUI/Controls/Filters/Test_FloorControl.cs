@@ -236,17 +236,16 @@ namespace Test_Project_1
     }
 
     [DesignerCategory("Code")]
-    public class FloorMockVolume : UserControl
+    public class FloorMockVolume : BTH_VolumeSliderControl
     {
-        private double _volumeValue;
-        public event EventHandler VolumeChanged;
-
-        public void SetVolume(double value) => _volumeValue = value;
-        public double GetVolume() => _volumeValue;
+        public void SetVolume(double value) => this.Volume = value;
+        public double GetVolume() => this.Volume;
 
         public void RaiseVolumeChanged()
         {
-            VolumeChanged?.Invoke(this, EventArgs.Empty);
+            var field = typeof(BTH_VolumeSliderControl).GetField("VolumeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
+            var handler = field?.GetValue(this) as EventHandler;
+            handler?.Invoke(this, EventArgs.Empty);
         }
     }
 

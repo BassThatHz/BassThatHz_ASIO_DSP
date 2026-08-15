@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using BassThatHz_ASIO_DSP_Processor.REW_API;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -43,14 +43,14 @@ public class Test_REW_API
     //public async Task GetTargetSettingsFromREW_API_ShouldThrowOnInvalidId()
     //{
     //    var api = new REW_API();
-    //    await Assert.ThrowsExceptionAsync<System.Exception>(() => api.GetTargetSettingsFromREW_API("invalid_id"));
+    //    await Assert.ThrowsExactlyAsync<System.Exception>(() => api.GetTargetSettingsFromREW_API("invalid_id"));
     //}
 
     //[TestMethod]
     //public async Task GetFiltersFromREW_API_ShouldThrowOnInvalidId()
     //{
     //    var api = new REW_API();
-    //    await Assert.ThrowsExceptionAsync<System.Exception>(() => api.GetFiltersFromREW_API("invalid_id"));
+    //    await Assert.ThrowsExactlyAsync<System.Exception>(() => api.GetFiltersFromREW_API("invalid_id"));
     //}
 
     [TestMethod]

@@ -25,7 +25,7 @@ namespace Test_Project_1
         {
             _control = new TestableSmartGainControl();
             _gainTextBox = new TextBox();
-            _durationTextBox = new TextBox();
+            _durationTextBox = new TextBox { MaxLength = 5 };
             _peakCheckBox = new CheckBox();
             _peakHoldCheckBox = new CheckBox();
             _appliedGainLabel = new Label();
@@ -168,9 +168,9 @@ namespace Test_Project_1
             _control.TestRefreshStats();
 
             // Assert
-            Assert.AreEqual("-03.0", _appliedGainLabel.Text);
-            Assert.AreEqual("-06.0", _peakLevelLabel.Text); // ~-6dB for 0.5 linear
-            Assert.AreEqual("-03.0", _headroomLabel.Text);  // ~-3dB for 0.707 linear
+            Assert.AreEqual("-003.0", _appliedGainLabel.Text);
+            Assert.AreEqual("-006.0", _peakLevelLabel.Text); // ~-6dB for 0.5 linear
+            Assert.AreEqual("-003.0", _headroomLabel.Text);  // ~-3dB for 0.707 linear
         }
 
         [TestMethod]

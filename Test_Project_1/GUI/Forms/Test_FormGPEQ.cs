@@ -7,6 +7,7 @@ using System.Collections.Generic;
 namespace Test_Project_1;
 
 [TestClass]
+[DoNotParallelize]
 public class Test_FormGPEQ
 {
     [TestMethod]

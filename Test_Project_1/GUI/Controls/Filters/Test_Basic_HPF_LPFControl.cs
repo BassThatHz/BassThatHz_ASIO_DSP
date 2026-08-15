@@ -1,4 +1,4 @@
-using BassThatHz_ASIO_DSP_Processor.GUI.Controls;
+﻿using BassThatHz_ASIO_DSP_Processor.GUI.Controls;
 using BassThatHz_ASIO_DSP_Processor;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
@@ -119,7 +119,7 @@ public class Test_Basic_HPF_LPFControl
     //    foreach (var input in invalidInputs)
     //    {
     //        control.Get_txtHPFFreq.Text = input;
-    //        Assert.ThrowsException<FormatException>(() => control.ApplySettings());
+    //        Assert.ThrowsExactly<FormatException>(() => control.ApplySettings());
     //    }
     //}
 
@@ -160,7 +160,7 @@ public class Test_Basic_HPF_LPFControl
     //public void SetFilter_WithInvalidType_Throws()
     //{
     //    var invalidFilter = new DummyFilter();
-    //    Assert.ThrowsException<ArgumentException>(() => control.SetDeepClonedFilter(invalidFilter));
+    //    Assert.ThrowsExactly<ArgumentException>(() => control.SetDeepClonedFilter(invalidFilter));
     //}
 
     private class DummyFilter : IFilter

@@ -1321,7 +1321,7 @@ public class ASIO_Engine : IDisposable
     #endregion
 
     #region ASIO Control Panel
-    protected void Show_ASIO_ControlPanel()
+    protected virtual void Show_ASIO_ControlPanel()
     {
         if (string.IsNullOrEmpty(this.DeviceName))
             throw new InvalidOperationException("DeviceName isn't set");
@@ -1330,7 +1330,7 @@ public class ASIO_Engine : IDisposable
         asio.ShowControlPanel();
     }
 
-    protected void Show_ASIO_ControlPanel(string deviceName)
+    protected virtual void Show_ASIO_ControlPanel(string deviceName)
     {
         if (string.IsNullOrEmpty(deviceName))
             throw new ArgumentNullException(nameof(deviceName));

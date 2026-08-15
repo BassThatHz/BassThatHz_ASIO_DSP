@@ -26,7 +26,7 @@ public class Test_FilterTypes
         var set = new HashSet<int>();
         foreach (var v in values)
         {
-            int intVal = (int)v;
+            int intVal = Convert.ToInt32(v);
             Assert.IsFalse(set.Contains(intVal), $"Duplicate enum value: {intVal}");
             set.Add(intVal);
         }

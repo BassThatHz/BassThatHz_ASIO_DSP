@@ -137,7 +137,7 @@ namespace NAudio.Wave
             if (names.Length == 0)
                 throw new ArgumentException("There is no ASIO Driver installed on your system");
 
-            if (driverIndex < 0 || driverIndex > names.Length)
+            if (driverIndex < 0 || driverIndex >= names.Length)
                 throw new ArgumentException(String.Format("Invalid device number. Must be in the range [0,{0}]", names.Length));
 
             this.DriverName = names[driverIndex];
@@ -423,10 +423,8 @@ namespace NAudio.Wave
             {
                 fixed (AsioBufferInfo* infos = &this.bufferInfos[0])
                 {
-                    IntPtr pOutputBufferInfos = new IntPtr(infos);
-
-                    // Create the ASIO Buffers with the callbacks
-                    this.CreateBuffers(pOutputBufferInfos, nbTotalChannels, this.bufferSize, ref this.callbacks);
+                    // avoid creating a managed IntPtr instance per call by passing the pointer value directly
+                    this.CreateBuffers(new IntPtr(infos), nbTotalChannels, this.bufferSize, ref this.callbacks);
                 }
             }
 

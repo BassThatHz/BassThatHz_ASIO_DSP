@@ -9,13 +9,14 @@ using System.Windows.Forms;
 namespace Test_Project_1
 {
     [TestClass]
+    [DoNotParallelize]
     public class Test_ClassicLimiterControl
     {
         private TestableClassicLimiterControl _control;
         private MockVolumeControl _thresholdControl;
-        private TextBox _attackTimeTextBox;
-        private TextBox _releaseTimeTextBox;
-        private TextBox _kneeWidthTextBox;
+        private MaskedTextBox _attackTimeTextBox;
+        private MaskedTextBox _releaseTimeTextBox;
+        private MaskedTextBox _kneeWidthTextBox;
         private CheckBox _softKneeCheckBox;
         private MockVolumeControl _compressionApplied;
 
@@ -23,17 +24,16 @@ namespace Test_Project_1
         public void InitializeTest()
         {
             _thresholdControl = new MockVolumeControl();
-            _attackTimeTextBox = new TextBox();
-            _releaseTimeTextBox = new TextBox();
-            _kneeWidthTextBox = new TextBox();
+            _attackTimeTextBox = new MaskedTextBox();
+            _releaseTimeTextBox = new MaskedTextBox();
+            _kneeWidthTextBox = new MaskedTextBox();
             _softKneeCheckBox = new CheckBox();
             _compressionApplied = new MockVolumeControl();
 
             // Set up the ASIO mock
             var mockAsio = new ASIO_Engine();
             typeof(ASIO_Engine).GetProperty("SampleRate_Current")?.SetValue(mockAsio, 44100);
-            var asioField = typeof(Program).GetField("ASIO", BindingFlags.Static | BindingFlags.Public);
-            asioField?.SetValue(null, mockAsio);
+            Program.SetAsioForTesting(mockAsio);
 
             _control = new TestableClassicLimiterControl();
             SetPrivateField(_control, "Threshold", _thresholdControl);
@@ -167,50 +167,13 @@ namespace Test_Project_1
     }
 
     [DesignerCategory("Code")]
-    public class MockVolumeControl : UserControl
+    public class MockVolumeControl : BTH_VolumeSliderControl
     {
-        private double _volume;
-        private double _volumeDb;
-
-        public event EventHandler VolumeChanged;
-
-        [Browsable(true)]
-        [Category("Data")]
-        [System.ComponentModel.Description("The volume in linear scale")]
-        [DefaultValue(0.0)]
-        public virtual double Volume 
-        { 
-            get => _volume;
-            set
-            {
-                if (_volume != value)
-                {
-                    _volume = value;
-                    VolumeChanged?.Invoke(this, EventArgs.Empty);
-                }
-            }
-        }
-
-        [Browsable(true)]
-        [Category("Data")]
-        [System.ComponentModel.Description("The volume in decibels")]
-        [DefaultValue(0.0)]
-        public virtual double VolumedB
-        {
-            get => _volumeDb;
-            set
-            {
-                if (_volumeDb != value)
-                {
-                    _volumeDb = value;
-                    VolumeChanged?.Invoke(this, EventArgs.Empty);
-                }
-            }
-        }
-
         public void RaiseVolumeChanged()
         {
-            VolumeChanged?.Invoke(this, EventArgs.Empty);
+            var field = typeof(BTH_VolumeSliderControl).GetField("VolumeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
+            var handler = field?.GetValue(this) as EventHandler;
+            handler?.Invoke(this, EventArgs.Empty);
         }
     }
 }

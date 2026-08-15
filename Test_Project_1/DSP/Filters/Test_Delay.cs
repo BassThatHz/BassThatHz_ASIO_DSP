@@ -75,20 +75,20 @@ public class Test_Delay
     public void Delay_Throws_OnNegativeDelay()
     {
         var filter = new Delay();
-        filter.DelayInMS = -1;
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => filter.DelayInMS = -1);
     }
 
     [TestMethod]
     public void Delay_Throws_OnNegativeSampleRate()
     {
         var filter = new Delay();
-        filter.ResetSampleRate(-1);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => filter.ResetSampleRate(-1));
     }
 
     [TestMethod]
     public void Delay_Throws_OnNegativeBufferSize()
     {
         var filter = new Delay();
-        filter.ResetBufferSize(-1);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => filter.ResetBufferSize(-1));
     }
 }

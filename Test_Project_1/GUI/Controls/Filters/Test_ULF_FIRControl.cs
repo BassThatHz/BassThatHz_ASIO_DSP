@@ -13,7 +13,7 @@ namespace Test_Project_1
     {
         private TestableULF_FIRControl _control;
         private TextBox _fftSizeTextBox;
-        private TextBox _tapsTextBox;
+        private RichTextBox _tapsTextBox;
         private TextBox _tapsSampleRateTextBox;
         private ComboBox _tapsSampleRateComboBox;
         private Button _applyButton;
@@ -27,7 +27,7 @@ namespace Test_Project_1
 
             _control = new TestableULF_FIRControl();
             _fftSizeTextBox = new TextBox();
-            _tapsTextBox = new TextBox();
+            _tapsTextBox = new RichTextBox();
             _tapsSampleRateTextBox = new TextBox();
             _tapsSampleRateComboBox = new ComboBox();
             _applyButton = new Button();

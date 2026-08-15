@@ -14,7 +14,7 @@ namespace Test_Project_1
     public class Test_MixerControl
     {
         private TestableMixerControl _control;
-        private FlowLayoutPanel _mixerElementsPanel;
+        private ListBox _mixerElementsPanel;
         private Button _configButton;
 
         [TestInitialize]
@@ -23,30 +23,41 @@ namespace Test_Project_1
             _control = new TestableMixerControl();
             _configButton = new Button();
 
-            // Ensure InitializeComponent is called to initialize flp_MixerElements
+            // Ensure InitializeComponent is called to initialize the control's fields
             var initMethod = _control.GetType().GetMethod("InitializeComponent", BindingFlags.NonPublic | BindingFlags.Instance);
             initMethod?.Invoke(_control, null);
 
-            // Get the actual panel used by the control
-            _mixerElementsPanel = (FlowLayoutPanel)_control.GetType()
-                .GetField("flp_MixerElements", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(_control);
-            SetPrivateField(_control, "btnConfig", _configButton);
+            // Get the actual list box used by the control to display mixer elements
+            _mixerElementsPanel = (ListBox)GetFieldIncludingBaseTypes(_control, "listBox1")?.GetValue(_control);
+            SetPrivateField(_control, "btnConfigMixer", _configButton);
 
             // Set up ASIO mock
             var mockAsio = new ASIO_Engine();
             typeof(ASIO_Engine).GetProperty("SampleRate_Current")?.SetValue(mockAsio, 44100);
         }
 
+        private static FieldInfo GetFieldIncludingBaseTypes(object obj, string fieldName)
+        {
+            var type = obj.GetType();
+            while (type != null)
+            {
+                var field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+                if (field != null)
+                    return field;
+                type = type.BaseType;
+            }
+            return null;
+        }
+
         private void SetPrivateField(object obj, string fieldName, object value)
         {
-            var field = obj.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+            var field = GetFieldIncludingBaseTypes(obj, fieldName);
             field?.SetValue(obj, value);
         }
 
         private T GetPrivateField<T>(object obj, string fieldName)
         {
-            var field = obj.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+            var field = GetFieldIncludingBaseTypes(obj, fieldName);
             return (T)field?.GetValue(obj);
         }
 

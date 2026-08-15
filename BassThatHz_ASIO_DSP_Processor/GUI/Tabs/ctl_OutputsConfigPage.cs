@@ -157,8 +157,10 @@ public partial class ctl_OutputsConfigPage : UserControl
             {
                 this.cboDevices.Items.AddRange(driverArray);
             }
-            else
+            else if (Environment.UserInteractive)
             {
+                // Guarded by UserInteractive so headless/automated contexts (tests, CI, services)
+                // never block indefinitely on a modal dialog with no one to dismiss it.
                 _ = MessageBox.Show("Cannot find any ASIO drivers or devices, application may not run correctly.");
             }
         }

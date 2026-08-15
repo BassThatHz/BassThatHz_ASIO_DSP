@@ -8,6 +8,7 @@ using System.Windows.Forms;
 namespace Test_Project_1
 {
     [TestClass]
+    [DoNotParallelize]
     public class Test_DynamicRangeCompressorControl
     {
         private TestableDynamicRangeCompressorControl _control;
@@ -48,10 +49,9 @@ namespace Test_Project_1
             _control.OnError = (ex) => _errorCalled = true;
 
             // Set up mock ASIO
-            var asioField = typeof(Program).GetField("ASIO", BindingFlags.Static | BindingFlags.Public);
             var mockAsio = new ASIO_Engine();
             typeof(ASIO_Engine).GetProperty("SampleRate_Current")?.SetValue(mockAsio, 44100);
-            asioField?.SetValue(null, mockAsio);
+            Program.SetAsioForTesting(mockAsio);
 
             _control.MapEventHandlers();
         }

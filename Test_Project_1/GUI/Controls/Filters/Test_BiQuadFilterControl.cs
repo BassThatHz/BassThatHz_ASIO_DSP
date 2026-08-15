@@ -31,14 +31,14 @@ public class Test_BiQuadFilterControl
     public void ApplySettings_UpdatesFilterFromUI()
     {
         var control = new BiQuadFilterControl();
-        // Setup test values in UI
-        SetNumericValue(control, "numFrequency", 1000);
-        SetNumericValue(control, "numQ", 0.707);
-        SetNumericValue(control, "numGain", 6.0);
-        SetComboBoxValue(control, "cboFilterType", 0); // LowPass
+        // Setup test values in the actual UI controls (txtF/txtQ/txtG). FilterType
+        // defaults to PEQ (FilterTypes.PEQ == 0), which ApplySettings routes to PeakingEQ.
+        control.Get_txtF.Text = "1000";
+        control.Get_txtQ.Text = "0.707";
+        control.Get_txtG.Text = "6.0";
 
         control.ApplySettings();
-        
+
         var filter = control.GetFilter as BiQuadFilter;
         Assert.IsNotNull(filter);
         Assert.AreEqual(1000, filter.Frequency);
@@ -75,31 +75,4 @@ public class Test_BiQuadFilterControl
         Assert.IsInstanceOfType(control, typeof(ISetDeepClonedFilter));
     }
 
-    #region Helper Methods
-
-    private double GetNumericValue(BiQuadFilterControl control, string controlName)
-    {
-        var numericUpDown = control.Controls.Find(controlName, true)[0] as NumericUpDown;
-        return numericUpDown != null ? (double)numericUpDown.Value : 0;
-    }
-
-    private void SetNumericValue(BiQuadFilterControl control, string controlName, double value)
-    {
-        var numericUpDown = control.Controls.Find(controlName, true)[0] as NumericUpDown;
-        if (numericUpDown != null)
-        {
-            numericUpDown.Value = (decimal)value;
-        }
-    }
-
-    private void SetComboBoxValue(BiQuadFilterControl control, string controlName, int index)
-    {
-        var comboBox = control.Controls.Find(controlName, true)[0] as ComboBox;
-        if (comboBox != null)
-        {
-            comboBox.SelectedIndex = index;
-        }
-    }
-
-    #endregion
 }

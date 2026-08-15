@@ -48,7 +48,7 @@ public class Test_DSP_Stream
     {
         var stream = new DSP_Stream();
         var invalidSource = new StreamItem { StreamType = StreamType.Stream };
-        stream.InputSource = invalidSource;
+        Assert.ThrowsExactly<InvalidOperationException>(() => stream.InputSource = invalidSource);
     }
 
     [TestMethod]
@@ -56,7 +56,7 @@ public class Test_DSP_Stream
     {
         var stream = new DSP_Stream();
         var invalidDest = new StreamItem { StreamType = StreamType.Stream };
-        stream.OutputDestination = invalidDest;
+        Assert.ThrowsExactly<InvalidOperationException>(() => stream.OutputDestination = invalidDest);
     }
 
     [TestMethod]

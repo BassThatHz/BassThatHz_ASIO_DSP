@@ -28,10 +28,10 @@ public class Test_DEQControl
         SetTextBox(control, "txtG", "5.6");
         SetTextBox(control, "txtQ", "0.7");
         SetTextBox(control, "txtS", "1.2");
-        SetTextBox(control, "mask_Attack", "10");
-        SetTextBox(control, "mask_Release", "20");
-        SetTextBox(control, "msb_CompressionRatio", "12");
-        SetTextBox(control, "msb_KneeWidth_db", "2");
+        SetMaskedTextBox(control, "mask_Attack", "10");
+        SetMaskedTextBox(control, "mask_Release", "20");
+        SetMaskedTextBox(control, "msb_CompressionRatio", "12");
+        SetMaskedTextBox(control, "msb_KneeWidth_db", "2");
         SetCheckBox(control, "chkSoftKnee", true);
         // Simulate threshold control
         SetThreshold(control, 3.3);
@@ -111,6 +111,22 @@ public class Test_DEQControl
         var tb = field.GetValue(control) as TextBox;
         Assert.IsNotNull(tb, $"{name} is not TextBox");
         return tb!;
+    }
+    private static void SetMaskedTextBox(DEQControl control, string name, string value)
+    {
+        var field = typeof(DEQControl).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.IsNotNull(field, $"{name} not found");
+        var mtb = field.GetValue(control) as MaskedTextBox;
+        Assert.IsNotNull(mtb, $"{name} is not MaskedTextBox");
+        mtb.Text = value;
+    }
+    private static MaskedTextBox GetMaskedTextBox(DEQControl control, string name)
+    {
+        var field = typeof(DEQControl).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.IsNotNull(field, $"{name} not found");
+        var mtb = field.GetValue(control) as MaskedTextBox;
+        Assert.IsNotNull(mtb, $"{name} is not MaskedTextBox");
+        return mtb!;
     }
     private static void SetCheckBox(DEQControl control, string name, bool value)
     {
