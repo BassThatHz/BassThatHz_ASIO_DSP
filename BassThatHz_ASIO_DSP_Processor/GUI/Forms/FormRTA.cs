@@ -44,6 +44,23 @@ public partial class FormRTA : Form
 
     #region Multi-Threading and Closing State
     protected bool IsClosing = false;
+
+    //DEFECT FIX: every plot tick is 'async void'. It disables its own timer on entry and only
+    //re-arms it in the finally, and THAT was the only thing stopping two ticks from running at
+    //once - which matters because the two directions share a stateful FFT instance apiece, a
+    //stateful decimator apiece and one reusable scratch array apiece.
+    //
+    //Pause_CHK_CheckedChanged writes Enabled directly, from the UI thread, with no idea whether a
+    //tick is in flight. The UI thread is back in the message pump while a tick sits on its await,
+    //so ticking Pause off and on again during that window re-armed a 1 ms timer and delivered a
+    //second, concurrent tick into the same handler: two pool threads inside one FFT object,
+    //scribbling over one decimator's prefix sums, and two Advance calls for one plotted frame.
+    //
+    //These latches make Enabled a scheduling hint rather than the mutex. A tick that arrives while
+    //its predecessor is still running simply returns.
+    protected bool ULF_Tick_InFlight;
+    protected bool Top_Tick_InFlight;
+    protected bool Waveform_Tick_InFlight;
     protected List<Task> ULF_FFT_Tasks = new();
     protected List<Task> Top_FFT_Tasks = new();
     protected List<Task<ChartUpdateData>> Waveform_Tasks = new();
@@ -58,28 +75,88 @@ public partial class FormRTA : Form
     protected double[]? InputBuffer;
     protected double[]? OutputBuffer;
 
+    //The ULF analyser downsamples its frame to Default_ULF_FFTSize points, so one second of audio
+    //gives a 2048 Hz effective rate and 1 Hz bins across the plotted 1..100 Hz span. One second is
+    //therefore exactly what a frame needs - and anything the buffer holds BEYOND the frame is pure
+    //display latency, so keep only a single extra second for ASIO/timer jitter.
+    //DEFECT FIX: this store used to be ten seconds deep, which is what made the charts show
+    //never-written zeros for ten seconds after opening and take another ten seconds to fall silent
+    //once the signal stopped.
+    protected const int ULF_AnalysisSeconds = 1;
+    protected const int ULF_BufferSeconds = 2;
+
+    //Enough headroom for the largest selectable Top FFT size plus jitter, without hoarding audio.
+    protected const int Top_BufferFrames = 4;
+
     protected int ULF_FFT_OverLapPercentage = 90;
     protected int Top_FFT_OverLapPercentage = 10;
-    protected double Top_FFT_WindowScaleFactor = 1;
-    protected double ULF_FFT_WindowScaleFactor = 1;
     protected readonly int MouseMoveThrottleMs = 50;
     protected readonly int FFTThrottleMs = 50;
     #endregion
 
     #region FFT Object and Data Refs
-    protected FFT InputTop_FFT;
-    protected FFT OutputTop_FFT;
-    protected double[] Top_FFT_FSpan;
-    protected double[] Top_FFT_WindowCoefficients;
     protected CircularBuffer RTA_InputTopBuffer;
     protected CircularBuffer RTA_OutputTopBuffer;
-
-    protected FFT InputULF_FFT;
-    protected FFT OutputULF_FFT;
-    protected double[] ULF_FFT_FSpan;
-    protected double[] ULF_FFT_WindowCoefficients;
     protected CircularBuffer RTA_InputULFBuffer;
     protected CircularBuffer RTA_OutputULFBuffer;
+
+    //DEFECT FIX: the FFT objects, the window coefficients, the window scale factor, the frequency
+    //span and the FFT size used to be five (six for ULF) separate mutable fields. The plot timers
+    //are 'async void' and await with pool tasks still in flight, so the UI thread returns to the
+    //message pump mid-tick; a combo box change then reassigned those fields ONE AT A TIME while a
+    //task was reading them. Shrinking the Top FFT from 16384 to 2048 that way handed a 16384 point
+    //FFT a 2048 sample input, sailed past both length guards in Perform_FFT_Into, and ran off the
+    //end of the input array - an IndexOutOfRangeException that surfaced as the modal "A fatal error
+    //has occured / Press Yes to abort the app" dialog.
+    //
+    //Everything that has to agree now lives in one immutable snapshot published by a single
+    //reference assignment. A tick reads the field ONCE into a local and uses only that, so it
+    //either sees the whole old configuration or the whole new one.
+    protected AnalysisConfig Top_Config;
+    protected AnalysisConfig ULF_Config;
+    #endregion
+
+    #region Analysis Configuration
+    /// <summary>
+    /// An immutable snapshot of everything one FFT chart pair needs to analyse a frame. Publish a
+    /// new instance rather than mutating one; readers take a single reference and never look at any
+    /// of this through <c>this</c> again.
+    /// </summary>
+    protected sealed class AnalysisConfig
+    {
+        /// <summary>The FFT length, which is also the required frame length in samples.</summary>
+        public required int FFTSize { get; init; }
+
+        /// <summary>The FFT instance for the input chart. Not shared with the output chart.</summary>
+        public required FFT InputFFT { get; init; }
+
+        /// <summary>The FFT instance for the output chart.</summary>
+        public required FFT OutputFFT { get; init; }
+
+        /// <summary>Window coefficients, always exactly <see cref="FFTSize"/> long.</summary>
+        public required double[] WindowCoefficients { get; init; }
+
+        /// <summary>Amplitude correction for the chosen window.</summary>
+        public required double WindowScaleFactor { get; init; }
+
+        /// <summary>The X axis, one entry per plotted bin.</summary>
+        public required double[] FrequencySpan { get; init; }
+
+        /// <summary>
+        /// The input sample rate this snapshot was built for. The Top chart's frequency span is
+        /// derived from it, so a rate change has to rebuild the snapshot.
+        /// </summary>
+        public required int SampleRate { get; init; }
+
+        /// <summary>
+        /// Band-limiting decimator for the input chart, or null when the chart analyses the frame
+        /// at its native rate. Stateful, so the two directions never share one.
+        /// </summary>
+        public AntiAliasDecimator? InputDecimator { get; init; }
+
+        /// <summary>Band-limiting decimator for the output chart.</summary>
+        public AntiAliasDecimator? OutputDecimator { get; init; }
+    }
     #endregion
 
     #region FFT Read Scratch Buffers
@@ -90,6 +167,20 @@ public partial class FormRTA : Form
     //timeSeries.Length.
     protected double[]? InputULF_Scratch;
     protected double[]? OutputULF_Scratch;
+
+    //The ULF frame is band-limited and decimated from InSampleRate samples down to the FFT length
+    //before it is transformed; these hold that decimated frame.
+    protected double[]? InputULF_Decimated;
+    protected double[]? OutputULF_Decimated;
+
+    //One decimator per direction, for the lifetime of the window. They carry nothing but scratch -
+    //a second of doubles each, 1.5 MB at 192 kHz - and nothing about them depends on the window
+    //type or the FFT size, so a new snapshot borrows these rather than allocating its own. Building
+    //them per snapshot churned ~6 MB of large-object heap on every step through the 33 entry window
+    //type combo. Never share one between the two directions: Decimate is not thread safe.
+    protected readonly AntiAliasDecimator InputULF_Decimator = new();
+    protected readonly AntiAliasDecimator OutputULF_Decimator = new();
+
     protected double[]? InputTop_Scratch;
     protected double[]? OutputTop_Scratch;
 
@@ -115,9 +206,157 @@ public partial class FormRTA : Form
     }
     #endregion
 
-    #region WaveFormAutoReset State Flags
-    protected bool chart_InputWaveform_ResetAutoRange = false;
-    protected bool chart_OutputWaveform_ResetAutoRange = false;
+    #region FFT Framing and Buffer Sizing
+    /// <summary>
+    /// Samples in one ULF analysis frame: exactly one second, which is what 1 Hz bins require.
+    /// </summary>
+    /// <param name="sampleRate">The current input sample rate.</param>
+    /// <returns>The frame length in samples, or 0 if the sample rate is not yet known.</returns>
+    protected static int Get_ULF_FrameLength(int sampleRate)
+    {
+        return sampleRate <= 0 ? 0 : sampleRate * ULF_AnalysisSeconds;
+    }
+
+    /// <summary>
+    /// Samples of storage behind the ULF charts. One analysis frame plus one second of headroom -
+    /// the buffer is a jitter cushion, not a history, so anything deeper is display latency.
+    /// </summary>
+    /// <param name="sampleRate">The current input sample rate.</param>
+    /// <returns>The circular buffer capacity in samples, never less than 1.</returns>
+    protected static int Get_ULF_BufferLength(int sampleRate)
+    {
+        return sampleRate <= 0 ? 1 : sampleRate * ULF_BufferSeconds;
+    }
+
+    /// <summary>
+    /// Samples of storage behind the Top FFT charts, scaled to the selected FFT size.
+    /// </summary>
+    /// <param name="fftSize">The currently selected Top FFT size.</param>
+    /// <returns>The circular buffer capacity in samples, never less than 1.</returns>
+    protected static int Get_Top_BufferLength(int fftSize)
+    {
+        return fftSize <= 0 ? 1 : fftSize * Top_BufferFrames;
+    }
+
+    /// <summary>
+    /// Samples to step forward between overlapped frames.
+    /// </summary>
+    /// <param name="frameLength">The analysis frame length in samples.</param>
+    /// <param name="overlapPercentage">The configured overlap, 0..99.</param>
+    /// <returns>The hop, clamped to 1..frameLength so the analyser can never stall or skip audio.</returns>
+    protected static int Get_HopLength(int frameLength, int overlapPercentage)
+    {
+        if (frameLength <= 0)
+            return 0;
+
+        //Integer arithmetic on purpose: (int)(48000 * (1d - 90/100d)) truncates to 4799 because
+        //1d - 0.9 is 0.09999999999999998, which quietly shifted every frame by one sample.
+        int Local_Overlap = Math.Clamp(overlapPercentage, 0, 99);
+        int Local_Hop = (int)((long)frameLength * (100 - Local_Overlap) / 100);
+        return Math.Clamp(Local_Hop, 1, frameLength);
+    }
+
+    /// <summary>
+    /// True once a whole analysis frame is available.
+    /// </summary>
+    /// <param name="buffer">The circular buffer feeding the analyser.</param>
+    /// <param name="frameLength">The analysis frame length in samples.</param>
+    /// <returns>Whether a frame can be analysed now.</returns>
+    /// <remarks>
+    /// DEFECT FIX: this used to demand Count > frameLength * (1 + overlap) - nearly TWO seconds of
+    /// ULF audio at the default 90% overlap - before the first frame could be plotted, and it held
+    /// that extra second of latency in the buffer permanently. A frame needs a frame, no more.
+    /// </remarks>
+    protected static bool HasFullFrame(CircularBuffer buffer, int frameLength)
+    {
+        return frameLength > 0 && buffer.Count >= frameLength;
+    }
+
+    /// <summary>
+    /// Re-allocates the ULF buffers if the input sample rate changed while the window is open.
+    /// Without this the buffers would keep the capacity captured at construction time and a rate
+    /// increase would leave them permanently too small to hold a frame.
+    /// </summary>
+    /// <param name="sampleRate">The current input sample rate.</param>
+    protected void EnsureULFBufferCapacity(int sampleRate)
+    {
+        int Local_Length = Get_ULF_BufferLength(sampleRate);
+
+        if (this.RTA_InputULFBuffer.MaxLength != Local_Length)
+            this.RTA_InputULFBuffer = new CircularBuffer(Local_Length);
+
+        if (this.RTA_OutputULFBuffer.MaxLength != Local_Length)
+            this.RTA_OutputULFBuffer = new CircularBuffer(Local_Length);
+    }
+
+    /// <summary>
+    /// Re-allocates the Top FFT buffers if the user picked a different FFT size. The largest
+    /// selectable size is eight times the default, so a fixed constructor-time capacity could not
+    /// hold a frame at every setting.
+    /// </summary>
+    /// <param name="fftSize">The currently selected Top FFT size.</param>
+    protected void EnsureTopBufferCapacity(int fftSize)
+    {
+        int Local_Length = Get_Top_BufferLength(fftSize);
+
+        if (this.RTA_InputTopBuffer.MaxLength != Local_Length)
+            this.RTA_InputTopBuffer = new CircularBuffer(Local_Length);
+
+        if (this.RTA_OutputTopBuffer.MaxLength != Local_Length)
+            this.RTA_OutputTopBuffer = new CircularBuffer(Local_Length);
+    }
+    #endregion
+
+    #region Waveform Rolling Y Axis Range
+    //DEFECT FIX: the waveform Y axis used to be a five second ratchet. timer_ResetWaveform slammed
+    //AxisY to 0/0 and the axis then re-grew from whatever single ASIO block arrived next - and a
+    //512 sample block of a sub-bass tone can peak anywhere between zero and the full amplitude, so
+    //the range collapsed and climbed back every five seconds. Worse, the only assignment sat behind
+    //a "grow" comparison against AxisY.Maximum, which starts as NaN: every comparison against NaN
+    //is false, so a freshly opened window had NO range at all until the first reset fired.
+    //
+    //It is now a ten second rolling peak per chart: the axis follows the signal up immediately and
+    //eases back down as loud blocks age out of the window, with no discontinuity anywhere.
+    protected const int WaveformRangeWindowSeconds = 10;
+    protected const int WaveformRangeBuckets = 40;
+    //The ten second window is the authority on how long a peak is remembered; this time constant
+    //only smooths the step a bucket makes as it retires, so it is deliberately short - long enough
+    //to glide, short enough that the axis has settled a few seconds after the window releases.
+    protected const double WaveformRangeDecaySeconds = 1d;
+
+    //Below this relative change the axis is left alone: this runs on every waveform plot and every
+    //assignment forces the chart to re-layout.
+    protected const double WaveformRangeUpdateThreshold = 0.01d;
+
+    //Far beyond any real sample yet far inside decimal's range, so the plotted waveform is never
+    //altered but the (decimal) conversion can never overflow.
+    protected const double DecimalSafeSample = 1e9d;
+
+    protected readonly RollingPeakEnvelope InputWaveformRange = new(
+        TimeSpan.FromSeconds(WaveformRangeWindowSeconds),
+        WaveformRangeBuckets,
+        TimeSpan.FromSeconds(WaveformRangeDecaySeconds));
+
+    protected readonly RollingPeakEnvelope OutputWaveformRange = new(
+        TimeSpan.FromSeconds(WaveformRangeWindowSeconds),
+        WaveformRangeBuckets,
+        TimeSpan.FromSeconds(WaveformRangeDecaySeconds));
+
+    /// <summary>
+    /// The rolling Y axis range belonging to a waveform chart.
+    /// </summary>
+    /// <param name="chartControl">The chart being plotted.</param>
+    /// <returns>Its envelope, or null for a chart that has no rolling range.</returns>
+    protected RollingPeakEnvelope? Get_WaveformRange(Chart chartControl)
+    {
+        if (ReferenceEquals(chartControl, this.chart_InputWaveform))
+            return this.InputWaveformRange;
+
+        if (ReferenceEquals(chartControl, this.chart_OutputWaveform))
+            return this.OutputWaveformRange;
+
+        return null;
+    }
     #endregion
 
     #region Time throttle the mouse moves and min\max chart updates 
@@ -141,21 +380,18 @@ public partial class FormRTA : Form
         this.chart_Output_Top_FFT.SuppressExceptions = true;
         this.chart_Output_ULF_FFT.SuppressExceptions = true;
 
-        this.InputTop_FFT = new FFT(this.Default_Top_FFTSize, 0);
-        this.OutputTop_FFT = new FFT(this.Default_Top_FFTSize, 0);
-        this.InputULF_FFT = new FFT(this.Default_ULF_FFTSize, 0);
-        this.OutputULF_FFT = new FFT(this.Default_ULF_FFTSize, 0);
-        this.Top_FFT_WindowCoefficients = new double[this.Default_Top_FFTSize];
-        this.ULF_FFT_WindowCoefficients = new double[this.Default_ULF_FFTSize];
-        this.Top_FFT_FSpan = new double[this.Default_Top_FFTSize];
-        this.ULF_FFT_FSpan = new double[this.Default_ULF_FFTSize];
+        var Top_Length = Get_Top_BufferLength(this.Default_Top_FFTSize);
+        this.RTA_InputTopBuffer = new(Top_Length);
+        this.RTA_OutputTopBuffer = new(Top_Length);
 
-        var ULF_Length = (int)(Program.DSP_Info.InSampleRate * 10);
+        //Seed both snapshots so no code path can ever see a null configuration. The combo boxes are
+        //populated on Load, which re-publishes both with the real window coefficients.
+        this.Top_Config = this.Build_Top_Config();
+        this.ULF_Config = this.Build_ULF_Config();
+
+        var ULF_Length = Get_ULF_BufferLength(Program.DSP_Info.InSampleRate);
         this.RTA_InputULFBuffer = new(ULF_Length);
         this.RTA_OutputULFBuffer = new(ULF_Length);
-
-        this.RTA_InputTopBuffer = new(this.Default_Top_FFTSize * 10);
-        this.RTA_OutputTopBuffer = new(this.Default_Top_FFTSize * 10);
 
         this.Load += RTA_Load;
         this.Shown += RTA_Shown;
@@ -216,7 +452,6 @@ public partial class FormRTA : Form
             this.timer_PlotWaveforms.Enabled = false;
             this.timer_Plot_Top_FFTs.Enabled = false;
             this.timer_Plot_ULF_FFT.Enabled = false;
-            this.timer_ResetWaveform.Enabled = false;
             this.Pause_CHK.Checked = true;
 
             this.Load -= RTA_Load;
@@ -407,19 +642,17 @@ public partial class FormRTA : Form
 
     #region Waveform Plot Timers
     [SupportedOSPlatform("windows")]
-    protected void ResetWaveform_Timer_Tick(object sender, EventArgs e)
-    {
-        this.timer_ResetWaveform.Enabled = false;
-        this.chart_InputWaveform_ResetAutoRange = true;
-        this.chart_OutputWaveform_ResetAutoRange = true;
-        this.timer_ResetWaveform.Enabled = !this.Pause_CHK.Checked;
-    }
-
-    [SupportedOSPlatform("windows")]
     protected async void PlotWaveforms_Timer_Tick(object sender, EventArgs e)
     {
         // Disable the timer while processing.
         this.timer_PlotWaveforms.Enabled = false;
+
+        //See the Waveform_Tick_InFlight field: the waveform tasks share this.InputBuffer and the
+        //two rolling range envelopes, neither of which tolerates two concurrent ticks.
+        if (this.Waveform_Tick_InFlight)
+            return;
+
+        this.Waveform_Tick_InFlight = true;
         try
         {
             this.Waveform_Tasks.Clear();
@@ -431,7 +664,6 @@ public partial class FormRTA : Form
             {
                 double[] yDataInput = this.InputBuffer;
                 double scaleYAxis = 1.5;
-                bool resetAutoRange = this.chart_InputWaveform_ResetAutoRange;
 
                 this.Waveform_Tasks.Add(Task.Run(() =>
                 {
@@ -439,8 +671,7 @@ public partial class FormRTA : Form
                     return new ChartUpdateData
                     {
                         Chart = this.chart_InputWaveform,
-                        PlotData = plotData,
-                        ResetAutoRange = resetAutoRange
+                        PlotData = plotData
                     };
                 }));
             }
@@ -452,7 +683,6 @@ public partial class FormRTA : Form
             {
                 double[] yDataOutput = this.OutputBuffer;
                 double scaleYAxis = 1.5;
-                bool resetAutoRange = this.chart_OutputWaveform_ResetAutoRange;
 
                 this.Waveform_Tasks.Add(Task.Run(() =>
                 {
@@ -460,14 +690,16 @@ public partial class FormRTA : Form
                     return new ChartUpdateData
                     {
                         Chart = this.chart_OutputWaveform,
-                        PlotData = plotData,
-                        ResetAutoRange = resetAutoRange
+                        PlotData = plotData
                     };
                 }));
             }
 
             // Await all background tasks.
             ChartUpdateData[] updates = await Task.WhenAll(this.Waveform_Tasks);
+
+            //One instant for the whole batch, so both waveform ranges age by the same amount.
+            DateTime Local_PlottedAt = DateTime.UtcNow;
 
             // Batch all UI updates on the UI thread.
             if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
@@ -478,12 +710,7 @@ public partial class FormRTA : Form
                         if (update.Chart == null || update.PlotData == null)
                             continue;
 
-                        this.UpdateChartWithPlotData(update.Chart, update.PlotData, update.ResetAutoRange);
-                        // Reset the auto-range flags after updating.
-                        if (update.Chart == this.chart_InputWaveform)
-                            this.chart_InputWaveform_ResetAutoRange = false;
-                        else if (update.Chart == this.chart_OutputWaveform)
-                            this.chart_OutputWaveform_ResetAutoRange = false;
+                        this.UpdateChartWithPlotData(update.Chart, update.PlotData, Local_PlottedAt);
                     }
                 });
         }
@@ -493,6 +720,8 @@ public partial class FormRTA : Form
         }
         finally
         {
+            this.Waveform_Tick_InFlight = false;
+
             //DEFECT FIX: this is an 'async void' handler that awaits; the form can be closed and
             //disposed during the await. Touching this.timer_*/this.Pause_CHK unguarded threw
             //ObjectDisposedException FROM A FINALLY - unhandled (async void) and masking whatever
@@ -528,66 +757,128 @@ public partial class FormRTA : Form
     protected async void Plot_ULF_FFT_Timer_Tick(object sender, EventArgs e)
     {
         this.timer_Plot_ULF_FFT.Enabled = false;
+
+        //See the ULF_Tick_InFlight field: Pause can re-arm this timer while the previous tick is
+        //still awaiting, so Enabled alone is not mutual exclusion.
+        if (this.ULF_Tick_InFlight)
+            return;
+
+        this.ULF_Tick_InFlight = true;
         try
         {
+            //Read the snapshot ONCE. Everything below - the FFT instances, the window, the scale
+            //factor, the frequency span and the decimators - comes from this one local, so a combo
+            //box change during the await cannot split a frame across two configurations.
+            var Local_Config = this.ULF_Config;
+
             int inSampleRate = Program.DSP_Info.InSampleRate;
-            double overlap = this.ULF_FFT_OverLapPercentage / 100d;
-            double overlapAdd = 1d + overlap;
-            int removeLength = (int)(inSampleRate * (1d - overlap));
+            int frameLength = Get_ULF_FrameLength(inSampleRate);
+            int removeLength = Get_HopLength(frameLength, this.ULF_FFT_OverLapPercentage);
+
+            //Track a sample-rate change made while this window is open; the buffers are sized from
+            //the rate, so a stale capacity could no longer hold a frame.
+            this.EnsureULFBufferCapacity(inSampleRate);
 
             this.ULF_FFT_Tasks.Clear();
 
+            if (frameLength <= 0 || frameLength < Local_Config.FFTSize)
+                return;
+
             // Process Input ULF.
+            //Capture the buffer instance so the Peek and the matching Advance can never land on
+            //two different instances if the sample rate changes underneath us.
+            var Local_InputULF_Buffer = this.RTA_InputULFBuffer;
             if (this.chart_Input_ULF_FFT.Visible &&
-                this.RTA_InputULFBuffer.Count > inSampleRate * overlapAdd)
+                HasFullFrame(Local_InputULF_Buffer, frameLength))
             {
                 //PERF: this allocated a fresh double[InSampleRate] (384 KB at 96 kHz) on a timer
                 //whose interval can be as low as 1 ms. The array is filled from the circular
                 //buffer, consumed by the FFT and dropped, and the timer disables itself and awaits
                 //WhenAll before the next tick, so a per-direction reusable buffer is safe.
-                var Local_InputULF_Scratch = EnsureExactScratch(ref this.InputULF_Scratch, inSampleRate);
+                var Local_InputULF_Scratch = EnsureExactScratch(ref this.InputULF_Scratch, frameLength);
+                var Local_InputULF_Decimated = EnsureExactScratch(ref this.InputULF_Decimated, Local_Config.FFTSize);
                 this.ULF_FFT_Tasks.Add(Task.Run(() =>
                 {
                     var data = Local_InputULF_Scratch;
-                    _ = this.RTA_InputULFBuffer.Read(data, 0, inSampleRate);
-                    return this.Compute_ULF_FFT_Data(this.InputULF_FFT, data);
+                    //Peek, not Read: the frame is a whole second but only the hop is consumed, so
+                    //consecutive frames overlap. Reading destructively here and then advancing by
+                    //the hop as well was what drove the read pointer away from the write pointer.
+                    _ = Local_InputULF_Buffer.Peek(data, 0, frameLength);
+                    return this.Compute_ULF_FFT_Data(Local_Config, Local_Config.InputFFT,
+                        Local_Config.InputDecimator, data, Local_InputULF_Decimated);
                 })
                 .ContinueWith(t =>
                 {
-                    var (xData, magLog) = t.Result;
-                    if (xData.Length > 0 && magLog.Length > 0)
+                    //DEFECT FIX: this read t.Result straight into a deconstruction. A faulted
+                    //analysis task therefore rethrew here, skipped the Advance below, and left the
+                    //frame in the buffer - so the next tick re-analysed the same bad frame and
+                    //faulted again, once per millisecond, each one reaching the user as the modal
+                    //"A fatal error has occured / Press Yes to abort the app" dialog. Consume the
+                    //hop either way and report the fault once.
+                    try
                     {
-                        if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
-                            this.SafeInvoke(() =>
-                                // Use frequency range constants directly here: 1 Hz to 100 Hz.
-                                this.Plot_FFT(this.chart_Input_ULF_FFT, 1, 100, xData, magLog, ref this.LastFFTUpdateULF));
+                        if (!t.IsCompletedSuccessfully)
+                        {
+                            if (t.Exception != null)
+                                Debug.ReportSwallowed(t.Exception);
+                            return;
+                        }
+
+                        var (xData, magLog) = t.Result;
+                        if (xData.Length > 0 && magLog.Length > 0)
+                        {
+                            if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                                this.SafeInvoke(() =>
+                                    // Use frequency range constants directly here: 1 Hz to 100 Hz.
+                                    this.Plot_FFT(this.chart_Input_ULF_FFT, 1, 100, xData, magLog, ref this.LastFFTUpdateULF));
+                        }
                     }
-                    this.RTA_InputULFBuffer.Advance(removeLength);
+                    finally
+                    {
+                        Local_InputULF_Buffer.Advance(removeLength);
+                    }
                 }));
             }
 
             // Process Output ULF.
+            var Local_OutputULF_Buffer = this.RTA_OutputULFBuffer;
             if (this.chart_Output_ULF_FFT.Visible &&
-                this.RTA_OutputULFBuffer.Count > inSampleRate * overlapAdd)
+                HasFullFrame(Local_OutputULF_Buffer, frameLength))
             {
-                var Local_OutputULF_Scratch = EnsureExactScratch(ref this.OutputULF_Scratch, inSampleRate);
+                var Local_OutputULF_Scratch = EnsureExactScratch(ref this.OutputULF_Scratch, frameLength);
+                var Local_OutputULF_Decimated = EnsureExactScratch(ref this.OutputULF_Decimated, Local_Config.FFTSize);
                 this.ULF_FFT_Tasks.Add(Task.Run(() =>
                 {
                     var data = Local_OutputULF_Scratch;
-                    _ = this.RTA_OutputULFBuffer.Read(data, 0, inSampleRate);
-                    return this.Compute_ULF_FFT_Data(this.OutputULF_FFT, data);
+                    _ = Local_OutputULF_Buffer.Peek(data, 0, frameLength);
+                    return this.Compute_ULF_FFT_Data(Local_Config, Local_Config.OutputFFT,
+                        Local_Config.OutputDecimator, data, Local_OutputULF_Decimated);
                 })
                 .ContinueWith(t =>
                 {
-                    var (xData, magLog) = t.Result;
-                    if (xData.Length > 0 && magLog.Length > 0)
+                    //Fault handling as in the input path above.
+                    try
                     {
-                        if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
-                            this.SafeInvoke(() =>
-                                // Use frequency range constants directly here: 1 Hz to 100 Hz.
-                                this.Plot_FFT(this.chart_Output_ULF_FFT, 1, 100, xData, magLog, ref this.LastFFTUpdateULF));
+                        if (!t.IsCompletedSuccessfully)
+                        {
+                            if (t.Exception != null)
+                                Debug.ReportSwallowed(t.Exception);
+                            return;
+                        }
+
+                        var (xData, magLog) = t.Result;
+                        if (xData.Length > 0 && magLog.Length > 0)
+                        {
+                            if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                                this.SafeInvoke(() =>
+                                    // Use frequency range constants directly here: 1 Hz to 100 Hz.
+                                    this.Plot_FFT(this.chart_Output_ULF_FFT, 1, 100, xData, magLog, ref this.LastFFTUpdateULF));
+                        }
                     }
-                    this.RTA_OutputULFBuffer.Advance(removeLength);
+                    finally
+                    {
+                        Local_OutputULF_Buffer.Advance(removeLength);
+                    }
                 }));
             }
 
@@ -599,6 +890,8 @@ public partial class FormRTA : Form
         }
         finally
         {
+            this.ULF_Tick_InFlight = false;
+
             //DEFECT FIX: see RestartTimerIfAlive - unguarded member access from the finally of an
             //async void handler crashed the app when the form closed mid-await.
             this.RestartTimerIfAlive(this.timer_Plot_ULF_FFT);
@@ -609,63 +902,117 @@ public partial class FormRTA : Form
     protected async void PlotTopFFTs_Timer_Tick(object sender, EventArgs e)
     {
         this.timer_Plot_Top_FFTs.Enabled = false;
+
+        //See the Top_Tick_InFlight field.
+        if (this.Top_Tick_InFlight)
+            return;
+
+        this.Top_Tick_InFlight = true;
         try
         {
-            double overlap = this.Top_FFT_OverLapPercentage / 100d;
-            double overlapAdd = 1d + overlap;
-            int fftSize = this.Default_Top_FFTSize;
-            int removeLength = (int)(fftSize * (1d - overlap));
+            //Read the snapshot ONCE - see Plot_ULF_FFT_Timer_Tick. This is the tick that used to
+            //crash the app: shrinking the FFT size mid-await handed the old 16384 point FFT a 2048
+            //sample frame and it ran off the end of the input array.
+            var Local_Config = this.Top_Config;
+
+            //A sample rate change while the window is open invalidates the Top frequency span,
+            //which is derived from it. Rebuild the snapshot and use the new one from here on.
+            if (Local_Config.SampleRate != Program.DSP_Info.InSampleRate)
+            {
+                Local_Config = this.Build_Top_Config();
+                this.Top_Config = Local_Config;
+            }
+
+            int fftSize = Local_Config.FFTSize;
+            int removeLength = Get_HopLength(fftSize, this.Top_FFT_OverLapPercentage);
+
+            //Track a Top FFT size change made while this window is open.
+            this.EnsureTopBufferCapacity(fftSize);
 
             this.Top_FFT_Tasks.Clear();
 
+            if (fftSize <= 0)
+                return;
+
             // Process Input Top FFT.
+            //Same Peek/Advance pairing as the ULF path, see Plot_ULF_FFT_Timer_Tick.
+            var Local_InputTop_Buffer = this.RTA_InputTopBuffer;
             if (this.chart_Input_Top_FFT.Visible &&
-                this.RTA_InputTopBuffer.Count > fftSize * overlapAdd)
+                HasFullFrame(Local_InputTop_Buffer, fftSize))
             {
                 //PERF: reusable per-direction scratch, see Plot_ULF_FFT_Timer_Tick.
                 var Local_InputTop_Scratch = EnsureExactScratch(ref this.InputTop_Scratch, fftSize);
                 this.Top_FFT_Tasks.Add(Task.Run(() =>
                 {
                     var data = Local_InputTop_Scratch;
-                    _ = this.RTA_InputTopBuffer.Read(data, 0, fftSize);
-                    return this.Compute_Top_FFT_Data(this.InputTop_FFT, data);
+                    _ = Local_InputTop_Buffer.Peek(data, 0, fftSize);
+                    return this.Compute_Top_FFT_Data(Local_Config, Local_Config.InputFFT, data);
                 })
                 .ContinueWith(t =>
                 {
-                    var (xData, magLog) = t.Result;
-                    if (xData.Length > 0 && magLog.Length > 0)
+                    //Fault handling as in the ULF path, see Plot_ULF_FFT_Timer_Tick.
+                    try
                     {
-                        if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
-                            this.SafeInvoke(() =>
-                                // Use frequency range constants directly here: 10 Hz to 20000 Hz.
-                                this.Plot_FFT(this.chart_Input_Top_FFT, 10, 20000, xData, magLog, ref this.LastFFTUpdateTop));
+                        if (!t.IsCompletedSuccessfully)
+                        {
+                            if (t.Exception != null)
+                                Debug.ReportSwallowed(t.Exception);
+                            return;
+                        }
+
+                        var (xData, magLog) = t.Result;
+                        if (xData.Length > 0 && magLog.Length > 0)
+                        {
+                            if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                                this.SafeInvoke(() =>
+                                    // Use frequency range constants directly here: 10 Hz to 20000 Hz.
+                                    this.Plot_FFT(this.chart_Input_Top_FFT, 10, 20000, xData, magLog, ref this.LastFFTUpdateTop));
+                        }
                     }
-                    this.RTA_InputTopBuffer.Advance(removeLength);
+                    finally
+                    {
+                        Local_InputTop_Buffer.Advance(removeLength);
+                    }
                 }));
             }
 
             // Process Output Top FFT.
+            var Local_OutputTop_Buffer = this.RTA_OutputTopBuffer;
             if (this.chart_Output_Top_FFT.Visible &&
-                this.RTA_OutputTopBuffer.Count > fftSize * overlapAdd)
+                HasFullFrame(Local_OutputTop_Buffer, fftSize))
             {
                 var Local_OutputTop_Scratch = EnsureExactScratch(ref this.OutputTop_Scratch, fftSize);
                 this.Top_FFT_Tasks.Add(Task.Run(() =>
                 {
                     var data = Local_OutputTop_Scratch;
-                    _ = this.RTA_OutputTopBuffer.Read(data, 0, fftSize);
-                    return this.Compute_Top_FFT_Data(this.OutputTop_FFT, data);
+                    _ = Local_OutputTop_Buffer.Peek(data, 0, fftSize);
+                    return this.Compute_Top_FFT_Data(Local_Config, Local_Config.OutputFFT, data);
                 })
                 .ContinueWith(t =>
                 {
-                    var (xData, magLog) = t.Result;
-                    if (xData.Length > 0 && magLog.Length > 0)
+                    //Fault handling as in the ULF path, see Plot_ULF_FFT_Timer_Tick.
+                    try
                     {
-                        if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
-                            this.SafeInvoke(() =>
-                                // Use frequency range constants directly here: 10 Hz to 20000 Hz.
-                                this.Plot_FFT(this.chart_Output_Top_FFT, 10, 20000, xData, magLog, ref this.LastFFTUpdateTop));
+                        if (!t.IsCompletedSuccessfully)
+                        {
+                            if (t.Exception != null)
+                                Debug.ReportSwallowed(t.Exception);
+                            return;
+                        }
+
+                        var (xData, magLog) = t.Result;
+                        if (xData.Length > 0 && magLog.Length > 0)
+                        {
+                            if (!this.IsClosing && !this.IsDisposed && this.IsHandleCreated)
+                                this.SafeInvoke(() =>
+                                    // Use frequency range constants directly here: 10 Hz to 20000 Hz.
+                                    this.Plot_FFT(this.chart_Output_Top_FFT, 10, 20000, xData, magLog, ref this.LastFFTUpdateTop));
+                        }
                     }
-                    this.RTA_OutputTopBuffer.Advance(removeLength);
+                    finally
+                    {
+                        Local_OutputTop_Buffer.Advance(removeLength);
+                    }
                 }));
             }
 
@@ -677,23 +1024,43 @@ public partial class FormRTA : Form
         }
         finally
         {
+            this.Top_Tick_InFlight = false;
+
             //DEFECT FIX: see RestartTimerIfAlive - unguarded member access from the finally of an
             //async void handler crashed the app when the form closed mid-await.
             this.RestartTimerIfAlive(this.timer_Plot_Top_FFTs);
         }
     }
 
-    protected (double[] xData, double[] magLog) Compute_ULF_FFT_Data(FFT fft, double[] timeSeries)
+    /// <summary>
+    /// Band-limits, decimates and transforms one ULF frame.
+    /// </summary>
+    /// <param name="config">The snapshot this frame is being analysed under. Never re-read fields.</param>
+    /// <param name="fft">The FFT instance belonging to this direction, taken from the snapshot.</param>
+    /// <param name="decimator">The decimator belonging to this direction, taken from the snapshot.</param>
+    /// <param name="timeSeries">One second of audio at the input sample rate.</param>
+    /// <param name="decimated">Scratch of exactly <c>config.FFTSize</c> entries.</param>
+    /// <returns>The frequency span and the magnitudes in dBV, or empty arrays to skip the plot.</returns>
+    protected (double[] xData, double[] magLog) Compute_ULF_FFT_Data(
+        AnalysisConfig config, FFT fft, AntiAliasDecimator? decimator, double[] timeSeries, double[] decimated)
     {
-        if (timeSeries.Length < this.Default_ULF_FFTSize)
+        //A snapshot without decimators is not a ULF snapshot; skip the frame rather than plot
+        //something that was never band-limited.
+        if (decimator == null)
             return (Array.Empty<double>(), Array.Empty<double>());
 
-        int FFTSize = Math.Min(this.Default_ULF_FFTSize, timeSeries.Length);
-        //Downsample for ULF
-        var Down = DownSampler.downsample(timeSeries, FFTSize);
+        if (timeSeries.Length < config.FFTSize || decimated.Length != config.FFTSize)
+            return (Array.Empty<double>(), Array.Empty<double>());
+
+        //DEFECT FIX: this used DownSampler.downsample - Largest Triangle Three Buckets, a PLOT
+        //THINNING algorithm. It emits the most extreme sample of each bucket at that sample's own
+        //position, so the result was non-uniformly spaced, biased towards peaks, and band-limited
+        //not at all: every component above 1 kHz folded straight down into the plotted 1-100 Hz
+        //span. AntiAliasDecimator filters first and then resamples uniformly.
+        decimator.Decimate(timeSeries, timeSeries.Length, decimated);
 
         // Perform a FFT
-        Complex[] FFTResult = fft.Perform_FFT(Down, this.ULF_FFT_WindowCoefficients);
+        Complex[] FFTResult = fft.Perform_FFT(decimated, config.WindowCoefficients);
         var HalfLength = FFTResult.Length / 2 + 1;
         var RealResult = new Complex[HalfLength];
         Array.Copy(FFTResult, RealResult, HalfLength);
@@ -701,26 +1068,30 @@ public partial class FormRTA : Form
         double[] magResult = DSP.ConvertComplex.ToMagnitude(RealResult);
         double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(
                              magResult,
-                             this.ULF_FFT_WindowScaleFactor * Math.Sqrt(2),
+                             config.WindowScaleFactor * Math.Sqrt(2),
                              -400d);
 
         // Return just the data needed to plot.
-        return (this.ULF_FFT_FSpan, magLog);
+        return (config.FrequencySpan, magLog);
     }
 
-    protected (double[] xData, double[] magLog) Compute_Top_FFT_Data(FFT fft, double[] timeSeries)
+    /// <summary>
+    /// Transforms one Top FFT frame.
+    /// </summary>
+    /// <param name="config">The snapshot this frame is being analysed under. Never re-read fields.</param>
+    /// <param name="fft">The FFT instance belonging to this direction, taken from the snapshot.</param>
+    /// <param name="timeSeries">Exactly <c>config.FFTSize</c> samples at the input sample rate.</param>
+    /// <returns>The frequency span and the magnitudes in dBV, or empty arrays to skip the plot.</returns>
+    protected (double[] xData, double[] magLog) Compute_Top_FFT_Data(
+        AnalysisConfig config, FFT fft, double[] timeSeries)
     {
-        int FFTSize = this.Default_Top_FFTSize;
-
-        // If the incoming buffer is too short, return empty arrays so we skip plotting.
-        if (timeSeries.Length < FFTSize)
+        //The frame, the window and the FFT all come from one snapshot, so these lengths agree by
+        //construction. The guard stays as a backstop against a mis-sized scratch buffer.
+        if (timeSeries.Length != config.FFTSize)
             return (Array.Empty<double>(), Array.Empty<double>());
 
-        // Exactly as in Render_Top_FFT: resize to the chosen FFT length.
-        Array.Resize(ref timeSeries, FFTSize);
-
-        // Perform the FFT using your existing Top_FFT instance & window coefficients.
-        Complex[] fftResult = fft.Perform_FFT(timeSeries, this.Top_FFT_WindowCoefficients);
+        // Perform the FFT using the snapshot's FFT instance & window coefficients.
+        Complex[] fftResult = fft.Perform_FFT(timeSeries, config.WindowCoefficients);
 
         // Keep only the real, non-mirrored half.
         int halfLength = fftResult.Length / 2 + 1;
@@ -733,12 +1104,11 @@ public partial class FormRTA : Form
         // Convert magnitude to dBV with your original scale factor & floor of -400 dB.
         double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(
             magResult,
-            this.Top_FFT_WindowScaleFactor * Math.Sqrt(2),
+            config.WindowScaleFactor * Math.Sqrt(2),
             -400d
         );
 
-        // Return the frequency span (already stored in Top_FFT_FSpan) plus the final magnitude array.
-        return (this.Top_FFT_FSpan, magLog);
+        return (config.FrequencySpan, magLog);
     }
 
     #endregion
@@ -848,7 +1218,6 @@ public partial class FormRTA : Form
             this.timer_PlotWaveforms.Enabled = !this.Pause_CHK.Checked;
             this.timer_Plot_Top_FFTs.Enabled = !this.Pause_CHK.Checked;
             this.timer_Plot_ULF_FFT.Enabled = !this.Pause_CHK.Checked;
-            this.timer_ResetWaveform.Enabled = !this.Pause_CHK.Checked;
         }
         catch (Exception ex)
         {
@@ -894,7 +1263,6 @@ public partial class FormRTA : Form
         this.timer_PlotWaveforms.Enabled = true;
         this.timer_Plot_Top_FFTs.Enabled = true;
         this.timer_Plot_ULF_FFT.Enabled = true;
-        this.timer_ResetWaveform.Enabled = true;
     }
     #endregion
 
@@ -934,6 +1302,14 @@ public partial class FormRTA : Form
 
         if (Control != null)
             Control.Visible = Checked;
+
+        //DEFECT FIX: both the ASIO writes and the plot ticks are gated on chart.Visible, so a chart
+        //that gets unchecked leaves roughly a frame of audio frozen in its buffer and replays it,
+        //frame by overlapped frame, when it is re-checked - stale audio spliced onto live audio,
+        //which reads as a burst of broadband noise across the whole span. Empty it on hide; nothing
+        //writes to it again until it is shown.
+        if (!Checked)
+            this.Discard_BufferedAudio(e.Index);
 
         //If one item is left checked
         if (Checked & this.checkedListBox1.CheckedItems.Count == 0 || !Checked & this.checkedListBox1.CheckedItems.Count == 2)
@@ -1024,51 +1400,189 @@ public partial class FormRTA : Form
         }
         return null;
     }
+
+    /// <summary>
+    /// Throws away whatever a hidden chart's analysis buffer is still holding, so it cannot splice
+    /// stale audio onto live audio when the chart is shown again.
+    /// </summary>
+    /// <param name="checkboxIndex">The checked-list index of the chart being hidden.</param>
+    /// <remarks>
+    /// The buffer INSTANCE is replaced rather than reset: a tick already in flight captured the old
+    /// instance into a local, so its Peek and its matching Advance both complete harmlessly on the
+    /// orphan instead of racing a reset between them.
+    /// </remarks>
+    protected void Discard_BufferedAudio(int checkboxIndex)
+    {
+        switch (checkboxIndex)
+        {
+            //0 and 1 are the waveform charts, which plot the raw ASIO snapshot and buffer nothing.
+            case 2:
+                this.RTA_InputULFBuffer = new(Get_ULF_BufferLength(Program.DSP_Info.InSampleRate));
+                break;
+            case 3:
+                this.RTA_OutputULFBuffer = new(Get_ULF_BufferLength(Program.DSP_Info.InSampleRate));
+                break;
+            //Sized from the published snapshot, not from Default_Top_FFTSize, so this agrees with
+            //whatever the plot timer is currently analysing under.
+            case 4:
+                this.RTA_InputTopBuffer = new(Get_Top_BufferLength(this.Top_Config.FFTSize));
+                break;
+            case 5:
+                this.RTA_OutputTopBuffer = new(Get_Top_BufferLength(this.Top_Config.FFTSize));
+                break;
+        }
+    }
     #endregion
 
     #region PreCalculateWindowCoefficients
-    protected void ReCalculate_Top_FFT()
+    /// <summary>
+    /// Reads the selected window type out of a combo box, falling back to the current setting when
+    /// the combo has not been populated yet (the constructor runs before Init_Comboboxes).
+    /// </summary>
+    /// <param name="comboBox">The window type combo box.</param>
+    /// <param name="fftSize">The FFT length the coefficients must match.</param>
+    /// <returns>The coefficients and their amplitude correction factor.</returns>
+    protected static (double[] Coefficients, double ScaleFactor) Build_Window(ComboBox comboBox, int fftSize)
     {
-        //Precalculate Window
-        var SelectedItem = this.cbo_Top_FFT_Window_Type.SelectedItem?.ToString();
-        if (!string.IsNullOrEmpty(SelectedItem))
-        {
-            var WindowType = Enum.Parse<DSP.Window.Type>(SelectedItem);
-            this.Top_FFT_WindowCoefficients = DSP.Window.Coefficients(WindowType, this.Default_Top_FFTSize);
-            this.Top_FFT_WindowScaleFactor = DSP.Window.ScaleFactor.Signal(this.Top_FFT_WindowCoefficients);
-        }
+        var Local_Selected = comboBox.SelectedItem?.ToString();
 
-        this.InputTop_FFT = new FFT(this.Default_Top_FFTSize);
-        this.OutputTop_FFT = new FFT(this.Default_Top_FFTSize);
-        int SampleRate = Program.DSP_Info.InSampleRate;
-        // Calculate the frequency span
-        this.Top_FFT_FSpan = this.InputTop_FFT.FrequencySpan(SampleRate);
-        this.Top_FFT_FSpan[0] = 0.0001;
+        //Fall back to a rectangular (all ones) window rather than an all-zero array: zeros multiply
+        //the whole frame away and hand the dB conversion a spectrum of silence, so a snapshot built
+        //before the combo boxes are populated would plot the noise floor instead of the signal.
+        if (string.IsNullOrEmpty(Local_Selected) || !Enum.TryParse<DSP.Window.Type>(Local_Selected, out var Local_Type))
+            Local_Type = DSP.Window.Type.Rectangular;
 
-        this.RTA_InputTopBuffer = new(this.Default_Top_FFTSize * 10);
-        this.RTA_OutputTopBuffer = new(this.Default_Top_FFTSize * 10);
+        var Local_Coefficients = DSP.Window.Coefficients(Local_Type, fftSize);
+        return (Local_Coefficients, DSP.Window.ScaleFactor.Signal(Local_Coefficients));
     }
 
+    /// <summary>
+    /// Builds a fresh Top FFT snapshot. Every field a running analysis depends on is constructed
+    /// here, so publishing it is one reference assignment and a reader sees all of it or none.
+    /// </summary>
+    /// <returns>The new snapshot.</returns>
+    protected AnalysisConfig Build_Top_Config()
+    {
+        int Local_FFTSize = this.Default_Top_FFTSize;
+        int Local_SampleRate = Program.DSP_Info.InSampleRate;
+
+        var (Local_Coefficients, Local_ScaleFactor) = Build_Window(this.cbo_Top_FFT_Window_Type, Local_FFTSize);
+
+        var Local_InputFFT = new FFT(Local_FFTSize);
+        var Local_OutputFFT = new FFT(Local_FFTSize);
+
+        var Local_FSpan = Local_InputFFT.FrequencySpan(Local_SampleRate);
+        if (Local_FSpan.Length > 0)
+            Local_FSpan[0] = 0.0001;
+
+        return new AnalysisConfig
+        {
+            FFTSize = Local_FFTSize,
+            InputFFT = Local_InputFFT,
+            OutputFFT = Local_OutputFFT,
+            WindowCoefficients = Local_Coefficients,
+            WindowScaleFactor = Local_ScaleFactor,
+            FrequencySpan = Local_FSpan,
+            SampleRate = Local_SampleRate
+        };
+    }
+
+    /// <summary>
+    /// Publishes a fresh Top FFT snapshot in one reference assignment.
+    /// </summary>
+    protected void ReCalculate_Top_FFT()
+    {
+        var Local_Config = this.Build_Top_Config();
+        this.Top_Config = Local_Config;
+
+        //DEFECT FIX: this re-allocated the Top buffers at ten frames deep, contradicting
+        //Get_Top_BufferLength. Every window-type and FFT-size change installed a ten-frame buffer
+        //that the very next tick discarded through EnsureTopBufferCapacity, throwing buffered audio
+        //away twice and swapping the instance under the ASIO producer an extra time.
+        this.EnsureTopBufferCapacity(Local_Config.FFTSize);
+    }
+
+    /// <summary>
+    /// Builds a fresh ULF FFT snapshot, including the two band-limiting decimators.
+    /// </summary>
+    /// <returns>The new snapshot.</returns>
+    /// <remarks>
+    /// The ULF frequency span is derived from the DECIMATED rate, which is the FFT size itself: one
+    /// second of audio reduced to <c>Default_ULF_FFTSize</c> points is that many samples per second,
+    /// so the span runs 0 Hz to half of it in exactly 1 Hz steps.
+    /// </remarks>
+    protected AnalysisConfig Build_ULF_Config()
+    {
+        int Local_FFTSize = this.Default_ULF_FFTSize;
+
+        var (Local_Coefficients, Local_ScaleFactor) = Build_Window(this.cbo_ULF_FFT_Window_Type, Local_FFTSize);
+
+        var Local_InputFFT = new FFT(Local_FFTSize);
+        var Local_OutputFFT = new FFT(Local_FFTSize);
+
+        var Local_FSpan = Local_InputFFT.FrequencySpan(Local_FFTSize);
+        if (Local_FSpan.Length > 0)
+            Local_FSpan[0] = 0.0001;
+
+        return new AnalysisConfig
+        {
+            FFTSize = Local_FFTSize,
+            InputFFT = Local_InputFFT,
+            OutputFFT = Local_OutputFFT,
+            WindowCoefficients = Local_Coefficients,
+            WindowScaleFactor = Local_ScaleFactor,
+            FrequencySpan = Local_FSpan,
+            SampleRate = Program.DSP_Info.InSampleRate,
+            //Borrowed, not built: see the fields. Stateful scratch, so one per direction. This
+            //replaces the Largest-Triangle plot thinner that used to feed the ULF FFT unfiltered,
+            //aliased and non-uniformly spaced samples.
+            InputDecimator = this.InputULF_Decimator,
+            OutputDecimator = this.OutputULF_Decimator
+        };
+    }
+
+    /// <summary>
+    /// Publishes a fresh ULF FFT snapshot in one reference assignment.
+    /// </summary>
     protected void ReCalculate_ULF_FFT()
     {
-        //Precalculate Window
-        var SelectedItem = this.cbo_ULF_FFT_Window_Type.SelectedItem?.ToString();
-        if (!string.IsNullOrEmpty(SelectedItem))
-        {
-            var WindowType = Enum.Parse<DSP.Window.Type>(SelectedItem);
-            this.ULF_FFT_WindowCoefficients = DSP.Window.Coefficients(WindowType, this.Default_ULF_FFTSize);
-            this.ULF_FFT_WindowScaleFactor = DSP.Window.ScaleFactor.Signal(this.ULF_FFT_WindowCoefficients);
-        }
-
-        this.InputULF_FFT = new FFT(this.Default_ULF_FFTSize);
-        this.OutputULF_FFT = new FFT(this.Default_ULF_FFTSize);
-        // Calculate the frequency span
-        this.ULF_FFT_FSpan = this.InputULF_FFT.FrequencySpan(this.Default_ULF_FFTSize);
-        this.ULF_FFT_FSpan[0] = 0.0001;
+        this.ULF_Config = this.Build_ULF_Config();
     }
     #endregion
 
     #region FFT Charts Logic
+    /// <summary>
+    /// Converts a displayed frequency range into the half-open bin range covering it, so the
+    /// Max/Min readout can only ever name a bin that is actually on screen.
+    /// </summary>
+    /// <param name="frequencySpan">The chart's X data, ascending, one entry per bin.</param>
+    /// <param name="minimumHz">The lowest displayed frequency.</param>
+    /// <param name="maximumHz">The highest displayed frequency.</param>
+    /// <returns>The first bin at or above the minimum, and one past the last bin at or below the maximum.</returns>
+    protected static (int From, int To) Get_BinRangeForFrequencies(double[] frequencySpan, double minimumHz, double maximumHz)
+    {
+        if (frequencySpan == null || frequencySpan.Length == 0)
+            return (0, 0);
+
+        int Local_From = -1;
+        int Local_To = 0;
+
+        for (int i = 0; i < frequencySpan.Length; i++)
+        {
+            double Local_Frequency = frequencySpan[i];
+            if (Local_Frequency < minimumHz)
+                continue;
+            if (Local_Frequency > maximumHz)
+                break;
+
+            if (Local_From < 0)
+                Local_From = i;
+            Local_To = i + 1;
+        }
+
+        return Local_From < 0 ? (0, 0) : (Local_From, Local_To);
+    }
+
     [SupportedOSPlatform("windows")]
     protected void Plot_FFT(Chart chartControl, int min, int max, double[] xData, double[] yData, ref DateTime lastUpdate)
     {
@@ -1106,9 +1620,22 @@ public partial class FormRTA : Form
                 return;
             lastUpdate = DateTime.Now;
 
-            // Determine the positions of max and min values.
-            int maxIndex = DSP.Analyze.FindMaxPosition(yData, 0, max);
-            int minIndex = DSP.Analyze.FindMinPosition(yData, 0, max);
+            //DEFECT FIX: min and max are HERTZ - they are the axis limits set above - but they were
+            //handed straight to FindMaxPosition/FindMinPosition, which take BIN INDICES. The ULF
+            //charts searched bins 0..100 of a 1 Hz-per-bin spectrum, which happens to be close, but
+            //still started at the DC bin that the axis deliberately excludes; the Top charts passed
+            //20000, which clamps to the whole spectrum, so the readout could name a bin far below
+            //the 10 Hz the axis starts at. That is why the screenshot reads "Min: 0.0" on a chart
+            //whose X axis begins at 1 Hz.
+            var (searchFrom, searchTo) = Get_BinRangeForFrequencies(xData, min, max);
+            if (searchTo <= searchFrom)
+                return;
+
+            int maxIndex = DSP.Analyze.FindMaxPosition(yData, searchFrom, searchTo);
+            int minIndex = DSP.Analyze.FindMinPosition(yData, searchFrom, searchTo);
+
+            if (maxIndex < 0 || maxIndex >= xData.Length || minIndex < 0 || minIndex >= xData.Length)
+                return;
 
             if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
                 return;
@@ -1171,7 +1698,7 @@ public partial class FormRTA : Form
     // Updates a Chart control with the computed waveform data. This method is
     // invoked on the UI thread and assumes that the chart has been initialized.
     [SupportedOSPlatform("windows")]
-    protected void UpdateChartWithPlotData(Chart chartControl, WaveformPlotData plotData, bool resetAutoRange)
+    protected void UpdateChartWithPlotData(Chart chartControl, WaveformPlotData plotData, DateTime timestamp)
     {
         //DEFECT FIX: these four early-returns sat OUTSIDE the try, so whenever the form was
         //closing / the chart was not ready the rented ArrayPool buffers were dropped on the floor
@@ -1191,14 +1718,6 @@ public partial class FormRTA : Form
 
             chartControl.SuspendLayout();
 
-            // If auto‑range needs to be reset, set the Y‑axis values to 0.
-            if (resetAutoRange)
-            {
-                chartControl.ChartAreas[0].AxisY.Maximum = 0;
-                chartControl.ChartAreas[0].AxisY.Minimum = 0;
-                chartControl.ChartAreas[0].AxisY.Interval = 0;
-            }
-
             // Set basic axis properties.
             ChartArea area = chartControl.ChartAreas[0];
             area.AxisX.IntervalType = DateTimeIntervalType.Number;
@@ -1212,11 +1731,21 @@ public partial class FormRTA : Form
             // Use the ArraySegment<T> instances to avoid allocating new arrays when possible.
             chartControl.Series["Series1"].Points.DataBindXY((System.Collections.IEnumerable)plotData.XData, (System.Collections.IEnumerable)plotData.YDataDec);
 
-            // Update Y‑axis scaling if needed.
-            if (area.AxisY.Maximum < plotData.YMaximum || area.AxisY.Minimum > plotData.YMinimum)
+            // Roll this block's magnitude into the chart's ten second range envelope. The envelope
+            // rises with the signal at once and eases back down, so the axis never steps.
+            var Local_Range = this.Get_WaveformRange(chartControl);
+            double Local_Magnitude = Local_Range == null
+                ? plotData.YMaximum
+                : Local_Range.Update(plotData.YMaximum, timestamp);
+
+            //An unset MS Chart axis reads back as NaN, and every comparison against NaN is false -
+            //which is why the old grow-only test never assigned a range to a fresh chart at all.
+            if (double.IsNaN(area.AxisY.Maximum) || double.IsNaN(area.AxisY.Minimum) ||
+                Math.Abs(area.AxisY.Maximum - Local_Magnitude) > Local_Magnitude * WaveformRangeUpdateThreshold)
             {
-                area.AxisY.Maximum = plotData.YMaximum;
-                area.AxisY.Minimum = plotData.YMinimum;
+                area.AxisY.Maximum = Local_Magnitude;
+                area.AxisY.Minimum = -Local_Magnitude;
+                area.AxisY.Interval = 0;
             }
 
             chartControl.ResumeLayout();
@@ -1264,25 +1793,61 @@ public partial class FormRTA : Form
         double[] rentedX = ArrayPool<double>.Shared.Rent(length);
         decimal[] rentedY = ArrayPool<decimal>.Shared.Rent(length);
 
-        // Fill X as simple linear indices (0 .. length-1) — faster than LinSpace.
-        for (int i = 0; i < length; i++)
-            rentedX[i] = i;
+        double mag;
+        try
+        {
+            // Fill X as simple linear indices (0 .. length-1) — faster than LinSpace.
+            for (int i = 0; i < length; i++)
+                rentedX[i] = i;
 
-        // Convert to decimals for the chart.
-        for (int i = 0; i < length; i++)
-            rentedY[i] = (decimal)yData[i];
+            //DEFECT FIX: the Y limits were computed as
+            //  maxCandidate = Min(yData.Max() * scale, scale)
+            //  minCandidate = Min(yData.Min() * scale, -0.0001)
+            //  mag          = Max(|maxCandidate|, |minCandidate|)
+            //Math.Min returns the SMALLER value, so the second line only floors minCandidate at
+            //-0.0001; it never bounds its magnitude the way the first line bounds the positive
+            //side. A -4.0 sample therefore produced mag = 6.0 while an otherwise identical +4.0
+            //sample produced the clamped mag = 1.5. Since mag drives the axis and now feeds a ten
+            //second peak envelope, one negative overshoot zoomed the chart out four-fold and held
+            //it there. Fold a symmetric absolute peak into the conversion loop instead, which also
+            //drops the two extra LINQ passes over the block.
+            double Local_BlockPeak = 0d;
+            for (int i = 0; i < length; i++)
+            {
+                double Local_Sample = yData![i];
+
+                //(decimal)NaN, (decimal)Infinity and anything beyond decimal's range all throw
+                //OverflowException - on a background thread, after both pool rentals. Sanitising
+                //here leaves every realistic sample untouched; only the RANGE is clamped, below.
+                if (!double.IsFinite(Local_Sample))
+                    Local_Sample = 0d;
+                else if (Local_Sample > DecimalSafeSample)
+                    Local_Sample = DecimalSafeSample;
+                else if (Local_Sample < -DecimalSafeSample)
+                    Local_Sample = -DecimalSafeSample;
+
+                rentedY[i] = (decimal)Local_Sample;
+
+                double Local_Absolute = Math.Abs(Local_Sample);
+                if (Local_Absolute > Local_BlockPeak)
+                    Local_BlockPeak = Local_Absolute;
+            }
+
+            mag = Math.Min(Local_BlockPeak * scaleYAxis, scaleYAxis);
+            mag = Math.Max(mag, 0.0001);
+        }
+        catch
+        {
+            //The rentals are only released in UpdateChartWithPlotData's finally, which is never
+            //reached if this method throws - every failed block would leak one array of each pool.
+            ArrayPool<double>.Shared.Return(rentedX);
+            ArrayPool<decimal>.Shared.Return(rentedY);
+            throw;
+        }
 
         double xMin = 0;
         double xMax = length;
         double xInterval = length * 0.25;
-
-        // Compute Y‑axis limits.
-        double maxCandidate = yData.Max() * scaleYAxis;
-        maxCandidate = Math.Min(maxCandidate, scaleYAxis);
-        double minCandidate = yData.Min() * scaleYAxis;
-        minCandidate = Math.Min(minCandidate, -0.0001);
-        double mag = Math.Max(Math.Abs(maxCandidate), Math.Abs(minCandidate));
-        mag = Math.Max(mag, 0.0001);
 
         return new WaveformPlotData
         {
@@ -1316,13 +1881,11 @@ public partial class FormRTA : Form
         public double YMinimum { get; set; }
     }
 
-    // Container that pairs a Chart control with its computed waveform data and
-    // whether auto-range needs to be reset.
+    // Container that pairs a Chart control with its computed waveform data.
     protected class ChartUpdateData
     {
         public Chart? Chart { get; set; }
         public WaveformPlotData? PlotData { get; set; }
-        public bool ResetAutoRange { get; set; }
     }
 
     #endregion

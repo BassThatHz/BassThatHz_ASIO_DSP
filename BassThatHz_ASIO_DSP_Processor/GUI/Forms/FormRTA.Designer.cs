@@ -70,7 +70,6 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormRTA));
             timer_PlotWaveforms = new System.Windows.Forms.Timer(components);
             timer_Plot_Top_FFTs = new System.Windows.Forms.Timer(components);
-            timer_ResetWaveform = new System.Windows.Forms.Timer(components);
             timer_Plot_ULF_FFT = new System.Windows.Forms.Timer(components);
             splitContainer1 = new System.Windows.Forms.SplitContainer();
             panel1 = new System.Windows.Forms.Panel();
@@ -122,12 +121,7 @@
             // 
             timer_Plot_Top_FFTs.Interval = 1;
             timer_Plot_Top_FFTs.Tick += PlotTopFFTs_Timer_Tick;
-            // 
-            // timer_ResetWaveform
-            // 
-            timer_ResetWaveform.Interval = 5000;
-            timer_ResetWaveform.Tick += ResetWaveform_Timer_Tick;
-            // 
+            //
             // timer_Plot_ULF_FFT
             // 
             timer_Plot_ULF_FFT.Interval = 1;
@@ -757,7 +751,6 @@
         #endregion
         protected System.Windows.Forms.Timer timer_PlotWaveforms;
         protected System.Windows.Forms.Timer timer_Plot_Top_FFTs;
-        protected System.Windows.Forms.Timer timer_ResetWaveform;
         protected System.Windows.Forms.Timer timer_Plot_ULF_FFT;
         protected System.Windows.Forms.SplitContainer splitContainer1;
         protected System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
