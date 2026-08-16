@@ -146,24 +146,60 @@ namespace NAudio.Wave
             this.Driver_ResetRequestCallback = this.OnDriverResetRequest;
         }
 
+        private bool IsDisposed;
+
         public void Dispose()
         {
-            if (this.PlaybackState != PlaybackState.Stopped)
-                this.Stop();
+            //DEFECT FIX: without a guard a second Dispose() double-releases the COM pointer and
+            //double-frees the pinned callback block. Callers use 'using var temp_ASIO = ...' in
+            //several places and the engine also disposes on shutdown.
+            if (this.IsDisposed)
+                return;
+            this.IsDisposed = true;
 
+            //DEFECT FIX: every step below used to be skippable. If Stop() threw, disposeBuffers,
+            //FreeHGlobal AND Marshal.Release were all skipped (unmanaged + COM leak) and the throw
+            //escaped the caller's 'using', replacing the original exception. Each step is now
+            //independently guarded and the mandatory releases run from finally blocks.
             try
             {
-                AsioError result = this.asioDriverVTable.disposeBuffers(this.pAsioComObject);
-                _ = result;
-                Marshal.FreeHGlobal(this.pinnedcallbacks);
+                if (this.PlaybackState != PlaybackState.Stopped)
+                    this.Stop();
             }
             catch (Exception ex)
             {
-                Console.Out.WriteLine(ex.ToString());
+                //Never route this to Debug.Error: Dispose can run from a finalizer or during
+                //shutdown, where a modal dialog would hang the process.
+                BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
             }
-
-            //ReleaseComAsioDriver
-            _ = Marshal.Release(this.pAsioComObject);
+            finally
+            {
+                try
+                {
+                    AsioError result = this.asioDriverVTable.disposeBuffers(this.pAsioComObject);
+                    _ = result;
+                }
+                catch (Exception ex)
+                {
+                    BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
+                }
+                finally
+                {
+                    try
+                    {
+                        Marshal.FreeHGlobal(this.pinnedcallbacks);
+                    }
+                    catch (Exception ex)
+                    {
+                        BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
+                    }
+                    finally
+                    {
+                        //ReleaseComAsioDriver
+                        _ = Marshal.Release(this.pAsioComObject);
+                    }
+                }
+            }
         }
         #endregion
 
@@ -225,14 +261,16 @@ namespace NAudio.Wave
                     this.capability.OutputChannelInfos[channel].name;
 
         /// <summary>
-        /// returns Tuple: int InputLatency, int OutputLatency
+        /// The driver's reported hardware latencies, in samples.
+        /// Returns a named ValueTuple (InputLatency, OutputLatency) so that reading this
+        /// property does not heap-allocate.
         /// </summary>
-        public Tuple<int, int> PlaybackLatency
+        public (int InputLatency, int OutputLatency) PlaybackLatency
         {
             get
             {
                 this.GetLatencies(out int InputLatency, out int OutputLatency);
-                return new Tuple<int, int>(InputLatency, OutputLatency);
+                return (InputLatency, OutputLatency);
             }
         }
 

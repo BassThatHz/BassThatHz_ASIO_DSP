@@ -28,16 +28,22 @@ namespace Test_Project_1
             _control = new TestableULF_FIRControl();
             _fftSizeTextBox = new TextBox();
             _tapsTextBox = new RichTextBox();
-            _tapsSampleRateTextBox = new TextBox();
-            _tapsSampleRateComboBox = new ComboBox();
             _applyButton = new Button();
 
             // Set up test controls
             SetPrivateField(_control, "txtFFTSize", _fftSizeTextBox);
             SetPrivateField(_control, "txtTaps", _tapsTextBox);
-            SetPrivateField(_control, "txtTapsSampleRate", _tapsSampleRateTextBox);
-            SetPrivateField(_control, "comboTapsSampleRate", _tapsSampleRateComboBox);
             SetPrivateField(_control, "btnApply", _applyButton);
+
+            // comboTapsSampleRate is a DropDownList whose SelectedIndex setter validates against
+            // Items.Count, and both it and txtTapsSampleRate already carry state the control's
+            // constructor established (4 items with SelectedIndex = 1, and the InSampleRate/100
+            // default text). Substituting brand-new empty controls - as this setup used to do -
+            // made every "SelectedIndex = n" in these tests throw ArgumentOutOfRangeException
+            // ("value must be less than '0'") and silently discarded the default text. Take the
+            // real, already-initialized controls instead so the production wiring is exercised.
+            _tapsSampleRateTextBox = GetPrivateField<TextBox>(_control, "txtTapsSampleRate");
+            _tapsSampleRateComboBox = GetPrivateField<ComboBox>(_control, "comboTapsSampleRate");
         }
 
         private void SetPrivateField(object obj, string fieldName, object value)

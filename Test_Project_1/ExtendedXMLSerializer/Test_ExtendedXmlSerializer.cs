@@ -205,20 +205,21 @@ namespace Test_Project_1.ExtendedXMLSerializer
         }
 
         [TestMethod]
-        public void RoundTrip_EmptyStringProperty_DoesNotThrow_ButValueIsNotPreserved()
+        public void RoundTrip_EmptyStringProperty_PreservesEmptyString()
         {
-            // SUSPECTED REAL DEFECT: ExtendedXmlSerializer.cs ReadXml (~line 297) does
-            // "if (string.IsNullOrEmpty(value)) continue;" when reading primitive element
-            // text, so a property serialized as an empty string element is skipped on
-            // deserialize and the property is left at its default value instead of "".
-            // This documents the CORRECT/expected round-trip behavior (empty string should
-            // survive round trip) - it is expected to FAIL against current production code.
+            // REGRESSION COVERAGE for a FIXED defect (DefectPin Defect 3a): ReadXml used to do
+            // "if (string.IsNullOrEmpty(value)) continue;" for primitive element text, so a string
+            // property serialized as an empty element was skipped on deserialize and silently left
+            // at its default instead of "" - a save/load data-loss bug. ReadXml now distinguishes
+            // "element present but empty" (restore "") from a non-string primitive that genuinely
+            // cannot be parsed from empty text.
             var serializer = new ExtendedXmlSerializer();
             var original = new StringOnlyPoco { Text = string.Empty };
 
             var xml = serializer.Serialize(original);
             var result = serializer.Deserialize<StringOnlyPoco>(xml);
 
+            Assert.IsNotNull(result.Text, "An empty string must not come back as null.");
             Assert.AreEqual(string.Empty, result.Text);
         }
 
@@ -383,19 +384,82 @@ namespace Test_Project_1.ExtendedXMLSerializer
         }
 
         [TestMethod]
-        public void WriteXml_SwallowsExceptions_ProducingIncompleteXmlInsteadOfThrowing()
+        public void WriteXml_PropagatesExceptions_InsteadOfProducingIncompleteXml()
         {
-            // SUSPECTED REAL DEFECT: ExtendedXmlSerializer.cs WriteXml (~line 438-441) has
-            // `catch (Exception ex) { _ = ex; }` around the entire object-writing body,
-            // silently swallowing any exception (e.g. a property getter that throws) and
-            // producing truncated/incomplete XML rather than surfacing the failure to the
-            // caller. This documents the CORRECT expected behavior (an exception from a
-            // throwing property getter should propagate) - expected to FAIL against current
-            // production code because the exception is currently swallowed.
+            // REGRESSION COVERAGE for a FIXED defect (DefectPin Defect 3b): WriteXml used to wrap
+            // its whole body in `catch (Exception ex) { _ = ex; }`, silently swallowing any failure
+            // (e.g. a throwing property getter) and handing the caller TRUNCATED XML that looked
+            // like a successful config save. The swallow is gone, so the failure now surfaces.
             var serializer = new ExtendedXmlSerializer();
             var original = new ThrowingPoco();
 
-            Assert.ThrowsExactly<InvalidOperationException>(() => serializer.Serialize(original));
+            var ex = Assert.ThrowsExactly<InvalidOperationException>(() => serializer.Serialize(original));
+            Assert.AreEqual("boom", ex.Message);
+        }
+
+        // ---------------------------------------------------------------------------------
+        // Regression coverage for the allocation pass on ExtendedXmlSerializer:
+        //  * XmlWriterSettings is now a single shared static instance instead of a fresh object
+        //    per Serialize() call (Serialize backs CommonFunctions.DeepClone<T>).
+        //  * WriteXmlArray no longer builds its reserved-object List<string> unconditionally.
+        //  * ReadXmlArray enumerates currentNode.Elements() ONCE instead of twice
+        //    (Count() + ToArray()).
+        // All three must be byte-for-byte output-identical and behaviour-identical.
+        // ---------------------------------------------------------------------------------
+
+        [TestMethod]
+        public void Serialize_CalledRepeatedly_ProducesIdenticalXml_WithSharedWriterSettings()
+        {
+            var serializer = new ExtendedXmlSerializer();
+            var original = new SimplePoco { IntValue = 7, StringValue = "shared-settings", DoubleValue = 1.5 };
+
+            var first = serializer.Serialize(original);
+            var second = serializer.Serialize(original);
+            var third = new ExtendedXmlSerializer().Serialize(original);
+
+            // Reusing one XmlWriterSettings instance must not change indentation, newlines or
+            // encoding on any subsequent call, nor across serializer instances.
+            Assert.AreEqual(first, second);
+            Assert.AreEqual(first, third);
+            StringAssert.Contains(first, "  <IntValue>");
+            StringAssert.Contains(first, System.Environment.NewLine);
+        }
+
+        [TestMethod]
+        public void RoundTrip_EmptyList_StillRoundTrips()
+        {
+            // ReadXmlArray with zero child elements - the "materialise once, take Length"
+            // rewrite must handle the empty case identically.
+            var serializer = new ExtendedXmlSerializer();
+            var original = new ListPoco();
+
+            var result = serializer.Deserialize<ListPoco>(serializer.Serialize(original));
+
+            Assert.IsNotNull(result.Numbers);
+            Assert.AreEqual(0, result.Numbers.Count);
+            Assert.IsNotNull(result.Items);
+            Assert.AreEqual(0, result.Items.Count);
+        }
+
+        [TestMethod]
+        public void RoundTrip_ListAndArray_PreserveOrderAndCount()
+        {
+            var serializer = new ExtendedXmlSerializer();
+            var listOriginal = new ListPoco();
+            listOriginal.Numbers.AddRange(new[] { 5, 4, 3, 2, 1 });
+            listOriginal.Items.Add(new SimplePoco { IntValue = 1 });
+            listOriginal.Items.Add(new SimplePoco { IntValue = 2 });
+
+            var listResult = serializer.Deserialize<ListPoco>(serializer.Serialize(listOriginal));
+            CollectionAssert.AreEqual(new[] { 5, 4, 3, 2, 1 }, listResult.Numbers);
+            Assert.AreEqual(2, listResult.Items.Count);
+            Assert.AreEqual(1, listResult.Items[0].IntValue);
+            Assert.AreEqual(2, listResult.Items[1].IntValue);
+
+            var arrayOriginal = new ArrayPoco { Numbers = new[] { 9, 8, 7 }, Names = new[] { "a", "b" } };
+            var arrayResult = serializer.Deserialize<ArrayPoco>(serializer.Serialize(arrayOriginal));
+            CollectionAssert.AreEqual(new[] { 9, 8, 7 }, arrayResult.Numbers);
+            CollectionAssert.AreEqual(new[] { "a", "b" }, arrayResult.Names);
         }
 
         public class ThrowingPoco

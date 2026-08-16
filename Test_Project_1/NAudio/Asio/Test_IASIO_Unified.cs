@@ -32,7 +32,8 @@ public class Test_IASIO_Unified
         public AsioDriverCapability GetDriverCapabilities => new AsioDriverCapability();
         public int DriverInputChannelCount => 2;
         public int DriverOutputChannelCount => 2;
-        public Tuple<int, int> PlaybackLatency => Tuple.Create(1, 1);
+        //Deliberately asymmetric so a transposed read of InputLatency/OutputLatency is detectable.
+        public (int InputLatency, int OutputLatency) PlaybackLatency => (11, 22);
 
         public string AsioInputChannelName(int channel) => "In" + channel;
         public string AsioOutputChannelName(int channel) => "Out" + channel;
@@ -104,5 +105,50 @@ public class Test_IASIO_Unified
     public void Interface_IsAssignableToIDisposable()
     {
         Assert.IsTrue(typeof(IDisposable).IsAssignableFrom(typeof(IASIO_Unified)));
+    }
+
+    /// <summary>
+    /// PlaybackLatency used to be a Tuple&lt;int, int&gt; read positionally as .Item1/.Item2, which made
+    /// an input/output transposition invisible. It is now a named ValueTuple; pin both the naming and
+    /// the ordering with deliberately asymmetric values.
+    /// </summary>
+    [TestMethod]
+    public void PlaybackLatency_ReturnsInputAndOutput_NotTransposed()
+    {
+        IASIO_Unified asio = new FakeASIO();
+        var Local_Latency = asio.PlaybackLatency;
+
+        Assert.AreEqual(11, Local_Latency.InputLatency, "InputLatency came back transposed.");
+        Assert.AreEqual(22, Local_Latency.OutputLatency, "OutputLatency came back transposed.");
+        Assert.AreEqual(11, Local_Latency.Item1);
+        Assert.AreEqual(22, Local_Latency.Item2);
+    }
+
+    /// <summary>
+    /// The stats page reads PlaybackLatency from a repeating ~1 Hz timer. As a ValueTuple it is a
+    /// struct, so a steady-state read must not allocate on the managed heap the way the old
+    /// reference-typed Tuple did.
+    /// </summary>
+    [TestMethod]
+    public void PlaybackLatency_IsValueType_AndDoesNotAllocate()
+    {
+        Assert.IsTrue(typeof(IASIO_Unified).GetProperty(nameof(IASIO_Unified.PlaybackLatency))!.PropertyType.IsValueType,
+            "PlaybackLatency must be a value type so that reading it cannot heap-allocate.");
+
+        IASIO_Unified asio = new FakeASIO();
+
+        //Warm up (JIT + any first-touch allocation) before measuring the steady state.
+        long Local_Sink = 0;
+        for (int i = 0; i < 1000; i++)
+            Local_Sink += asio.PlaybackLatency.InputLatency;
+
+        var Local_Before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100000; i++)
+            Local_Sink += asio.PlaybackLatency.InputLatency + asio.PlaybackLatency.OutputLatency;
+        var Local_After = GC.GetAllocatedBytesForCurrentThread();
+
+        Assert.AreNotEqual(0, Local_Sink);
+        Assert.AreEqual(0, Local_After - Local_Before,
+            "Reading PlaybackLatency must be allocation-free in steady state.");
     }
 }

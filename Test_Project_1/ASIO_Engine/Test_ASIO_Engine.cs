@@ -66,7 +66,7 @@ public class Test_ASIO_Engine
         public AsioDriverCapability GetDriverCapabilities { get; }
         public int DriverInputChannelCount { get; }
         public int DriverOutputChannelCount { get; }
-        public Tuple<int, int> PlaybackLatency { get; } = Tuple.Create(0, 0);
+        public (int InputLatency, int OutputLatency) PlaybackLatency { get; } = (0, 0);
 
         public string AsioInputChannelName(int channel)
         {
@@ -175,7 +175,8 @@ public class Test_ASIO_Engine
         public AsioDriverCapability GetDriverCapabilities => new AsioDriverCapability();
         public int DriverInputChannelCount => 2;
         public int DriverOutputChannelCount => 2;
-        public Tuple<int, int> PlaybackLatency => Tuple.Create(1, 1);
+        //Deliberately asymmetric so a transposed read of InputLatency/OutputLatency is detectable.
+        public (int InputLatency, int OutputLatency) PlaybackLatency => (11, 22);
         public string AsioInputChannelName(int channel) => "I";
         public string AsioOutputChannelName(int channel) => "O";
         public void ShowControlPanel() { }
@@ -349,16 +350,17 @@ public class Test_ASIO_Engine
         var engine = new ASIO_Engine();
         var streams = new ObservableCollection<DSP_Stream>
         {
-            CreateStream(0, StreamType.Channel, 0, StreamType.AbstractBus),
-            CreateStream(0, StreamType.AbstractBus, 1, StreamType.Channel),
-            CreateStream(0, StreamType.AbstractBus, 0, StreamType.AbstractBus) // Master
+            CreateStream(0, StreamType.Channel, 0, StreamType.AbstractBus),  // Stream 0: feeds AbstractBus0
+            CreateStream(0, StreamType.AbstractBus, 1, StreamType.Channel),  // Stream 1: drains AbstractBus0
+            CreateStream(0, StreamType.AbstractBus, 0, StreamType.AbstractBus) // Stream 2: Master
         };
         Program.DSP_Info.AbstractBuses.Clear();
         var ab = new DSP_AbstractBus { Name = "AB0" };
+        //Mapping endpoints are STREAM-LIST indices (StreamType.Stream), not channel indices.
         ab.Mappings.Add(new DSP_AbstractBusMappings
         {
-            InputSource = new StreamItem { Index = 0, StreamType = StreamType.Channel },
-            OutputDestination = new StreamItem { Index = 1, StreamType = StreamType.Channel }
+            InputSource = new StreamItem { Index = 0, StreamType = StreamType.Stream },
+            OutputDestination = new StreamItem { Index = 1, StreamType = StreamType.Stream }
         });
         Program.DSP_Info.AbstractBuses.Add(ab);
         Program.DSP_Info.Streams.Clear();
@@ -396,17 +398,22 @@ public class Test_ASIO_Engine
         var engine = new ASIO_Engine();
         var streams = new ObservableCollection<DSP_Stream>
         {
-            CreateStream(0, StreamType.Channel, 0, StreamType.Bus),
-            CreateStream(0, StreamType.Bus, 0, StreamType.AbstractBus),
-            CreateStream(0, StreamType.AbstractBus, 1, StreamType.Channel),
-            CreateStream(0, StreamType.AbstractBus, 0, StreamType.AbstractBus) // Master
+            CreateStream(0, StreamType.Channel, 0, StreamType.Bus),      // Stream 0: feeds Bus0
+            CreateStream(0, StreamType.Bus, 0, StreamType.AbstractBus),  // Stream 1: feeds AbstractBus0
+            CreateStream(0, StreamType.AbstractBus, 1, StreamType.Channel), // Stream 2: drains AbstractBus0
+            CreateStream(0, StreamType.AbstractBus, 0, StreamType.AbstractBus) // Stream 3: Master
         };
         Program.DSP_Info.AbstractBuses.Clear();
         var ab = new DSP_AbstractBus { Name = "AB0" };
+        //An AbstractBus mapping's InputSource/OutputDestination are STREAM-LIST indices
+        //(StreamType.Stream), not channel/bus indices - see CommonFunctions.Set_DropDownTargetLists
+        //with IsAbstractBusDropDown=true, which is what populates these combo boxes in the GUI.
+        //InputSource  -> the stream that FEEDS  the AbstractBus (index 1 here)
+        //OutputDestination -> the stream that DRAINS the AbstractBus (index 2 here)
         ab.Mappings.Add(new DSP_AbstractBusMappings
         {
-            InputSource = new StreamItem { Index = 0, StreamType = StreamType.Channel },
-            OutputDestination = new StreamItem { Index = 1, StreamType = StreamType.Channel }
+            InputSource = new StreamItem { Index = 1, StreamType = StreamType.Stream },
+            OutputDestination = new StreamItem { Index = 2, StreamType = StreamType.Stream }
         });
         Program.DSP_Info.AbstractBuses.Add(ab);
         Program.DSP_Info.Streams.Clear();
@@ -414,7 +421,18 @@ public class Test_ASIO_Engine
         var chains = InvokeBuildStreamChains(engine, streams);
         Assert.IsNotNull(chains);
         Assert.AreEqual(1, chains.Count);
-        Assert.AreEqual(3, chains[0].Count);
+        //PostProcessChain drops the configured master and injects a CLONE of it after the
+        //stream whose OutputDestination is the AbstractBus, so the final chain is
+        //Stream0 -> Stream1 -> MasterClone -> Stream2 (4 nodes, not 3).
+        Assert.AreEqual(4, chains[0].Count);
+        Assert.AreSame(streams[0], chains[0][0]);
+        Assert.AreSame(streams[1], chains[0][1]);
+        Assert.AreEqual(StreamType.AbstractBus, chains[0][2].InputSource.StreamType);
+        Assert.AreEqual(StreamType.AbstractBus, chains[0][2].OutputDestination.StreamType);
+        Assert.AreNotSame(streams[3], chains[0][2], "The injected master must be a clone, not the configured master.");
+        Assert.AreSame(streams[2], chains[0][3]);
+        Assert.AreEqual(StreamType.Channel, chains[0][0].InputSource.StreamType);
+        Assert.AreEqual(StreamType.Channel, chains[0][3].OutputDestination.StreamType);
         Assert.IsTrue(chains[0].Any(s => s.InputSource.StreamType == StreamType.AbstractBus));
         Assert.IsTrue(chains[0].Any(s => s.OutputDestination.StreamType == StreamType.AbstractBus));
     }
@@ -447,18 +465,20 @@ public class Test_ASIO_Engine
         var engine = new ASIO_Engine();
         var streams = new ObservableCollection<DSP_Stream>
         {
-            CreateStream(0, StreamType.Channel, 0, StreamType.Bus),
-            CreateStream(0, StreamType.Bus, 0, StreamType.AbstractBus),
-            CreateStream(0, StreamType.AbstractBus, 1, StreamType.Bus),
-            CreateStream(1, StreamType.Bus, 2, StreamType.Channel),
-            CreateStream(0, StreamType.AbstractBus, 0, StreamType.AbstractBus) // Master
+            CreateStream(0, StreamType.Channel, 0, StreamType.Bus),          // Stream 0: feeds Bus0
+            CreateStream(0, StreamType.Bus, 0, StreamType.AbstractBus),      // Stream 1: feeds AbstractBus0
+            CreateStream(0, StreamType.AbstractBus, 1, StreamType.Bus),      // Stream 2: drains AbstractBus0
+            CreateStream(1, StreamType.Bus, 2, StreamType.Channel),          // Stream 3: Bus1 -> Channel2
+            CreateStream(0, StreamType.AbstractBus, 0, StreamType.AbstractBus) // Stream 4: Master
         };
         Program.DSP_Info.AbstractBuses.Clear();
         var ab = new DSP_AbstractBus { Name = "AB0" };
+        //Mapping endpoints are STREAM-LIST indices (see the Depth3 test for the reference).
+        //Stream 1 feeds AbstractBus0, Stream 2 drains it.
         ab.Mappings.Add(new DSP_AbstractBusMappings
         {
-            InputSource = new StreamItem { Index = 0, StreamType = StreamType.Channel },
-            OutputDestination = new StreamItem { Index = 2, StreamType = StreamType.Channel }
+            InputSource = new StreamItem { Index = 1, StreamType = StreamType.Stream },
+            OutputDestination = new StreamItem { Index = 2, StreamType = StreamType.Stream }
         });
         Program.DSP_Info.AbstractBuses.Add(ab);
         Program.DSP_Info.Streams.Clear();
@@ -466,11 +486,21 @@ public class Test_ASIO_Engine
         var chains = InvokeBuildStreamChains(engine, streams);
         Assert.IsNotNull(chains);
         Assert.AreEqual(1, chains.Count);
-        Assert.AreEqual(4, chains[0].Count);
+        //Final chain is Stream0 -> Stream1 -> MasterClone -> Stream2 -> Stream3: the four
+        //configured non-master streams plus the AbstractBus master clone injected by
+        //PostProcessChain.
+        Assert.AreEqual(5, chains[0].Count);
+        Assert.AreSame(streams[0], chains[0][0]);
+        Assert.AreSame(streams[1], chains[0][1]);
+        Assert.AreEqual(StreamType.AbstractBus, chains[0][2].InputSource.StreamType);
+        Assert.AreEqual(StreamType.AbstractBus, chains[0][2].OutputDestination.StreamType);
+        Assert.AreNotSame(streams[4], chains[0][2], "The injected master must be a clone, not the configured master.");
+        Assert.AreSame(streams[2], chains[0][3]);
+        Assert.AreSame(streams[3], chains[0][4]);
         Assert.IsTrue(chains[0].Any(s => s.InputSource.StreamType == StreamType.AbstractBus));
         Assert.IsTrue(chains[0].Any(s => s.OutputDestination.StreamType == StreamType.AbstractBus));
         Assert.AreEqual(StreamType.Channel, chains[0][0].InputSource.StreamType);
-        Assert.AreEqual(StreamType.Channel, chains[0][3].OutputDestination.StreamType);
+        Assert.AreEqual(StreamType.Channel, chains[0][4].OutputDestination.StreamType);
     }
 
     [TestMethod]
@@ -502,6 +532,32 @@ public class Test_ASIO_Engine
         mock.CleanUp();
         var asioField = typeof(ASIO_Engine).GetField("ASIO", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.IsNull(asioField.GetValue(mock));
+    }
+
+    /// <summary>
+    /// ASIO_Engine.PlaybackLatency is a Nullable&lt;(int, int)&gt; forwarded off the driver with ?.
+    /// Pin that the null-propagation still works and that the two values are not transposed.
+    /// </summary>
+    [TestMethod]
+    public void PlaybackLatency_ForwardsDriverValues_NotTransposed()
+    {
+        var engine = new LocalMockASIOEngine(new DummyASIO());
+
+        var Local_Latency = engine.PlaybackLatency;
+
+        Assert.IsNotNull(Local_Latency, "PlaybackLatency must be non-null while a driver is attached.");
+        Assert.AreEqual(11, Local_Latency.Value.InputLatency, "InputLatency came back transposed.");
+        Assert.AreEqual(22, Local_Latency.Value.OutputLatency, "OutputLatency came back transposed.");
+    }
+
+    /// <summary>
+    /// With no driver attached the ?. propagation must still yield null rather than throwing.
+    /// </summary>
+    [TestMethod]
+    public void PlaybackLatency_IsNull_WhenNoDriverAttached()
+    {
+        var engine = new ASIO_Engine();
+        Assert.IsNull(engine.PlaybackLatency);
     }
 
     [TestMethod]

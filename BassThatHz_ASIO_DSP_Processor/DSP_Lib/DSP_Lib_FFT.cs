@@ -44,6 +44,20 @@ namespace DSPLib
         protected int LengthHalf;     // (mN + mZp) / 2
         protected FFTElement[] FFTElements;        // Vector of linked list elements
 
+        // Reusable scratch buffers for the *_NonPower2 zero-padding wrappers.
+        // These are per-FFT-instance, exactly like FFTElements: an FFT object is inherently
+        // single-threaded (every Perform_* call mutates FFTElements in place), so reusing a
+        // per-instance scratch array adds no sharing hazard that did not already exist.
+        protected double[] PaddedTimeSeriesScratch;
+        protected Complex[] PaddedSpectrumScratch;
+
+        /// <summary>
+        /// Total number of points this instance was initialized for (inputDataLength +
+        /// zeroPaddingLength). Exposed so callers can size a reusable buffer for the
+        /// Perform_*_Into overloads without guessing.
+        /// </summary>
+        public int PointCount => LengthTotal;
+
         // Element for linked list to store input/output data.
         public class FFTElement
         {
@@ -133,8 +147,16 @@ namespace DSPLib
 
                 Init(nextPowerOf2, 0);
 
-                double[] paddedTimeSeries = new double[nextPowerOf2];
+                // Reuse the per-instance padding scratch buffer. The tail past input.Length is
+                // explicitly re-zeroed so the padded contents are identical to a fresh array.
+                double[] paddedTimeSeries = PaddedTimeSeriesScratch;
+                if (paddedTimeSeries == null || paddedTimeSeries.Length != nextPowerOf2)
+                {
+                    paddedTimeSeries = new double[nextPowerOf2];
+                    PaddedTimeSeriesScratch = paddedTimeSeries;
+                }
                 Array.Copy(input, paddedTimeSeries, input.Length);
+                Array.Clear(paddedTimeSeries, input.Length, nextPowerOf2 - input.Length);
 
                 // Perform the FFT on the padded signal
                 Complex[] paddedResult = Perform_FFT(paddedTimeSeries, shouldScale);
@@ -150,7 +172,26 @@ namespace DSPLib
             }
         }
 
+        /// <summary>
+        /// Allocating form. Always returns a freshly allocated Complex[LengthTotal].
+        /// </summary>
         public Complex[] Perform_FFT(double[] input, bool shouldScale = true)
+        {
+            return Perform_FFT_Into(input, new Complex[LengthTotal], shouldScale);
+        }
+
+        /// <summary>
+        /// Non-allocating form of <see cref="Perform_FFT(double[], bool)"/>: unswizzles into the
+        /// caller supplied <paramref name="output"/> buffer instead of allocating one per call.
+        /// The arithmetic, the operand order and the write order are identical to the allocating
+        /// overload, so results are bit-for-bit the same.
+        /// <para>
+        /// The buffer is fully overwritten (revTgt is a permutation of 0..LengthTotal-1), so stale
+        /// content from a previous call cannot leak through. <paramref name="output"/> must not
+        /// alias any array the caller still needs, and must be at least LengthTotal long.
+        /// </para>
+        /// </summary>
+        public Complex[] Perform_FFT_Into(double[] input, Complex[] output, bool shouldScale = true)
         {
             int numFlies = LengthTotal >> 1;  // Number of butterflies per sub-FFT
             int span = LengthTotal >> 1;      // Width of the butterfly
@@ -159,6 +200,9 @@ namespace DSPLib
 
             if (input.Length > LengthTotal)
                 throw new InvalidOperationException("The input timeSeries length was greater than the total number of points that was initialized.");
+
+            if (output == null || output.Length < LengthTotal)
+                throw new InvalidOperationException("The output spectrum buffer was smaller than the total number of points that was initialized.");
 
             // Copy data into linked complex number objects (use indexed access for performance)
             var elems = FFTElements;
@@ -246,7 +290,7 @@ namespace DSPLib
             // Unscramble while copying values from the complex
             // linked list elements to a complex output vector & properly apply scale factors.
 
-            var unswizzle = new Complex[lenTotal];
+            var unswizzle = output;
             double s = FFTScale;
             if (shouldScale)
             {
@@ -257,8 +301,7 @@ namespace DSPLib
                 }
 
                 // DC and Fs/2 Points are scaled differently, since they have only a real part
-                unswizzle[0] = new Complex(unswizzle[0].Real / Math.Sqrt(2), 0.0);
-                unswizzle[LengthHalf] = new Complex(unswizzle[LengthHalf].Real / Math.Sqrt(2), 0.0);
+                Apply_DCAndNyquistScale(unswizzle);
             }
             else
             {
@@ -276,7 +319,20 @@ namespace DSPLib
             return unswizzle;
         }
 
+        /// <summary>
+        /// Allocating form. Always returns a freshly allocated Complex[LengthTotal].
+        /// </summary>
         public Complex[] Perform_FFT(double[] input, double[] windowCoefficients, bool shouldScale = true)
+        {
+            return Perform_FFT_Into(input, windowCoefficients, new Complex[LengthTotal], shouldScale);
+        }
+
+        /// <summary>
+        /// Non-allocating form of <see cref="Perform_FFT(double[], double[], bool)"/>. See the
+        /// remarks on <see cref="Perform_FFT_Into(double[], Complex[], bool)"/>; the arithmetic is
+        /// unchanged, only the destination of the unswizzle step.
+        /// </summary>
+        public Complex[] Perform_FFT_Into(double[] input, double[] windowCoefficients, Complex[] output, bool shouldScale = true)
         {
             int numFlies = LengthTotal >> 1;  // Number of butterflies per sub-FFT
             int span = LengthTotal >> 1;      // Width of the butterfly
@@ -288,6 +344,9 @@ namespace DSPLib
 
             if (input.Length != windowCoefficients.Length)
                 throw new InvalidOperationException("windowCoefficients must be same length as timeSeries");
+
+            if (output == null || output.Length < LengthTotal)
+                throw new InvalidOperationException("The output spectrum buffer was smaller than the total number of points that was initialized.");
 
             // Copy data into linked complex number objects (use indexed access for performance)
             var elems = FFTElements;
@@ -375,7 +434,7 @@ namespace DSPLib
             // Unscramble while copying values from the complex
             // linked list elements to a complex output vector & properly apply scale factors.
 
-            var unswizzle = new Complex[lenTotal];
+            var unswizzle = output;
             double s = FFTScale;
             if (shouldScale)
             {
@@ -386,8 +445,7 @@ namespace DSPLib
                 }
 
                 // DC and Fs/2 Points are scaled differently, since they have only a real part
-                unswizzle[0] = new Complex(unswizzle[0].Real / Math.Sqrt(2), 0.0);
-                unswizzle[LengthHalf] = new Complex(unswizzle[LengthHalf].Real / Math.Sqrt(2), 0.0);
+                Apply_DCAndNyquistScale(unswizzle);
             }
             else
             {
@@ -422,8 +480,15 @@ namespace DSPLib
 
                 Init(nextPowerOf2, 0);
 
-                Complex[] paddedTimeSeries = new Complex[nextPowerOf2];
+                // Reuse the per-instance padding scratch buffer (see Perform_FFT_NonPower2).
+                Complex[] paddedTimeSeries = PaddedSpectrumScratch;
+                if (paddedTimeSeries == null || paddedTimeSeries.Length != nextPowerOf2)
+                {
+                    paddedTimeSeries = new Complex[nextPowerOf2];
+                    PaddedSpectrumScratch = paddedTimeSeries;
+                }
                 Array.Copy(input, paddedTimeSeries, input.Length);
+                Array.Clear(paddedTimeSeries, input.Length, nextPowerOf2 - input.Length);
 
                 // Perform the FFT on the padded signal
                 double[] paddedResult = Perform_IFFT(paddedTimeSeries, shouldScale);
@@ -439,7 +504,22 @@ namespace DSPLib
             }
         }
 
+        /// <summary>
+        /// Allocating form. Always returns a freshly allocated double[LengthTotal].
+        /// </summary>
         public double[] Perform_IFFT(Complex[] input, bool shouldScale = true)
+        {
+            return Perform_IFFT_Into(input, new double[LengthTotal], shouldScale);
+        }
+
+        /// <summary>
+        /// Non-allocating form of <see cref="Perform_IFFT(Complex[], bool)"/>: unswizzles into the
+        /// caller supplied <paramref name="output"/> buffer instead of allocating one per call.
+        /// The arithmetic and write order are identical to the allocating overload, so results are
+        /// bit-for-bit the same. Every slot 0..LengthTotal-1 is written, so stale content cannot
+        /// leak through.
+        /// </summary>
+        public double[] Perform_IFFT_Into(Complex[] input, double[] output, bool shouldScale = true)
         {
             int numFlies = LengthTotal >> 1;  // Number of butterflies per sub-FFT
             int span = LengthTotal >> 1;      // Width of the butterfly
@@ -448,6 +528,9 @@ namespace DSPLib
 
             if (input.Length > LengthTotal)
                 throw new InvalidOperationException("The input timeSeries length was greater than the total number of points that was initialized.");
+
+            if (output == null || output.Length < LengthTotal)
+                throw new InvalidOperationException("The output timeSeries buffer was smaller than the total number of points that was initialized.");
 
             // Copy data into linked complex number objects (use indexed access)
             var elems = FFTElements;
@@ -535,7 +618,7 @@ namespace DSPLib
             // The algorithm leaves the result in a scrambled order.
             // Unscramble while copying values from the complex
             // linked list elements to a complex output vector & properly apply scale factors.
-            var ReturnValue = new double[lenTotal];
+            var ReturnValue = output;
             if (shouldScale)
             {
                 double s = FFTScale * LengthHalf;
@@ -563,6 +646,37 @@ namespace DSPLib
         #endregion
 
         #region protected FFT Functions
+
+        /// <summary>
+        /// Applies the DC / Nyquist end-of-spectrum correction used by the scaled forward
+        /// transform. Every ordinary bin of a real-input spectrum appears twice (at k and at
+        /// LengthTotal - k), so FFTScale carries a sqrt(2) that converts a one-sided peak
+        /// amplitude into an RMS reading. The two endpoint bins - DC (k = 0) and Nyquist
+        /// (k = LengthTotal / 2) - have no mirror partner and are purely real for a real input,
+        /// so that sqrt(2) must be divided back out and the (numerically negligible) imaginary
+        /// part forced to exactly zero.
+        /// <para>
+        /// OFF-BY-ONE FIX: this used to be written inline as unswizzle[LengthHalf].
+        /// LengthHalf is LengthTotal / 2 + 1, which is the BIN COUNT of the DC..Fs/2 half
+        /// spectrum, NOT the index of its last bin - the true Nyquist bin is at LengthTotal / 2,
+        /// i.e. LengthHalf - 1. Indexing with LengthHalf left the real Nyquist bin uncorrected
+        /// (reading sqrt(2), about +3 dB, too high) while an ordinary mirror bin one above it was
+        /// wrongly divided by sqrt(2) AND had its genuine imaginary part destroyed. It also ran
+        /// off the end of the output array for LengthTotal of 1 and 2.
+        /// </para>
+        /// </summary>
+        /// <param name="unswizzle">The already-scaled, already-unswizzled output spectrum.</param>
+        protected void Apply_DCAndNyquistScale(Complex[] unswizzle)
+        {
+            unswizzle[0] = new Complex(unswizzle[0].Real / Math.Sqrt(2), 0.0);
+
+            // For LengthTotal == 1 there is no distinct Nyquist bin: index 0 IS the whole
+            // spectrum, and it has already been corrected above. Correcting it twice would
+            // halve the DC reading, so only bins strictly above DC are touched here.
+            int Local_NyquistIndex = this.LengthTotal / 2;
+            if (Local_NyquistIndex > 0)
+                unswizzle[Local_NyquistIndex] = new Complex(unswizzle[Local_NyquistIndex].Real / Math.Sqrt(2), 0.0);
+        }
 
         //* Do bit reversal of specified number of places of an int
         //* For example, 1101 bit-reversed is 1011

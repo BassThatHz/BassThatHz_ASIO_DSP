@@ -100,18 +100,23 @@ public static class ExtensionMethods
         }
         catch (ThreadAbortException ex)
         {
-            _ = ex;
-            // Handle thread termination gracefully
+            Debug.ReportSwallowed(ex);
+            // Handle thread termination gracefully.
         }
         catch (ObjectDisposedException ex)
         {
-            _ = ex;
+            Debug.ReportSwallowed(ex);
             // The control was disposed between the check and the invoke call.
         }
         catch (InvalidOperationException ex)
         {
-            _ = ex;
-            // Handle other potential exceptions, e.g., if the handle is lost.
+            // The handle was lost / the control was recreated between the check and the invoke.
+            // NOTE: the try also covers the body of 'action', so an InvalidOperationException
+            // raised by application logic inside the callback lands here too. It is still
+            // swallowed (this is the UI marshalling boundary and throwing would take down the
+            // timer/notifier thread), but it is now recorded via Debug.ReportSwallowed instead of
+            // being silently discarded, so it is observable to tests and to a debugger.
+            Debug.ReportSwallowed(ex);
         }
     }
 

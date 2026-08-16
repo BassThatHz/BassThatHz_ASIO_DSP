@@ -136,7 +136,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 AbstractBuses.Any(m => m.Name == TempBus.Name)
                 )
             {
-                MessageBox.Show("Already exists. Cannot create duplicates.");
+                Debug.ShowMessage("Already exists. Cannot create duplicates.");
                 return;
             }
             dsp.Buses.Add(TempBus);
@@ -181,7 +181,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                     if (Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == SelectedIndex ||
                         Stream.OutputDestination.StreamType == StreamType.Bus && Stream.OutputDestination.Index == SelectedIndex)
                     {
-                        MessageBox.Show("Bus in use. It must be unassigned before it can be changed.");
+                        Debug.ShowMessage("Bus in use. It must be unassigned before it can be changed.");
                         return;
                     }
                 }
@@ -219,7 +219,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 if (Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == SelectedIndex ||
                     Stream.OutputDestination.StreamType == StreamType.Bus && Stream.OutputDestination.Index == SelectedIndex)
                 {
-                    MessageBox.Show("Bus in use. It must be unassigned before it can be deleted.");
+                    Debug.ShowMessage("Bus in use. It must be unassigned before it can be deleted.");
                     return;
                 }
             }
@@ -275,7 +275,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 Buses.Any(m => m.Name == TempAbstractBus.Name)
                 )
             {
-                MessageBox.Show("Already exists. Cannot create duplicates.");
+                Debug.ShowMessage("Already exists. Cannot create duplicates.");
                 return;
             }
 
@@ -330,7 +330,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                     if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == SelectedIndex ||
                         Stream.OutputDestination.StreamType == StreamType.AbstractBus && Stream.OutputDestination.Index == SelectedIndex)
                     {
-                        MessageBox.Show("AbstractBus in use. It must be unassigned before it can be changed.");
+                        Debug.ShowMessage("AbstractBus in use. It must be unassigned before it can be changed.");
                         return;
                     }
                 }
@@ -366,7 +366,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == SelectedIndex ||
                     Stream.OutputDestination.StreamType == StreamType.AbstractBus && Stream.OutputDestination.Index == SelectedIndex)
                 {
-                    MessageBox.Show("AbstractBus in use. It must be unassigned before it can be deleted.");
+                    Debug.ShowMessage("AbstractBus in use. It must be unassigned before it can be deleted.");
                     return;
                 }
             }
@@ -443,13 +443,13 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
 
             if (AbstractBus.Mappings.Any(m => m.Equals(TempAbstractBusMapping)))
             {
-                MessageBox.Show("Mapping already exists. Cannot create duplicates.");
+                Debug.ShowMessage("Mapping already exists. Cannot create duplicates.");
                 return;
             }
 
             if (Source.StreamType == StreamType.AbstractBus || Destination.StreamType == StreamType.AbstractBus)
             {
-                MessageBox.Show("AbstractBus to AbstractBus is not supported at this time.");
+                Debug.ShowMessage("AbstractBus to AbstractBus is not supported at this time.");
                 return;
             }
 
@@ -492,7 +492,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
 
             if (Source.StreamType == StreamType.AbstractBus || Destination.StreamType == StreamType.AbstractBus)
             {
-                MessageBox.Show("AbstractBus to AbstractBus is not supported at this time.");
+                Debug.ShowMessage("AbstractBus to AbstractBus is not supported at this time.");
                 return;
             }
 
@@ -531,7 +531,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                     if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == AbstractBuses_SelectedIndex ||
                         Stream.OutputDestination.StreamType == StreamType.AbstractBus && Stream.OutputDestination.Index == AbstractBuses_SelectedIndex)
                     {
-                        MessageBox.Show("AbstractBus Mapping in use. It must be unassigned before it can be changed.");
+                        Debug.ShowMessage("AbstractBus Mapping in use. It must be unassigned before it can be changed.");
                         return;
                     }
                 }
@@ -579,7 +579,7 @@ public partial class ctl_BusesPage : UserControl, IHasFocus
                 if (Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == AbstractBuses_SelectedIndex ||
                     Stream.OutputDestination.StreamType == StreamType.AbstractBus && Stream.OutputDestination.Index == AbstractBuses_SelectedIndex)
                 {
-                    MessageBox.Show("AbstractBus Mapping in use. It must be unassigned before it can be deleted.");
+                    Debug.ShowMessage("AbstractBus Mapping in use. It must be unassigned before it can be deleted.");
                     return;
                 }
             }

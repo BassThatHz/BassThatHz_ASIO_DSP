@@ -142,6 +142,14 @@ namespace ExtendedXmlSerialization
             {
                 return value;
             }
+            // Allocation: this runs for EVERY Single/Double/Decimal property on every
+            // deserialize (and therefore on every CommonFunctions.DeepClone). The overwhelmingly
+            // common case is a value with no comma at all, so probe first and return the original
+            // instance instead of relying on string.Replace's internal no-match shortcut.
+            if (value.IndexOf(',') < 0)
+            {
+                return value;
+            }
             return value.Replace(",", ".");
         }
     }

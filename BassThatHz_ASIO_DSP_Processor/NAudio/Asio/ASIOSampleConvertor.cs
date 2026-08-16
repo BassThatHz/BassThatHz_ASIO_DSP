@@ -271,10 +271,16 @@ namespace NAudio.Wave.Asio
             unsafe
             {
                 int* inputSamples = (int*)inputInterleavedBuffer;
-                int*[] samples = new int*[nbChannels];
+                //The destination is a 16-bit SHORT buffer, so the per-channel cursors must
+                //advance by 2 bytes. They were previously declared as int* (4-byte stride),
+                //which wrote every sample into a 4-byte slot and left a 2-byte hole between
+                //samples - corrupting the output for any channel count other than 2 (the
+                //2-channel case is handled by ConvertorIntToShort2Channels, which already
+                //used short* correctly).
+                short*[] samples = new short*[nbChannels];
                 for (int i = 0; i < nbChannels; i++)
                 {
-                    samples[i] = (int*)asioOutputBuffers[i];
+                    samples[i] = (short*)asioOutputBuffers[i];
                 }
 
                 for (int i = 0; i < nbSamples; i++)

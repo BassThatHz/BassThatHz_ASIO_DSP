@@ -58,7 +58,19 @@ public class Mixer : IFilter
             double streamGain = Decibels.DecibelsToLinear(mi.StreamAttenuation);
             double inputGain = Decibels.DecibelsToLinear(mi.Attenuation);
 
-            var source = Program.ASIO.InputBuffer[mi.ChannelIndex];
+            //DEFECT FIX: this indexed InputBuffer with no bounds check. A config that references a
+            //channel the CURRENT device does not have - which is exactly what a preserved-but-unbacked
+            //MixerInput is, and was already possible for any config moved between machines - threw
+            //IndexOutOfRangeException on every buffer callback. The engine tolerates the exception, but
+            //tolerating it aborts the whole filter chain for that block, so the stream goes silent.
+            //Skip the entry instead: it contributes nothing until its device is available again.
+            var Local_InputBuffer = Program.ASIO.InputBuffer;
+            if (Local_InputBuffer == null || mi.ChannelIndex < 0 || mi.ChannelIndex >= Local_InputBuffer.Length)
+                continue;
+
+            var source = Local_InputBuffer[mi.ChannelIndex];
+            if (source == null)
+                continue;
 
             // Use SIMD when available and length is sufficient
             int j = 0;

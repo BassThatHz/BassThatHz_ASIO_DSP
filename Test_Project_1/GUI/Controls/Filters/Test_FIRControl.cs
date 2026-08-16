@@ -182,6 +182,86 @@ namespace Test_Project_1
             Assert.IsTrue(filter.FilterEnabled);
         }
 
+        // ---------------------------------------------------------------------------------
+        // Regression coverage for the allocation pass: the taps split used to allocate a fresh
+        // new[] { '\r', '\n' } separator array on every btnApply_Click. It now uses a static
+        // readonly array. These tests pin that CR, LF and CRLF line endings (and blank lines)
+        // still split identically, and that repeated applies are stable.
+        // ---------------------------------------------------------------------------------
+
+        [TestMethod]
+        public void TestApplySettings_TapsSplit_HandlesCrLfLfAndCrLineEndings()
+        {
+            var filter = GetPrivateField<FIR>(_control, "Filter");
+
+            _tapsTextBox.Text = "1.0\r\n2.0\n3.0\r4.0";
+            _control.ApplySettings();
+
+            Assert.IsNotNull(filter.Taps);
+            Assert.AreEqual(4, filter.Taps.Length);
+            Assert.AreEqual(1.0, filter.Taps[0]);
+            Assert.AreEqual(2.0, filter.Taps[1]);
+            Assert.AreEqual(3.0, filter.Taps[2]);
+            Assert.AreEqual(4.0, filter.Taps[3]);
+        }
+
+        [TestMethod]
+        public void TestApplySettings_TapsSplit_SkipsBlankLines()
+        {
+            var filter = GetPrivateField<FIR>(_control, "Filter");
+
+            _tapsTextBox.Text = "\r\n1.0\r\n\r\n\r\n2.0\r\n";
+            _control.ApplySettings();
+
+            Assert.IsNotNull(filter.Taps);
+            Assert.AreEqual(2, filter.Taps.Length);
+            Assert.AreEqual(1.0, filter.Taps[0]);
+            Assert.AreEqual(2.0, filter.Taps[1]);
+        }
+
+        [TestMethod]
+        public void TestApplySettings_TapsSplit_RepeatedCallsAreStable()
+        {
+            // The separator array is now shared static state; repeated splits must not disturb it.
+            var filter = GetPrivateField<FIR>(_control, "Filter");
+            _tapsTextBox.Text = "1.5\r\n2.5\r\n3.5";
+
+            _control.ApplySettings();
+            _control.ApplySettings();
+            _control.ApplySettings();
+
+            Assert.IsNotNull(filter.Taps);
+            Assert.AreEqual(3, filter.Taps.Length);
+            Assert.AreEqual(1.5, filter.Taps[0]);
+            Assert.AreEqual(2.5, filter.Taps[1]);
+            Assert.AreEqual(3.5, filter.Taps[2]);
+        }
+
+        [TestMethod]
+        public void TestApplySettings_TapsSplit_SharedSeparatorArrayIsUnmodified()
+        {
+            // Two independent control instances must both split correctly off the same
+            // static separator array.
+            var second = new TestableFIRControl();
+            var secondTaps = new RichTextBox();
+            SetPrivateField(second, "txtTaps", secondTaps);
+            SetPrivateField(second, "txtFFTSize", new TextBox());
+
+            _tapsTextBox.Text = "9.0\r\n8.0";
+            _control.ApplySettings();
+
+            secondTaps.Text = "1.0\r\n2.0\r\n3.0";
+            second.ApplySettings();
+
+            var firstFilter = GetPrivateField<FIR>(_control, "Filter");
+            var secondFilter = GetPrivateField<FIR>(second, "Filter");
+
+            Assert.IsNotNull(firstFilter.Taps);
+            Assert.IsNotNull(secondFilter.Taps);
+            Assert.AreEqual(2, firstFilter.Taps.Length);
+            Assert.AreEqual(3, secondFilter.Taps.Length);
+        }
+
         private IFilter CreateMockFilter()
         {
             var filter = new Mock_TestFilter();

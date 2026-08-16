@@ -37,9 +37,12 @@ namespace ExtendedXmlSerialization.Cache
 
 		public static TypeDefinition GetDefinition(Type type)
 		{
-			if (TypeDefinitions.ContainsKey(type))
+			// ContainsKey followed by the indexer performed TWO hash lookups on the hottest cache
+			// path in the serializer (called for every property of every element). TryGetValue does
+			// one. Behaviour is identical - the cache is add-only, nothing is ever removed.
+			if (TypeDefinitions.TryGetValue(type, out var Local_Cached))
 			{
-				return TypeDefinitions[type];
+				return Local_Cached;
 			}
 
 			var result = new TypeDefinition(type);
@@ -49,9 +52,9 @@ namespace ExtendedXmlSerialization.Cache
 
         public static Type GetType(string naneType)
         {
-            if (TypeCache.ContainsKey(naneType))
+            if (TypeCache.TryGetValue(naneType, out var Local_Cached))
             {
-                return TypeCache[naneType];
+                return Local_Cached;
             }
 
             var result = GetTypeFromName(naneType);

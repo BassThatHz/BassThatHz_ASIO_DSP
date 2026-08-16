@@ -61,6 +61,24 @@ public partial class FormMixer : Form
 
     protected List<MixerElement> MixerElements = new();
     protected List<MixerInput> MixerInputs = new();
+
+    /// <summary>
+    /// Saved routing that has no live ASIO channel to bind to on this machine - either because the
+    /// configured input device is absent entirely, or because the device that IS present does not
+    /// expose that ChannelIndex.
+    /// <para>
+    /// These entries deliberately get NO row in the mixer panel (there is no hardware channel to
+    /// show), but they are carried back out through <see cref="ApplyChanges"/> so that merely
+    /// opening a config on the "wrong" machine cannot silently delete the user's routing - which,
+    /// once saved, would destroy it on disk permanently.
+    /// </para>
+    /// <para>
+    /// Matching is keyed on ChannelIndex only. ChannelName is hardware-derived and is not a
+    /// reliable round-trip value, so it is never used to identify an entry.
+    /// </para>
+    /// </summary>
+    protected List<MixerInput> UnbackedMixerInputs = new();
+
     protected bool HasChangesBeenSaved = true;
     #endregion
 
@@ -103,8 +121,10 @@ public partial class FormMixer : Form
         {
             if (!this.HasChangesBeenSaved)
             {
-                var result = MessageBox.Show("Would you like to apply the changes? (No will discard the changes)", "Apply Changes?",
-                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                //Suppressed (non-interactive/test) default is No: an unattended close must not
+                //silently commit unconfirmed changes to the live DSP config.
+                var result = Debug.ShowMessage("Would you like to apply the changes? (No will discard the changes)", "Apply Changes?",
+                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, DialogResult.No);
                 if (result == DialogResult.Yes)
                 {
                     this.ApplyChanges();
@@ -180,8 +200,9 @@ public partial class FormMixer : Form
     {
         try
         {
-            var result = MessageBox.Show("This discards changes. Do you want to continue?", "Discard Changes?",
-                                    MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+            //Suppressed (non-interactive/test) default is OK: the refresh was explicitly requested.
+            var result = Debug.ShowMessage("This discards changes. Do you want to continue?", "Discard Changes?",
+                                    MessageBoxButtons.OKCancel, MessageBoxIcon.Question, DialogResult.OK);
             if (result == DialogResult.OK)
             {
                 this.HasChangesBeenSaved = false;
@@ -200,11 +221,55 @@ public partial class FormMixer : Form
     protected void ApplyChanges()
     {
         this.ClearAllFilterElements?.Invoke();
-        this.AddRangeOfFilterElements?.Invoke(this.MixerInputs);
+        this.AddRangeOfFilterElements?.Invoke(this.GetAllMixerInputs());
         this.PersistentDeepClone();
         this.HasChangesBeenSaved = true;
     }
 
+    /// <summary>
+    /// The full set of routing to push back into the filter: the rows currently shown in the panel,
+    /// followed by any saved-but-unbacked entries being preserved for this session.
+    /// </summary>
+    /// <remarks>
+    /// When nothing is unbacked - the normal case, where the configured device is fully present -
+    /// this returns the very same list instance as before, so the device-present path is byte-for-byte
+    /// unchanged. Unbacked entries are appended last; their relative order against the live rows is
+    /// irrelevant because <see cref="Mixer.Transform"/> skips any ChannelIndex that has no input
+    /// buffer, so they contribute no audio while their device is missing.
+    /// </remarks>
+    /// <returns>The combined list of mixer inputs.</returns>
+    protected List<MixerInput> GetAllMixerInputs()
+    {
+        if (this.UnbackedMixerInputs.Count == 0)
+            return this.MixerInputs;
+
+        var Local_Combined = new List<MixerInput>(this.MixerInputs.Count + this.UnbackedMixerInputs.Count);
+        Local_Combined.AddRange(this.MixerInputs);
+        Local_Combined.AddRange(this.UnbackedMixerInputs);
+        return Local_Combined;
+    }
+
+    /// <summary>
+    /// Drops any preserved entry whose ChannelIndex is now backed by a live panel row, so that a
+    /// device coming back (or a Refresh List) can never produce a duplicate for the same channel.
+    /// </summary>
+    protected void PruneUnbackedMixerInputs()
+    {
+        if (this.UnbackedMixerInputs.Count == 0)
+            return;
+
+        var Local_LiveChannels = new HashSet<int>();
+        for (int i = 0; i < this.MixerInputs.Count; i++)
+            Local_LiveChannels.Add(this.MixerInputs[i].ChannelIndex);
+
+        this.UnbackedMixerInputs.RemoveAll(mi => Local_LiveChannels.Contains(mi.ChannelIndex));
+    }
+
+    /// <remarks>
+    /// <see cref="UnbackedMixerInputs"/> is deliberately NOT snapshotted: it has no UI rows, so
+    /// nothing the user does in this form can edit it, and <see cref="RevertToOrignal"/> therefore
+    /// leaves it intact - which is what preserving it means.
+    /// </remarks>
     protected void PersistentDeepClone()
     {
         // Capture only the minimal state required to restore UI and inputs later.
@@ -250,46 +315,83 @@ public partial class FormMixer : Form
         }
     }
 
+    /// <summary>
+    /// Fetches the input channels exposed by the ASIO device named in the current config, or null
+    /// when no device is configured, the device is not present on this machine, or the driver
+    /// refuses to report its capabilities.
+    /// Virtual so tests can supply a synthetic channel list without real hardware.
+    /// </summary>
+    /// <returns>The live input channels, or null when they cannot be determined.</returns>
+    protected virtual AsioChannelInfo[]? GetLiveInputChannels()
+    {
+        if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
+            return null;
+
+        AsioDriverCapability? Local_Capabilities = null;
+        try
+        {
+            Local_Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
+        }
+        catch (Exception ex)
+        {
+            //A missing / busy / broken driver is an expected condition here, not a fault: the user
+            //may simply be editing a config on a machine that does not have the device. Record it
+            //rather than discarding it so the cause is still observable.
+            Debug.ReportSwallowed(ex);
+        }
+
+        return Local_Capabilities?.InputChannelInfos;
+    }
+
     protected void RedrawPanelItems()
     {
         this.MixerInputs.Clear();
         this.ClearGUI();
 
-        if (string.IsNullOrEmpty(Program.DSP_Info.ASIO_InputDevice))
-            return;
-
-        AsioDriverCapability? Capabilities = null;
-        try
-        {
-            Capabilities = Program.ASIO.GetDriverCapabilities(Program.DSP_Info.ASIO_InputDevice);
-        }
-        catch (Exception ex)
-        {
-            _ = ex;
-            //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
-        }
-        if (Capabilities == null)
+        var Local_Channels = this.GetLiveInputChannels();
+        if (Local_Channels == null)
             return;
 
         int i = 0;
-        foreach (var item in Capabilities.Value.InputChannelInfos)
+        foreach (var item in Local_Channels)
         {
             var tempMixerElement = this.CreateMixerElement(item, i);
             var tempMixerInput = this.CreateMixerInput(item.channel, item.name);
             this.CreateMixerElementEventHandlers(tempMixerInput, tempMixerElement);
             i++;
         }
+
+        this.PruneUnbackedMixerInputs();
     }
 
+    /// <summary>
+    /// Rebuilds the mixer panel from the live ASIO channel list and overlays the routing loaded from
+    /// a config file onto it.
+    /// </summary>
+    /// <remarks>
+    /// DEFECT FIX: this used to overlay onto <see cref="MixerInputs"/> and then hand ONLY that list
+    /// to <see cref="ApplyChanges"/>. On a machine where the configured input device is missing,
+    /// <see cref="RedrawPanelItems"/> leaves MixerInputs empty, so ApplyChanges cleared the filter and
+    /// re-added nothing - the user's saved routing was destroyed in memory just by loading the config,
+    /// and permanently on disk the moment they saved. Saved entries that cannot be bound to a live
+    /// channel are now retained in <see cref="UnbackedMixerInputs"/> and passed straight back through,
+    /// so load/save is lossless on any host.
+    /// </remarks>
+    /// <param name="input">The routing loaded from the config.</param>
     public void RedrawPanelItemsFromLoader(List<MixerInput> input)
     {
+        //A fresh config supersedes anything preserved from a previous load.
+        this.UnbackedMixerInputs.Clear();
+
         this.RedrawPanelItems();
 
         // Use a lookup to avoid O(n^2) nested loops
         var loaderByChannel = input.ToDictionary(mi => mi.ChannelIndex);
+        var Local_LiveChannels = new HashSet<int>();
         for (int i = 0; i < this.MixerInputs.Count && i < this.MixerElements.Count; i++)
         {
             var current = this.MixerInputs[i];
+            Local_LiveChannels.Add(current.ChannelIndex);
             if (loaderByChannel.TryGetValue(current.ChannelIndex, out var loaded))
             {
                 current.Attenuation = loaded.Attenuation;
@@ -303,7 +405,43 @@ public partial class FormMixer : Form
             }
         }
 
+        //Retain, in their saved order, every entry that has no live channel to bind to. Copies are
+        //taken because ApplyChanges below clears the caller's list via ClearAllFilterElements.
+        foreach (var Local_Saved in input)
+        {
+            if (Local_LiveChannels.Contains(Local_Saved.ChannelIndex))
+                continue;
+
+            this.UnbackedMixerInputs.Add(new MixerInput
+            {
+                Attenuation = Local_Saved.Attenuation,
+                StreamAttenuation = Local_Saved.StreamAttenuation,
+                Enabled = Local_Saved.Enabled,
+                ChannelIndex = Local_Saved.ChannelIndex,
+                ChannelName = Local_Saved.ChannelName
+            });
+        }
+
+        this.ReportUnbackedMixerInputs();
+
         this.ApplyChanges();
+    }
+
+    /// <summary>
+    /// Makes a partial or total channel mismatch observable without blocking the user. This must NOT
+    /// use a modal dialog: config loading also runs at startup and under automated tests, where a
+    /// dialog would hang the process.
+    /// </summary>
+    protected void ReportUnbackedMixerInputs()
+    {
+        if (this.UnbackedMixerInputs.Count == 0)
+            return;
+
+        var Local_Channels = string.Join(", ", this.UnbackedMixerInputs.Select(mi => mi.ChannelIndex));
+        Debug.ReportSwallowed(new InvalidOperationException(
+            $"Mixer: {this.UnbackedMixerInputs.Count} saved input channel(s) ({Local_Channels}) are not present on the " +
+            $"current ASIO input device ('{Program.DSP_Info.ASIO_InputDevice}'). Their routing has been PRESERVED and " +
+            "will be written back on save, but it is muted until that device is available again."));
     }
 
     protected MixerInput CreateMixerInput(int channelIndex, string channelName)
@@ -355,12 +493,18 @@ public partial class FormMixer : Form
             // Remove controls from panel and dispose them to free resources and event handlers
             foreach (var ctrl in this.MixerElements)
             {
+                //DEFECT FIX: this was a bare 'catch { }'. A failed Remove/Dispose left the control
+                //parented to panel1 with its handlers attached while MixerElements.Clear() below
+                //dropped the only reference to it - a silent control leak with no trace.
                 try
                 {
                     this.panel1.Controls.Remove(ctrl);
                     ctrl.Dispose();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Debug.ReportSwallowed(ex);
+                }
             }
             this.MixerElements.Clear();
         }

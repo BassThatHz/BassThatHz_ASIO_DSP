@@ -55,7 +55,29 @@ namespace ExtendedXmlSerialization.Cache
 
         protected readonly ObjectAccessors.PropertyGetter _getter;
         protected readonly ObjectAccessors.PropertySetter _propertySetter;
-        
+
+        /// <summary>
+        /// Immutable (target type -&gt; Add method) pair cached for the read-only-collection merge
+        /// path in <see cref="SetValue"/>. It is stored as a single object reference so publishing
+        /// it is one atomic write - a racing thread either sees the whole previous entry or the
+        /// whole new one, never a torn type/method pair. A miss simply re-resolves, so a benign
+        /// race costs one extra reflection lookup and nothing else.
+        /// </summary>
+        protected sealed class AddMethodCacheEntry
+        {
+            public AddMethodCacheEntry(Type targetType, MethodInfo? addMethod)
+            {
+                this.TargetType = targetType;
+                this.AddMethod = addMethod;
+            }
+
+            public readonly Type TargetType;
+            public readonly MethodInfo? AddMethod;
+        }
+
+        protected AddMethodCacheEntry? _addMethodCache;
+
+
         public string Name { get; protected set; }
         public Type Type { get; protected set; }
 
@@ -84,13 +106,44 @@ namespace ExtendedXmlSerialization.Cache
             if (enumerable == null)
                 return;
 
-            var addMethod = existing.GetType().GetMethod("Add");
-            if (addMethod == null)
+            // Allocation: this used to call GetType().GetMethod("Add") on EVERY invocation (a
+            // reflection lookup that allocates internally) and then allocate a fresh one-element
+            // object[] for EVERY item added. The Add method is now cached per target type, and a
+            // single argument buffer is reused for the whole merge - MethodInfo.Invoke copies the
+            // arguments in, so reusing the buffer within one call is safe.
+            var Local_ExistingType = existing.GetType();
+            var Local_Cache = this._addMethodCache;
+            MethodInfo? Local_AddMethod;
+            if (Local_Cache != null && Local_Cache.TargetType == Local_ExistingType)
+            {
+                Local_AddMethod = Local_Cache.AddMethod;
+            }
+            else
+            {
+                Local_AddMethod = Local_ExistingType.GetMethod("Add");
+                this._addMethodCache = new AddMethodCacheEntry(Local_ExistingType, Local_AddMethod);
+            }
+
+            if (Local_AddMethod == null)
                 return;
+
+            var Local_Args = new object?[1];
+            if (enumerable is System.Collections.IList Local_SourceList)
+            {
+                // Indexed access avoids the boxed enumerator that foreach over the non-generic
+                // IEnumerable would allocate for List<T>.
+                for (int Local_i = 0; Local_i < Local_SourceList.Count; Local_i++)
+                {
+                    Local_Args[0] = Local_SourceList[Local_i];
+                    _ = Local_AddMethod.Invoke(existing, Local_Args);
+                }
+                return;
+            }
 
             foreach (var item in enumerable)
             {
-                addMethod.Invoke(existing, new[] { item });
+                Local_Args[0] = item;
+                _ = Local_AddMethod.Invoke(existing, Local_Args);
             }
         }
     }

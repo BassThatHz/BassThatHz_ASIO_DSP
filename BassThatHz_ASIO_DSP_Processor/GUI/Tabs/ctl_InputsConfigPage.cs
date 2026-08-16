@@ -87,7 +87,7 @@ public partial class ctl_InputsConfigPage : UserControl
         catch (AsioException ex)
         {
             _ = ex;
-            _ = MessageBox.Show("Cannot init ASIO device or no ASIO drivers detected. " + ex.Message + "|" + ex.StackTrace, "ASIO Error");
+            _ = Debug.ShowMessage("Cannot init ASIO device or no ASIO drivers detected. " + ex.Message + "|" + ex.StackTrace, "ASIO Error");
         }
         catch (Exception ex)
         {
@@ -168,7 +168,7 @@ public partial class ctl_InputsConfigPage : UserControl
         if (driverArray != null && driverArray.Length > 0)
             this.cboDevices.Items.AddRange(driverArray);
         else
-            _ = MessageBox.Show("Cannot find any ASIO drivers or devices, application may not run correctly.");
+            _ = Debug.ShowMessage("Cannot find any ASIO drivers or devices, application may not run correctly.");
     }
 
     protected void DisplayBufferSize()
@@ -215,7 +215,7 @@ public partial class ctl_InputsConfigPage : UserControl
             {
                 _ = ex;
                 //throw new InvalidOperationException("Can't fetch Driver Capabilities", ex);
-                _ = MessageBox.Show("Can't fetch Driver Capabilities. The app may not work correctly without them. " + ex.Message + "|" + ex.StackTrace);
+                _ = Debug.ShowMessage("Can't fetch Driver Capabilities. The app may not work correctly without them. " + ex.Message + "|" + ex.StackTrace);
             }
             if (Capabilities == null)
                 return;

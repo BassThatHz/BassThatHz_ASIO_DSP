@@ -122,8 +122,12 @@ namespace Test_Project_1
         [TestMethod]
         public void TestInputValidation_HoldInMS()
         {
-            var validChars = new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '\b' };
-            var invalidChars = new[] { 'a', 'b', 'c', '.', '-', ' ' };
+            // '.' is intentionally ACCEPTED: InputValidator.Validate_IsNumeric_NonNegative allows
+            // digits, control characters and the decimal separator, and HoldInMS is parsed as a
+            // double (TimeSpan.FromMilliseconds), so fractional milliseconds are valid input.
+            // Only the sign '-' is rejected, which is what "NonNegative" means.
+            var validChars = new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '\b' };
+            var invalidChars = new[] { 'a', 'b', 'c', '-', ' ' };
 
             foreach (var c in validChars)
             {
@@ -143,8 +147,10 @@ namespace Test_Project_1
         [TestMethod]
         public void TestInputValidation_Ratio()
         {
-            var validChars = new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '\b' };
-            var invalidChars = new[] { 'a', 'b', 'c', '.', '-', ' ' };
+            // See TestInputValidation_HoldInMS: '.' is accepted by Validate_IsNumeric_NonNegative
+            // and Ratio is parsed as a double, so a fractional ratio is valid input.
+            var validChars = new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '\b' };
+            var invalidChars = new[] { 'a', 'b', 'c', '-', ' ' };
 
             foreach (var c in validChars)
             {

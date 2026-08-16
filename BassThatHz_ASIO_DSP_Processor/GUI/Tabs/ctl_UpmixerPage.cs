@@ -37,15 +37,29 @@
             if (_layout != null)
                 return;
 
-            _layout = new ctl_3DLayout();
+            var Local_Layout = new ctl_3DLayout();
             try
             {
-                this.elementHost3D.Child = _layout;
+                this.elementHost3D.Child = Local_Layout;
+                _layout = Local_Layout;
             }
             catch
             {
-                // If assignment fails, ensure we don't keep a reference to the partially-initialized layout
+                //DEFECT FIX: the field used to be assigned BEFORE the host assignment, so a failure
+                //here abandoned a fully constructed WPF control without detaching or disposing it.
+                //Build into a local, publish only on success, and clean the local up on failure.
                 _layout = null;
+                if (Local_Layout is IDisposable Local_Disposable)
+                {
+                    try
+                    {
+                        Local_Disposable.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
+                    }
+                }
                 throw;
             }
         }
@@ -60,14 +74,25 @@
             {
                 this.elementHost3D.Child = null;
             }
-            catch
+            catch (Exception ex)
             {
-                // ignore - best effort detach
+                // Best effort detach; recorded rather than silently discarded.
+                BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
             }
 
+            //NOTE: ctl_3DLayout is a WPF UserControl and does not implement IDisposable today, so
+            //this branch is defensive only - kept in case the layout gains unmanaged resources.
             if (_layout is IDisposable d)
             {
-                try { d.Dispose(); } catch { }
+                try
+                {
+                    d.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    //DEFECT FIX: was 'catch { }' - a failed Dispose hid a real resource leak.
+                    BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
+                }
             }
 
             _layout = null;

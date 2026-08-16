@@ -33,16 +33,23 @@ public class Test_DEQControl
         SetMaskedTextBox(control, "msb_CompressionRatio", "12");
         SetMaskedTextBox(control, "msb_KneeWidth_db", "2");
         SetCheckBox(control, "chkSoftKnee", true);
-        // Simulate threshold control
-        SetThreshold(control, 3.3);
+        // Simulate threshold control. Threshold is a BTH_VolumeSliderControl whose Volume setter
+        // clamps to [MinDb, MaxDb] = [-384, 0] dB, so the old +3.3 dB was silently clamped to 0 and
+        // could never have been read back. Use a representable (negative) threshold instead.
+        SetThreshold(control, -3.3);
         control.ApplySettings();
         var filter = control.GetFilter as DEQ;
         Assert.IsNotNull(filter);
         Assert.AreEqual(123.4, filter!.TargetFrequency);
-        Assert.AreEqual(5.6, filter.TargetGain_dB);
+        // cboDEQType index 0 is DEQType.CutAbove. DEQ.ApplySettings() deliberately normalizes the
+        // gain sign to match the selected type ("Fix the gain magnitude sign by DEQ Type in case
+        // the user messed up"), so a Cut type always yields -Math.Abs(gain). The UI value "5.6"
+        // therefore lands as -5.6; the old expectation of +5.6 contradicted the type it selected.
+        Assert.AreEqual(-5.6, filter.TargetGain_dB);
         Assert.AreEqual(0.7, filter.TargetQ);
         Assert.AreEqual(1.2, filter.TargetSlope);
-        Assert.AreEqual(3.3, filter.Threshold_dB);
+        // dB -> linear -> dB round trip through the slider, so compare with a tolerance.
+        Assert.AreEqual(-3.3, filter.Threshold_dB, 1e-9);
         Assert.AreEqual(10, filter.AttackTime_ms);
         Assert.AreEqual(20, filter.ReleaseTime_ms);
         Assert.AreEqual(12, filter.Ratio);

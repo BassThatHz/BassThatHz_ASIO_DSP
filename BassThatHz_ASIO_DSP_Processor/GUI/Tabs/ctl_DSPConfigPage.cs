@@ -102,10 +102,22 @@ public partial class ctl_DSPConfigPage : UserControl
                 StreamControl.Get_cboOutputStream.SelectedIndex = matchIndex;
             }
 
-            var filters = DSP_Stream.Filters;
-            for (int f = 0; f < filters.Count; f++)
+            //DEFECT FIX (config load hung and consumed unbounded memory):
+            //This used to iterate DSP_Stream.Filters LIVE - `for (f = 0; f < filters.Count; f++)`
+            //against the very list that btnAdd_Click mutates. Creating a FilterControl raises
+            //FilterCreated -> StreamControl.FilterAdded -> dsp_Stream.Filters.Insert(...), so
+            //Count grew by one on every iteration and the loop never terminated, allocating a
+            //WinForms UserControl each pass. It threw nothing, so the app simply hung on startup
+            //while memory climbed into the GBs.
+            //(It only worked before because the initial FilterCreated used to be raised inside the
+            //FilterControl constructor, i.e. BEFORE StreamControl subscribed, so it was silently
+            //lost. That lost notification was load-bearing here; it is now delivered correctly,
+            //which is what exposed this loop.)
+            //Snapshot first so the bound is the SAVED filter count and can never move.
+            var Local_SavedFilters = DSP_Stream.Filters.ToArray();
+            for (int f = 0; f < Local_SavedFilters.Length; f++)
             {
-                var Filter = filters[f];
+                var Filter = Local_SavedFilters[f];
                 if (Filter == null)
                     continue;
 
@@ -113,6 +125,18 @@ public partial class ctl_DSPConfigPage : UserControl
                 var LastIndex = StreamControl.FilterControls.Count - 1;
                 var FilterControl = StreamControl.FilterControls[LastIndex];
                 FilterControl.LoadConfigRefresh(Filter);
+            }
+
+            //Each btnAdd_Click above inserted the control's DEFAULT filter into DSP_Stream.Filters,
+            //and LoadConfigRefresh then swapped the control over to the SAVED filter instance
+            //without raising an event - so the list is now holding the wrong instances. Re-sync it
+            //to what the controls actually hold, in control order, which is exactly the saved set.
+            DSP_Stream.Filters.Clear();
+            for (int c = 0; c < StreamControl.FilterControls.Count; c++)
+            {
+                var Local_Filter = StreamControl.FilterControls[c].CurrentFilterControl?.GetFilter;
+                if (Local_Filter != null)
+                    DSP_Stream.Filters.Add(Local_Filter);
             }
         }
     }
@@ -234,8 +258,10 @@ public partial class ctl_DSPConfigPage : UserControl
             }
             if (HasAbstractBus)
             {
-                var Result = MessageBox.Show("AbstractBus Streams detected. Are you sure this add is safe?",
-                                             "Warning", MessageBoxButtons.YesNo);
+                //Suppressed (non-interactive/test) default is Yes: the add was explicitly requested,
+                //so proceed rather than silently doing nothing.
+                var Result = Debug.ShowMessage("AbstractBus Streams detected. Are you sure this add is safe?",
+                                             "Warning", MessageBoxButtons.YesNo, DialogResult.Yes);
                 if (Result == DialogResult.No)
                     return;
             }
@@ -491,7 +517,7 @@ public partial class ctl_DSPConfigPage : UserControl
             {
                 if (dsp_Stream.InputSource.StreamType == StreamType.AbstractBus || dsp_Stream.OutputDestination.StreamType == StreamType.AbstractBus)
                 {
-                    MessageBox.Show("Cannot move an AbstractBus Stream.");
+                    Debug.ShowMessage("Cannot move an AbstractBus Stream.");
                     return;
                 }
 
@@ -508,8 +534,9 @@ public partial class ctl_DSPConfigPage : UserControl
                         }
                         if (HasAbstractBus)
                 {
-                    var Result = MessageBox.Show("AbstractBus Streams detected. Are you sure the move is safe?", 
-                                                 "Warning", MessageBoxButtons.YesNo);
+                    //Suppressed (non-interactive/test) default is Yes: the move was explicitly requested.
+                    var Result = Debug.ShowMessage("AbstractBus Streams detected. Are you sure the move is safe?",
+                                                 "Warning", MessageBoxButtons.YesNo, DialogResult.Yes);
                     if (Result == DialogResult.No)
                         return;
                 }
@@ -639,7 +666,7 @@ public partial class ctl_DSPConfigPage : UserControl
                         var Stream = streams[i];
                         if (dsp_Stream != Stream && Stream.InputSource.StreamType == StreamType.Bus && Stream.InputSource.Index == OutputChannelIndex)
                         {
-                            MessageBox.Show("Bus in use. It must be unassigned before the source stream can be deleted.");
+                            Debug.ShowMessage("Bus in use. It must be unassigned before the source stream can be deleted.");
                             return;
                         }
                     }
@@ -653,7 +680,7 @@ public partial class ctl_DSPConfigPage : UserControl
                         var Stream = streams[i];
                         if (dsp_Stream != Stream && Stream.InputSource.StreamType == StreamType.AbstractBus && Stream.InputSource.Index == OutputChannelIndex)
                         {
-                            MessageBox.Show("AbstractBus in use. It must be unassigned before the source stream can be deleted.");
+                            Debug.ShowMessage("AbstractBus in use. It must be unassigned before the source stream can be deleted.");
                             return;
                         }
                     }

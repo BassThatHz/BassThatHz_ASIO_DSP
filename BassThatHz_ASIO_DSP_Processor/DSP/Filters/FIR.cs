@@ -42,6 +42,18 @@ public class FIR : IFilter
     protected Complex[]? ThreadLocal_Taps_FFT_Complex;
     protected FFT? ThreadLocalFFT;
     protected double[] OverlapBuffer = Array.Empty<double>();
+
+    /// <summary>
+    /// Per-instance scratch for the forward FFT spectrum, so <see cref="Transform"/> does not
+    /// allocate a Complex[FFTSize] on every buffer callback.
+    /// </summary>
+    protected Complex[] SpectrumBuffer = Array.Empty<Complex>();
+
+    /// <summary>
+    /// Per-instance scratch for the inverse FFT time series, so <see cref="Transform"/> does not
+    /// allocate a double[FFTSize] on every buffer callback.
+    /// </summary>
+    protected double[] IFFTResultBuffer = Array.Empty<double>();
     #endregion
 
     #region Public Functions
@@ -66,8 +78,26 @@ public class FIR : IFilter
             // Use cached FFT instance when available
             var fft = this.ThreadLocalFFT ?? new FFT(this.FFTSize, 0);
 
-            // FFT the input (returns complex spectrum)
-            Complex[] Input_FFT_Complex = fft.Perform_FFT(this.OverlapBuffer, false);
+            // Reusable scratch, sized off the FFT instance itself so the allocated length is
+            // exactly what Perform_*_Into writes. Steady state hits neither allocation.
+            int Local_Points = fft.PointCount;
+
+            var Local_Spectrum = this.SpectrumBuffer;
+            if (Local_Spectrum.Length != Local_Points)
+            {
+                Local_Spectrum = new Complex[Local_Points];
+                this.SpectrumBuffer = Local_Spectrum;
+            }
+
+            var Local_ResultBuffer = this.IFFTResultBuffer;
+            if (Local_ResultBuffer.Length != Local_Points)
+            {
+                Local_ResultBuffer = new double[Local_Points];
+                this.IFFTResultBuffer = Local_ResultBuffer;
+            }
+
+            // FFT the input (fills the complex spectrum scratch)
+            Complex[] Input_FFT_Complex = fft.Perform_FFT_Into(this.OverlapBuffer, Local_Spectrum, false);
 
             // Multiply (convolve) in frequency domain in-place to avoid extra allocation
             var tapsFft = this.ThreadLocal_Taps_FFT_Complex;
@@ -78,7 +108,7 @@ public class FIR : IFilter
                 Input_FFT_Complex[n] *= tapsFft[n];
 
             // Inverse FFT
-            double[] Result = fft.Perform_IFFT(Input_FFT_Complex, false);
+            double[] Result = fft.Perform_IFFT_Into(Input_FFT_Complex, Local_ResultBuffer, false);
 
             // Overlap-save: copy the results to the output
             Array.Copy(Result, OverlapSize, input, 0, InputLength);

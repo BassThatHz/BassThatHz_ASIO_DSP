@@ -206,22 +206,39 @@ namespace NAudio.Dsp
             return input;
         }
 
+        /// <summary>
+        /// Stores the raw biquad coefficients and precomputes the normalized transform coefficients.
+        /// </summary>
+        /// <remarks>
+        /// PARAMETER-SHADOWS-FIELD DEFECT (fixed): the <paramref name="aa0"/> parameter shadows the
+        /// <see cref="aa0"/> field of the same name. The original code applied the zero-denominator
+        /// guard to the FIELD only (<c>this.aa0 = aa0 == 0 ? EPS : aa0;</c>) and then divided by the
+        /// still-zero PARAMETER, so the guard protected nothing: all five precomputed coefficients
+        /// became +/-Infinity and the filter emitted non-finite audio permanently, because
+        /// Infinity/NaN propagates through the x1/x2/y1/y2 biquad state and never recovers.
+        /// The guarded denominator is now computed ONCE into a local and EVERY division uses it.
+        /// For a non-zero <paramref name="aa0"/> the local equals the parameter, so the normal path
+        /// is bit-for-bit unchanged.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         public void SetCoefficients(double aa0, double aa1, double aa2, double b0, double b1, double b2)
         {
-            this.aa0 = aa0 == 0 ? EPS : aa0;
+            //Guard the denominator ONCE so the stored field and every division below agree.
+            double Local_Denominator = aa0 == 0 ? EPS : aa0;
+
+            this.aa0 = Local_Denominator;
             this.aa1 = aa1;
             this.aa2 = aa2;
             this.b0 = b0;
             this.b1 = b1;
             this.b2 = b2;
 
-            // precompute the coefficients
-            this.a0 = b0 / aa0;
-            this.a1 = b1 / aa0;
-            this.a2 = b2 / aa0;
-            this.a3 = aa1 / aa0;
-            this.a4 = aa2 / aa0;
+            // precompute the coefficients (divide by the GUARDED local, never the raw parameter)
+            this.a0 = b0 / Local_Denominator;
+            this.a1 = b1 / Local_Denominator;
+            this.a2 = b2 / Local_Denominator;
+            this.a3 = aa1 / Local_Denominator;
+            this.a4 = aa2 / Local_Denominator;
         }
 
         public void ChangeSampleRate(double sampleRate)

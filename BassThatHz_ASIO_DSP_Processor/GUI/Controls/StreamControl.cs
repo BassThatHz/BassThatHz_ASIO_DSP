@@ -180,7 +180,11 @@ public partial class StreamControl : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void AddFilter()
     {
-        var TempFilterControl = new FilterControl();
+        //Constructed with the initial filter creation deferred so that CreateFilter() can
+        //subscribe to FilterCreated before it fires - otherwise the very first notification
+        //happens inside the FilterControl constructor and the new filter never reaches
+        //DSP_Stream.Filters.
+        var TempFilterControl = new FilterControl(true);
         this.CreateFilter(TempFilterControl);
     }
 
@@ -188,17 +192,48 @@ public partial class StreamControl : UserControl
     protected void CreateFilter(FilterControl inputFilterControl)
     {
         inputFilterControl.BackColor = SystemColors.Control;
-        this.FilterControls.Add(inputFilterControl);
-        this.panel1.Controls.Add(inputFilterControl);
-        // Redraw and refresh once (RefreshFilterCountLabel called inside RedrawPanelItems)
-        this.RedrawPanelItems();
 
-        inputFilterControl.FilterDiscarded += (s1, e1) =>
+        //Subscribe BEFORE the control is wired into the panel/redrawn, and before
+        //CreateInitialFilter() below, so no FilterCreated/FilterDiscarded notification is lost.
+        void Local_OnFilterDiscarded(object? s1, FilterControl e1) =>
             this.FilterDeleted?.Invoke(this, inputFilterControl);
-
-
-        inputFilterControl.FilterCreated += (s1, e1) =>
+        void Local_OnFilterCreated(object? s1, FilterControl e1) =>
             this.FilterAdded?.Invoke(this, inputFilterControl);
+
+        inputFilterControl.FilterDiscarded += Local_OnFilterDiscarded;
+        inputFilterControl.FilterCreated += Local_OnFilterCreated;
+
+        bool Local_AddedToList = false;
+        bool Local_AddedToPanel = false;
+        try
+        {
+            this.FilterControls.Add(inputFilterControl);
+            Local_AddedToList = true;
+
+            this.panel1.Controls.Add(inputFilterControl);
+            Local_AddedToPanel = true;
+
+            // Redraw and refresh once (RefreshFilterCountLabel called inside RedrawPanelItems)
+            this.RedrawPanelItems();
+        }
+        catch
+        {
+            //Roll back so a failed add cannot leave a stray entry behind in FilterControls
+            //(or an orphaned child control in the panel).
+            inputFilterControl.FilterDiscarded -= Local_OnFilterDiscarded;
+            inputFilterControl.FilterCreated -= Local_OnFilterCreated;
+
+            if (Local_AddedToPanel)
+                this.panel1.Controls.Remove(inputFilterControl);
+            if (Local_AddedToList)
+                _ = this.FilterControls.Remove(inputFilterControl);
+
+            throw;
+        }
+
+        //Now that this control is subscribed, let a deferred FilterControl create its default
+        //filter. No-op for controls that already created one during construction.
+        inputFilterControl.CreateInitialFilter();
 
         #region Delete
         inputFilterControl.Get_btnDelete.Click += (s1, e1) =>
@@ -353,7 +388,7 @@ public partial class StreamControl : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Error exporting to REW: " + ex.Message, "REW API error");
+            Debug.ShowMessage("Error exporting to REW: " + ex.Message, "REW API error");
             _ = ex;
         }
     }
@@ -373,7 +408,7 @@ public partial class StreamControl : UserControl
         catch (Exception ex)
         {
             HadError = true;
-            MessageBox.Show("Error Fetching from REW: " + ex.Message, "REW API error");
+            Debug.ShowMessage("Error Fetching from REW: " + ex.Message, "REW API error");
         }
 
         if (!HadError)

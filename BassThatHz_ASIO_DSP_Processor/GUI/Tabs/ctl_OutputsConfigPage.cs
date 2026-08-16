@@ -108,7 +108,7 @@ public partial class ctl_OutputsConfigPage : UserControl
         catch (AsioException ex)
         {
             _ = ex;
-            _ = MessageBox.Show("Cannot init ASIO device or no ASIO drivers detected. " + ex.Message, "ASIO Error");
+            _ = Debug.ShowMessage("Cannot init ASIO device or no ASIO drivers detected. " + ex.Message, "ASIO Error");
         }
         catch (Exception ex)
         {
@@ -161,7 +161,7 @@ public partial class ctl_OutputsConfigPage : UserControl
             {
                 // Guarded by UserInteractive so headless/automated contexts (tests, CI, services)
                 // never block indefinitely on a modal dialog with no one to dismiss it.
-                _ = MessageBox.Show("Cannot find any ASIO drivers or devices, application may not run correctly.");
+                _ = Debug.ShowMessage("Cannot find any ASIO drivers or devices, application may not run correctly.");
             }
         }
         finally

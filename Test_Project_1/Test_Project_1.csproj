@@ -32,4 +32,12 @@
     <Folder Include="NAudio\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Read-only golden config asset. Copied to the test output directory; the original
+         C:\code\1.0.40\DSP.xml is never written to by the test suite. -->
+    <None Include="..\DSP.xml" Link="TestAssets\DSP.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

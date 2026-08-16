@@ -91,6 +91,11 @@ namespace Test_Project_1
         public void TestLimitChanged_ClampsThreshold()
         {
             // Arrange
+            // BTH_VolumeSliderControl's constructor sets Volume = 0, which clamps to MinDb (-384),
+            // so a freshly constructed Limit slider sits at -384dB, not 0dB. Without seeding a sane
+            // Limit first, the Threshold handler immediately drags Threshold down to -384 and this
+            // test never reaches the behaviour it is named for.
+            _limitControl.SetVolumeDb(0);
             _thresholdControl.SetVolumeDb(-0.5); // Above minimum -1dB
             _limitControl.SetVolumeDb(-5);
 
@@ -98,23 +103,37 @@ namespace Test_Project_1
             _limitControl.OnVolumeChanged();
 
             // Assert
-            Assert.AreEqual(-5, _thresholdControl.GetVolumeDb());
+            // Delta: every value round-trips dB -> linear -> dB through the shared slider control.
+            Assert.AreEqual(-5, _thresholdControl.GetVolumeDb(), 1e-9);
         }
 
         [TestMethod]
         public void TestThresholdChanged_ClampsToLimitAndMinimum()
         {
-            // Arrange
+            // LimiterControl.Threshold_VolumeChanged applies TWO clamps, in this order:
+            //   1. if (Threshold.Volume >= Limit.Volume) Threshold.VolumedB = Limit.VolumedB;
+            //   2. if (Threshold.VolumedB > -1d)         Threshold.VolumedB = -1d;
+            // Whichever is more restrictive therefore wins. Both are exercised below; the old
+            // version only asserted the -1dB floor while configuring a Limit that overrode it.
             var filter = GetPrivateField<Limiter>(_control, "Filter");
-            _limitControl.SetVolumeDb(-6);
-            _thresholdControl.SetVolumeDb(-0.5); // Should be clamped to -1dB
 
-            // Act
+            // Case 1: Limit (-6dB) is more restrictive than the -1dB floor, so the Limit wins.
+            _limitControl.SetVolumeDb(-6);
+            _thresholdControl.SetVolumeDb(-0.5);
+
             _thresholdControl.OnVolumeChanged();
 
-            // Assert
-            Assert.AreEqual(-1.0, _thresholdControl.GetVolumeDb());
-            Assert.AreEqual(Math.Pow(10, -1.0/20), filter.Threshold);
+            Assert.AreEqual(-6.0, _thresholdControl.GetVolumeDb(), 1e-9);
+            Assert.AreEqual(Math.Pow(10, -6.0 / 20), filter.Threshold, 1e-9);
+
+            // Case 2: Limit (0dB) is less restrictive, so the -1dB minimum floor wins.
+            _limitControl.SetVolumeDb(0);
+            _thresholdControl.SetVolumeDb(-0.5);
+
+            _thresholdControl.OnVolumeChanged();
+
+            Assert.AreEqual(-1.0, _thresholdControl.GetVolumeDb(), 1e-9);
+            Assert.AreEqual(Math.Pow(10, -1.0 / 20), filter.Threshold, 1e-9);
         }
 
         [TestMethod]
@@ -178,8 +197,10 @@ namespace Test_Project_1
         {
             // Arrange
             var filter = GetPrivateField<Limiter>(_control, "Filter");
-            typeof(Limiter).GetProperty("CompressionApplied")?.SetValue(filter, 0.5);
-            typeof(Limiter).GetProperty("IsBrickwall")?.SetValue(filter, true);
+            // CompressionApplied and IsBrickwall are public FIELDS on Limiter, so GetProperty
+            // returned null and the ?.SetValue calls silently did nothing.
+            typeof(Limiter).GetField("CompressionApplied")?.SetValue(filter, 0.5);
+            typeof(Limiter).GetField("IsBrickwall")?.SetValue(filter, true);
 
             // Act
             _control.TestRefreshTimer();

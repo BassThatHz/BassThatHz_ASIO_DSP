@@ -62,8 +62,21 @@ public class AntiDC : IFilter
     protected bool IsPreviousInputIdentical = false;
     protected bool WasPreviousInputIdentical = false;
 
+    /// <summary>
+    /// Timestamp of the last ClipEvent DISPATCH (not the last clip DETECTION - that is
+    /// TimeOfLastClipEvent). Every read and every write of this field MUST use the same clock;
+    /// see ClipEventThrottleInterval and ReportClipEvents.
+    /// </summary>
     protected DateTime TimeOfLastClipEventRaised;
     protected bool IsOutputMuted = false;
+
+    /// <summary>
+    /// Minimum interval between two ClipEvent dispatches.
+    /// Hoisted to a static readonly field so the per-sample detection path never re-materializes
+    /// the TimeSpan, and so the two call sites cannot drift to different windows.
+    /// It is non-public and init-only, so the ExtendedXmlSerializer never persists it.
+    /// </summary>
+    protected static readonly TimeSpan ClipEventThrottleInterval = TimeSpan.FromMilliseconds(1000);
     #endregion
 
     #region Public Custom Events
@@ -130,13 +143,21 @@ public class AntiDC : IFilter
 
                 if (wasPrevIdentical && !isPrevIdentical)
                 {
-                    // reset consecutive DC and report previous clip events
-                    if (DateTime.UtcNow - this.TimeOfLastClipEventRaised > TimeSpan.FromMilliseconds(1000))
-                    {
-                        // raise event asynchronously
-                        var args = Get_ClippedInfoArgs();
-                        _ = Task.Run(() => this.ClipEvent?.Invoke(this, args));
-                    }
+                    // Reset consecutive DC and report previous clip events.
+                    //
+                    // FIXED DEFECT (two halves, both making this fire once PER SAMPLE on the
+                    // real-time audio thread, allocating an args object + a closure + a Task each
+                    // time - the exact per-callback allocation this filter must never do):
+                    //   1) The throttle was CHECKED here but never UPDATED, so once the 1000 ms
+                    //      window opened it never closed again.
+                    //   2) The check read DateTime.UtcNow while the only writer of
+                    //      TimeOfLastClipEventRaised (ReportClipEvents) stamped local DateTime.Now.
+                    //      For any zone behind UTC the difference was inflated by the UTC offset,
+                    //      so the condition was unconditionally true.
+                    // Both sites now funnel through ReportClipEvents, which checks AND updates the
+                    // throttle using DateTime.UtcNow for every read and every write, so the two
+                    // cannot diverge again.
+                    this.ReportClipEvents();
                     consecDetected = 0;
                 }
 
@@ -146,11 +167,13 @@ public class AntiDC : IFilter
                     if (consecDetected >= maxConsec)
                     {
                         this.IsOutputMuted = true;
-                        // zero remaining buffer and raise output muted event asynchronously
+                        // Zero remaining buffer and raise output muted event asynchronously.
+                        // No throttle is needed: IsOutputMuted LATCHES, this breaks out of the
+                        // loop, and every later call takes the muted fast-path, so the event can
+                        // fire at most once per ResetDetection.
                         for (int j = i; j < buffer.Length; j++)
                             buffer[j] = 0;
-                        var args = Get_ClippedInfoArgs();
-                        _ = Task.Run(() => this.OutputMutedEvent?.Invoke(this, args));
+                        this.RaiseOutputMutedEvent();
                         break;
                     }
                 }
@@ -170,8 +193,8 @@ public class AntiDC : IFilter
                         this.IsOutputMuted = true;
                         for (int j = i; j < buffer.Length; j++)
                             buffer[j] = 0;
-                        var args = Get_ClippedInfoArgs();
-                        _ = Task.Run(() => this.OutputMutedEvent?.Invoke(this, args));
+                        //Same latch-once reasoning as the DC branch above - no throttle required.
+                        this.RaiseOutputMutedEvent();
                         break;
                     }
                 }
@@ -221,19 +244,35 @@ public class AntiDC : IFilter
         };
     }
 
+    /// <summary>
+    /// Dispatches OutputMutedEvent off the audio thread.
+    /// Deliberately NOT throttled: both call sites set the IsOutputMuted latch and break out of
+    /// the sample loop, and TransformInPlace returns immediately while that latch is set, so this
+    /// can be reached at most once between ResetDetection calls. A throttle here would only be
+    /// able to SUPPRESS the single legitimate notification.
+    /// </summary>
     protected void RaiseOutputMutedEvent()
     {
-        var args = this.Get_ClippedInfoArgs();
-        _ = Task.Run(() => this.OutputMutedEvent?.Invoke(this, args));
+        var Local_Args = this.Get_ClippedInfoArgs();
+        _ = Task.Run(() => this.OutputMutedEvent?.Invoke(this, Local_Args));
     }
 
+    /// <summary>
+    /// The single throttled ClipEvent dispatch point for the whole filter.
+    /// Reads AND writes TimeOfLastClipEventRaised with the SAME clock (DateTime.UtcNow). UTC is
+    /// used rather than DateTime.Now because local time can jump backwards at a DST boundary,
+    /// which would stall the throttle for an hour.
+    /// </summary>
     protected void ReportClipEvents()
     {
-        if (DateTime.Now - this.TimeOfLastClipEventRaised > TimeSpan.FromMilliseconds(1000))
+        var Local_Now = DateTime.UtcNow;
+        if (Local_Now - this.TimeOfLastClipEventRaised > ClipEventThrottleInterval)
         {
-            this.TimeOfLastClipEventRaised = DateTime.Now;
-            var args = this.Get_ClippedInfoArgs();
-            _ = Task.Run(() => this.ClipEvent?.Invoke(this, args));
+            //Stamping BEFORE dispatch is what closes the window; omitting it made the caller
+            //allocate a Task per qualifying sample on the real-time audio thread.
+            this.TimeOfLastClipEventRaised = Local_Now;
+            var Local_Args = this.Get_ClippedInfoArgs();
+            _ = Task.Run(() => this.ClipEvent?.Invoke(this, Local_Args));
         }
     }
 
@@ -259,11 +298,18 @@ public class AntiDC : IFilter
         }
     }
 
+    /// <summary>
+    /// Per-sample clip detector.
+    /// Uses DateTime.UtcNow so that TimeOfLastClipEvent is stamped with the same clock
+    /// TransformInPlace uses for the same field - the identical cross-clock divergence that broke
+    /// the TimeOfLastClipEventRaised throttle.
+    /// </summary>
     protected void ClipDetection(double input)
     {
         if (input >= this.Clip_Threshold || input <= -this.Clip_Threshold)
         {
-            if (DateTime.Now - this.TimeOfLastClipEvent <= this.DetectionDuration)
+            var Local_Now = DateTime.UtcNow;
+            if (Local_Now - this.TimeOfLastClipEvent <= this.DetectionDuration)
             {
                 this.ClipEventsPerDurationDetected++;
                 this.IsOutputMuted |= this.ClipEventsPerDurationDetected >= this._MaxClipEventsPerDuration;
@@ -272,7 +318,7 @@ public class AntiDC : IFilter
             {
                 this.ClipEventsPerDurationDetected = 0;
             }
-            this.TimeOfLastClipEvent = DateTime.Now;
+            this.TimeOfLastClipEvent = Local_Now;
         }
     }
     #endregion

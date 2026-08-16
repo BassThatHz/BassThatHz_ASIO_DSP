@@ -126,10 +126,28 @@ public partial class BTH_VolumeLevelControl : UserControl
             if (this.Stream == null || this.Stream.InputSource == null || this.Stream.OutputDestination == null)
                 return;
 
-            var x = new FormRTA();
-            x.Text += "  " + this.Stream.InputSource.Name + "-> " + this.Stream.OutputDestination.Name;
-            x.Init_Channels(this.Stream.InputSource, this.Stream.OutputDestination);
-            x.Show();
+            //DEFECT FIX: FormRTA holds charts, timers, FFT buffers and ASIO event subscriptions.
+            //If Init_Channels threw - or if dialogs are suppressed and the form is never shown -
+            //it used to be abandoned undisposed, leaking GDI handles and live subscriptions.
+            var Local_Form = new FormRTA();
+            var Local_Shown = false;
+            try
+            {
+                Local_Form.Text += "  " + this.Stream.InputSource.Name + "-> " + this.Stream.OutputDestination.Name;
+                Local_Form.Init_Channels(this.Stream.InputSource, this.Stream.OutputDestination);
+
+                if (!Debug.SuppressInteractiveDialogs)
+                {
+                    Debug.ShowFormSafe(Local_Form);
+                    Local_Shown = true;
+                }
+            }
+            finally
+            {
+                //Once shown the form owns its own lifetime (it disposes itself on close).
+                if (!Local_Shown)
+                    Local_Form.Dispose();
+            }
         }
         catch (Exception ex)
         {
@@ -181,10 +199,104 @@ public partial class BTH_VolumeLevelControl : UserControl
 
     #region Protected Functions
 
-    // Helper method that calculates RMS, peak, and decibel values.
-    private void CalculateLevels(double[] audioData, bool isInput)
+    /// <summary>
+    /// Reusable meter scratch buffer.
+    /// <para>
+    /// PERF: the meter path used to allocate a fresh <c>double[SamplesPerChannel]</c> for BOTH
+    /// the input and the output channel on every refresh (FormMonitoring's refresh interval is
+    /// user-settable down to 1 ms, per meter). The samples are only read, reduced to
+    /// RMS/peak and thrown away, so a per-control buffer is safe: it is filled and consumed
+    /// entirely inside a single <c>SafeInvoke</c> callback on the UI thread and is never
+    /// published anywhere.
+    /// </para>
+    /// </summary>
+    private double[]? MeterScratch;
+
+    /// <summary>
+    /// Returns the per-control scratch buffer, growing it only when the ASIO buffer size changes.
+    /// </summary>
+    /// <param name="minimumLength">The required capacity.</param>
+    /// <returns>A buffer of at least <paramref name="minimumLength"/> samples.</returns>
+    private double[] EnsureMeterScratch(int minimumLength)
     {
-        if (audioData == null || audioData.Length == 0)
+        var Local_Buffer = this.MeterScratch;
+        if (Local_Buffer == null || Local_Buffer.Length < minimumLength)
+        {
+            Local_Buffer = new double[minimumLength < 1 ? 1 : minimumLength];
+            this.MeterScratch = Local_Buffer;
+        }
+        return Local_Buffer;
+    }
+
+    /// <summary>
+    /// Copies one channel's samples into the reusable scratch buffer without allocating.
+    /// </summary>
+    /// <param name="item">The stream item to read.</param>
+    /// <param name="isInput">True for the input direction, false for the output direction.</param>
+    /// <param name="samples">Receives the filled slice of the scratch buffer.</param>
+    /// <returns>True when a slice was produced.</returns>
+    private bool TryFillMeterScratch(IStreamItem item, bool isInput, out ReadOnlySpan<double> samples)
+    {
+        samples = default;
+
+        var Local_Asio = Program.ASIO;
+        int Local_Length = Local_Asio.SamplesPerChannel;
+
+        switch (item.StreamType)
+        {
+            case StreamType.Bus:
+            {
+                //Live buffer, mutated by the audio thread - must be copied before reading.
+                var Local_Live = Program.DSP_Info.Buses[item.Index].Buffer;
+                if (Local_Live == null || Local_Live.Length == 0)
+                    return false;
+
+                var Local_Scratch = this.EnsureMeterScratch(Local_Live.Length);
+                Local_Live.AsSpan().CopyTo(Local_Scratch);
+                samples = new ReadOnlySpan<double>(Local_Scratch, 0, Local_Live.Length);
+                return true;
+            }
+            case StreamType.AbstractBus:
+            case StreamType.Stream:
+            {
+                //No real source - silence, exactly as the previous 'new double[SamplesPerChannel]'.
+                if (Local_Length < 1)
+                    return false;
+
+                var Local_Scratch = this.EnsureMeterScratch(Local_Length);
+                Array.Clear(Local_Scratch, 0, Local_Length);
+                samples = new ReadOnlySpan<double>(Local_Scratch, 0, Local_Length);
+                return true;
+            }
+            case StreamType.Channel:
+            default:
+            {
+                if (Local_Length < 1)
+                    return false;
+
+                var Local_Scratch = this.EnsureMeterScratch(Local_Length);
+                bool Local_Ok = isInput
+                    ? Local_Asio.TryCopyInputAudioData(item.Index, Local_Scratch, out int Local_Copied)
+                    : Local_Asio.TryCopyOutputAudioData(item.Index, Local_Scratch, out Local_Copied);
+
+                if (!Local_Ok)
+                {
+                    //Matches the old '?? new double[SamplesPerChannel]' silence fallback.
+                    Array.Clear(Local_Scratch, 0, Local_Length);
+                    samples = new ReadOnlySpan<double>(Local_Scratch, 0, Local_Length);
+                    return true;
+                }
+
+                samples = new ReadOnlySpan<double>(Local_Scratch, 0, Local_Copied);
+                return true;
+            }
+        }
+    }
+
+    // Helper method that calculates RMS, peak, and decibel values.
+    private void CalculateLevels(ReadOnlySpan<double> audioData, bool isInput)
+    {
+        if (audioData.Length == 0)
             return;
 
         double squareSum = 0;
@@ -230,13 +342,9 @@ public partial class BTH_VolumeLevelControl : UserControl
     {
         if (this.InputChannel != null && this.InputChannel.Index > -1)
         {
-            double[] inputData = CommonFunctions.GetStreamInputDataByStreamItem(this.InputChannel);
-            // Only calculate if inputData is not null.
-            if (inputData != null)
-            {
-                // For input, pass 'true' to apply stream volume.
-                CalculateLevels(inputData, true);
-            }
+            // For input, pass 'true' to apply stream volume.
+            if (this.TryFillMeterScratch(this.InputChannel, true, out var Local_Samples))
+                this.CalculateLevels(Local_Samples, true);
         }
     }
 
@@ -244,34 +352,44 @@ public partial class BTH_VolumeLevelControl : UserControl
     {
         if (this.OutputChannel != null && this.OutputChannel.Index > -1)
         {
-            double[] outputData = CommonFunctions.GetStreamOutputDataByStreamItem(this.OutputChannel);
-            // Only calculate if outputData is not null.
-            if (outputData != null)
-            {
-                // For output, pass 'false' so that no volume multiplier is applied.
-                CalculateLevels(outputData, false);
-            }
+            // For output, pass 'false' so that no volume multiplier is applied.
+            if (this.TryFillMeterScratch(this.OutputChannel, false, out var Local_Samples))
+                this.CalculateLevels(Local_Samples, false);
         }
     }
 
     protected void Set_DB_Lables()
     {
-        // Prepare strings once and only update UI when the text actually changes
-        string inPeak = Math.Round(this.Input_DB_Peak, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
-        if (this.lbl_Input_DB_Peak.Text != inPeak)
-            this.lbl_Input_DB_Peak.Text = inPeak;
+        //PERF: the old code always built all 4 strings (a ToString + a Concat each) and only then
+        //compared them against the label text, so it allocated 8 strings per refresh even when
+        //nothing had changed. Compare the ROUNDED SOURCE VALUE instead and format only on a change.
+        SetDbLabel(this.lbl_Input_DB_Peak, this.Input_DB_Peak, ref this.Last_Input_DB_Peak_Rounded);
+        SetDbLabel(this.lbl_Input_DB, this.Input_DB, ref this.Last_Input_DB_Rounded);
+        SetDbLabel(this.lbl_Output_DB_Peak, this.Output_DB_Peak, ref this.Last_Output_DB_Peak_Rounded);
+        SetDbLabel(this.lbl_Output_DB, this.Output_DB, ref this.Last_Output_DB_Rounded);
+    }
 
-        string inDb = Math.Round(this.Input_DB, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
-        if (this.lbl_Input_DB.Text != inDb)
-            this.lbl_Input_DB.Text = inDb;
+    #region dB label caches
+    private double Last_Input_DB_Peak_Rounded = double.NaN;
+    private double Last_Input_DB_Rounded = double.NaN;
+    private double Last_Output_DB_Peak_Rounded = double.NaN;
+    private double Last_Output_DB_Rounded = double.NaN;
+    #endregion
 
-        string outPeak = Math.Round(this.Output_DB_Peak, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
-        if (this.lbl_Output_DB_Peak.Text != outPeak)
-            this.lbl_Output_DB_Peak.Text = outPeak;
+    /// <summary>
+    /// Sets a "&lt;n&gt;dB" label only when the rounded value actually changed.
+    /// </summary>
+    /// <param name="label">The label to update.</param>
+    /// <param name="value">The current dB value.</param>
+    /// <param name="cache">The caller's cache of the previously rendered rounded value.</param>
+    private static void SetDbLabel(Control label, double value, ref double cache)
+    {
+        double Local_Rounded = Math.Round(value, 0);
+        if (Local_Rounded.Equals(cache)) //Equals so the NaN seed compares true against itself.
+            return;
 
-        string outDb = Math.Round(this.Output_DB, 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
-        if (this.lbl_Output_DB.Text != outDb)
-            this.lbl_Output_DB.Text = outDb;
+        cache = Local_Rounded;
+        label.Text = Local_Rounded.ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
     }
 
     protected void Set_VolAndClipIndicators()

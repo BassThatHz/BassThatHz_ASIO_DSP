@@ -41,6 +41,20 @@ public class ClassicLimiter : IFilter
     [XmlIgnoreAttribute]
     [IgnoreDataMember]
     public double CompressionApplied = 1;
+
+    /// <summary>
+    /// The largest double strictly below 1.0 (that is, 1 - 2^-53): the "just below full scale"
+    /// output ceiling the original clamp was written to express.
+    /// </summary>
+    /// <remarks>
+    /// The original constant read <c>1 - double.Epsilon</c>, which does NOT express that.
+    /// <c>double.Epsilon</c> is the smallest positive SUBNORMAL (about 4.9e-324), which is far
+    /// below the ULP of 1.0 (about 2.2e-16), so <c>1 - double.Epsilon</c> rounds straight back to
+    /// exactly 1.0 and the intended ceiling never existed. <see cref="Math.BitDecrement(double)"/>
+    /// of 1.0 is the value that was meant, and it keeps the output strictly inside full scale so a
+    /// downstream converter cannot wrap at 0 dBFS.
+    /// </remarks>
+    private static readonly double OutputCeiling = Math.BitDecrement(1.0);
     #endregion
 
     #region Public Properties 
@@ -152,7 +166,15 @@ public class ClassicLimiter : IFilter
                     double peakValue = temp[i];
                     if (peakValue > thresholdLinear)
                     {
-                        gainReductionLinear = Math.Max(gainReductionLinear, peakValue - thresholdLinear);
+                        // UNIT FIX: gainReductionLinear is a GAIN MULTIPLIER (<= 1 attenuates), but
+                        // (peakValue - thresholdLinear) is an amplitude DIFFERENCE. Mixing the two was a
+                        // unit error: a peak of 8.0 against a 0.1 threshold produced 7.9, and Math.Max
+                        // then selected a 7.9x BOOST, so hot material was amplified by the "limiter".
+                        // The multiplier that brings peakValue down to thresholdLinear is
+                        // thresholdLinear / peakValue, and "more reduction" is the SMALLER multiplier,
+                        // hence Math.Min. peakValue > thresholdLinear >= 0 here, so the divide is safe.
+                        double Local_LookAheadGain = thresholdLinear / peakValue;
+                        gainReductionLinear = Math.Min(gainReductionLinear, Local_LookAheadGain);
                     }
                 }
 
@@ -165,7 +187,20 @@ public class ClassicLimiter : IFilter
                         this.Gain_Linear = releaseCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
 
                     this.CompressionApplied = this.Gain_Linear;
-                    input[i] = Math.Min(1 - double.Epsilon, input[i] * this.Gain_Linear);
+
+                    // CLAMP FIX - the previous line was Math.Min(1 - double.Epsilon, ...), which
+                    // carried TWO defects:
+                    //  (a) the ceiling did not exist. 1 - double.Epsilon is exactly 1.0, because
+                    //      double.Epsilon is the smallest positive SUBNORMAL (~4.9e-324) and is far
+                    //      below the ULP of 1.0 (~2.2e-16). See OutputCeiling.
+                    //  (b) the clamp was ONE-SIDED. Math.Min bounds only from above, so negative
+                    //      peaks were completely unbounded: a -8.0 block still left the limiter at
+                    //      roughly -7.9, because the attack ramp has not converged at the start of
+                    //      the block and nothing else bounded it.
+                    // Math.Clamp against +/-OutputCeiling fixes both: a genuinely sub-unity ceiling,
+                    // applied symmetrically. Anything already inside the ceiling is returned
+                    // untouched, bit for bit, so normal audio is not perturbed.
+                    input[i] = Math.Clamp(input[i] * this.Gain_Linear, -OutputCeiling, OutputCeiling);
                 }
             }
         }

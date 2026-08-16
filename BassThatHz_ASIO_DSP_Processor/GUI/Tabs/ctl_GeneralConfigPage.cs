@@ -139,7 +139,7 @@ public partial class ctl_GeneralConfigPage : UserControl
         try
         {
             this.saveFileDialog1.InitialDirectory = AppContext.BaseDirectory;
-            if (this.saveFileDialog1.ShowDialog(this) == DialogResult.OK)
+            if (Debug.ShowDialogSafe(this.saveFileDialog1, this) == DialogResult.OK)
             {
                 var xml = _xmlSerializer.Serialize(Program.DSP_Info);
                 xml = CommonFunctions.RemoveDeprecatedXMLOutputTags(xml);
@@ -157,7 +157,7 @@ public partial class ctl_GeneralConfigPage : UserControl
         try
         {
             this.openFileDialog1.InitialDirectory = AppContext.BaseDirectory;
-            if (this.openFileDialog1.ShowDialog(this) == DialogResult.OK)
+            if (Debug.ShowDialogSafe(this.openFileDialog1, this) == DialogResult.OK)
             {
                 Program.ASIO.Stop();
                 var XML = File.ReadAllText(this.openFileDialog1.FileName);
@@ -187,8 +187,10 @@ public partial class ctl_GeneralConfigPage : UserControl
         }
         catch (Exception ex)
         {
-            // Intentionally ignore parsing errors; invalid input will be ignored.
-            _ = ex;
+            // NOTE: int.TryParse + Math.Max cannot actually throw, so this arm is unreachable in
+            // practice. Kept as a defensive UI-handler boundary, but it no longer claims to be
+            // "ignoring parsing errors" (there are none to ignore) and it no longer discards.
+            Debug.ReportSwallowed(ex);
         }
     }
 
@@ -298,9 +300,15 @@ public partial class ctl_GeneralConfigPage : UserControl
 
                 //Do the call in parellel so that the
                 //NetworkAPI can go back to listening for more requests ASAP
-                Task.Run(() =>
-                    Program.Form_Main?.ApplyXMLConfig(XML)
-                    );
+                //DEFECT FIX: the task was fire-and-forget with no continuation, so a failure to
+                //apply the config was an unobserved task exception - dropped entirely while the
+                //HTTP client had already been told "Success". Observe and record it.
+                _ = Task.Run(() => Program.Form_Main?.ApplyXMLConfig(XML))
+                        .ContinueWith(t =>
+                        {
+                            if (t.Exception != null)
+                                Debug.ReportSwallowed(t.Exception);
+                        }, TaskContinuationOptions.OnlyOnFaulted);
 
                 return "Success";
             }

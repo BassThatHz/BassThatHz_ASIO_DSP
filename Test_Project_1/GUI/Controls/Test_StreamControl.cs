@@ -218,19 +218,35 @@ public class Test_StreamControl
     [TestMethod]
     public void AddFilter_HandlesExceptions()
     {
-        // Since Error is protected, we can only verify the filter isn't added on error
+        // Regression coverage for the CreateFilter rollback: if any step after the
+        // FilterControls.Add() throws, the half-added control must not be left behind.
+        // Nulling lblFilterCount makes RefreshFilterCountLabel (reached via RedrawPanelItems)
+        // throw a NullReferenceException *after* the control has been added to both
+        // FilterControls and panel1, which is exactly the partial-failure case.
         int initialCount = streamControl.FilterControls.Count;
-        
+
+        var labelField = typeof(StreamControl).GetField("lblFilterCount", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(labelField, "lblFilterCount field not found - test needs updating.");
+        var originalLabel = labelField!.GetValue(streamControl);
+        var panelField = typeof(StreamControl).GetField("panel1", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.IsNotNull(panelField, "panel1 field not found - test needs updating.");
+        var panel = (System.Windows.Forms.Panel)panelField!.GetValue(streamControl)!;
+        int initialPanelCount = panel.Controls.Count;
+
+        labelField.SetValue(streamControl, null);
         try
         {
-            // Force an error by manipulating internal state
-            streamControl.Controls.Clear();
             var addMethod = typeof(StreamControl).GetMethod("AddFilter", BindingFlags.NonPublic | BindingFlags.Instance);
-            addMethod.Invoke(streamControl, null);
+            var ex = Assert.ThrowsExactly<TargetInvocationException>(() => addMethod!.Invoke(streamControl, null));
+            Assert.IsInstanceOfType<NullReferenceException>(ex.InnerException);
         }
-        catch { }
+        finally
+        {
+            labelField.SetValue(streamControl, originalLabel);
+        }
 
-        Assert.AreEqual(initialCount, streamControl.FilterControls.Count);
+        Assert.AreEqual(initialCount, streamControl.FilterControls.Count, "FilterControls must be rolled back on failure.");
+        Assert.AreEqual(initialPanelCount, panel.Controls.Count, "panel1 must be rolled back on failure.");
     }
 
     [TestMethod]

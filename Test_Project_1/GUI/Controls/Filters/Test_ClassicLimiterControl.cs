@@ -42,6 +42,13 @@ namespace Test_Project_1
             SetPrivateField(_control, "msb_KneeWidth_db", _kneeWidthTextBox);
             SetPrivateField(_control, "chkSoftKnee", _softKneeCheckBox);
             SetPrivateField(_control, "CompressionApplied", _compressionApplied);
+
+            // The constructor already ran MapEventHandlers() against the DESIGNER-created Threshold
+            // control; the reflection swap above points the field at the mock instead, leaving the
+            // mock's VolumeChanged event with no subscriber at all. Re-wire so the production
+            // handler actually runs (MapEventHandlers unsubscribes-then-resubscribes, so this is
+            // idempotent). Test_LimiterControl and Test_DynamicRangeCompressorControl already do this.
+            _control.MapEventHandlers();
         }
 
         private void SetPrivateField(object obj, string fieldName, object value)
@@ -71,11 +78,14 @@ namespace Test_Project_1
             double newVolume = -6.0;
 
             // Act
-            _thresholdControl.Volume = newVolume;
+            // VolumedB, not Volume: -6.0 is a DECIBEL value; assigning it to the linear Volume
+            // property is meaningless (a negative amplitude) and yielded NaN.
+            _thresholdControl.VolumedB = newVolume;
             _thresholdControl.RaiseVolumeChanged();
 
             // Assert
-            Assert.AreEqual(newVolume, filter.Threshold_dB);
+            // Delta: dB -> linear -> dB through the shared slider control is lossy at the 1e-15 level.
+            Assert.AreEqual(newVolume, filter.Threshold_dB, 1e-9);
         }
 
         [TestMethod]
@@ -93,7 +103,8 @@ namespace Test_Project_1
             _control.ApplySettings();
 
             // Assert
-            Assert.AreEqual(-6.0, filter.Threshold_dB);
+            // Delta: the value passed through BTH_VolumeSliderControl's dB -> linear -> dB round trip.
+            Assert.AreEqual(-6.0, filter.Threshold_dB, 1e-9);
             Assert.AreEqual(10.0, filter.AttackTime_ms);
             Assert.AreEqual(100.0, filter.ReleaseTime_ms);
             Assert.AreEqual(3.0, filter.KneeWidth_dB);

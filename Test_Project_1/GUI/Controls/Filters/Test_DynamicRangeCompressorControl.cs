@@ -195,7 +195,9 @@ namespace Test_Project_1
         public void RefreshTimerTick_UpdatesCompressionApplied()
         {
             var filter = GetPrivateField<DynamicRangeCompressor>(_control, "Filter");
-            typeof(DynamicRangeCompressor).GetProperty("CompressionApplied")?.SetValue(filter, 0.77);
+            // CompressionApplied is a public FIELD on DynamicRangeCompressor (default 1), so
+            // GetProperty returned null and the ?.SetValue silently did nothing.
+            typeof(DynamicRangeCompressor).GetField("CompressionApplied")?.SetValue(filter, 0.77);
             _control.TestRefreshTimer();
             Assert.AreEqual(0.77, _compressionApplied.GetVolume());
         }
@@ -276,9 +278,14 @@ namespace Test_Project_1
         public double GetVolumeDb() => VolumedB;
         public void RaiseVolumeChanged()
         {
-            // Use reflection to call the protected OnVolumeChanged(EventArgs) method
-            var mi = typeof(BTH_VolumeSliderControl).GetMethod("OnVolumeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
-            mi.Invoke(this, new object[] { EventArgs.Empty });
+            // BTH_VolumeSliderControl has no protected OnVolumeChanged(EventArgs) method - it only
+            // exposes a raw `public event EventHandler? VolumeChanged`. GetMethod therefore returned
+            // null and the Invoke threw NullReferenceException from inside this helper. Invoke the
+            // compiler-generated backing field directly, as the sibling mocks in
+            // Test_ClassicLimiterControl and Test_LimiterControl already do.
+            var field = typeof(BTH_VolumeSliderControl).GetField("VolumeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
+            var handler = field?.GetValue(this) as EventHandler;
+            handler?.Invoke(this, EventArgs.Empty);
         }
     }
 

@@ -56,9 +56,82 @@ public partial class FormMain : Form
     }
     #endregion
 
+    #region Variables
+    /// <summary>
+    /// Set only by the system tray "Close" command (and any other genuine shutdown path).
+    /// While false, a user-initiated close hides the app to the system tray instead of exiting,
+    /// which keeps the ASIO engine running.
+    /// </summary>
+    protected bool IsExitingToDesktop;
+
+    /// <summary>
+    /// The WindowState the form had before it was hidden to the tray, so that "Open"
+    /// restores a maximized window as maximized rather than forcing it to Normal.
+    /// </summary>
+    protected FormWindowState PreTrayWindowState = FormWindowState.Maximized;
+
+    /// <summary>
+    /// The tray balloon is only shown the first time, purely so the user learns that
+    /// Close did not terminate the DSP engine.
+    /// </summary>
+    protected bool HasShownTrayBalloon;
+    #endregion
+
     #region Public Properties
     public TabControl Get_tabControl1 => this.tabControl1;
     public ctl_DSPConfigPage Get_DSPConfigPage1 => this.ctl_DSPConfigPage1;
+    public NotifyIcon Get_SysTrayIcon => this.SysTrayIcon;
+    public ContextMenuStrip Get_SysTrayMenu => this.SysTrayMenu;
+    #endregion
+
+    #region System Tray
+    /// <summary>
+    /// Restores the window from the system tray and brings it to the foreground.
+    /// </summary>
+    public void RestoreFromSysTray()
+    {
+        this.SafeInvoke(() =>
+        {
+            this.Show();
+            this.WindowState = this.PreTrayWindowState;
+            this.Activate();
+        });
+    }
+
+    /// <summary>
+    /// Hides the window to the system tray. The ASIO engine and all processing keep running.
+    /// </summary>
+    public void HideToSysTray()
+    {
+        this.SafeInvoke(() =>
+        {
+            if (this.WindowState != FormWindowState.Minimized)
+                this.PreTrayWindowState = this.WindowState;
+
+            this.SysTrayIcon.Visible = true;
+            this.Hide();
+
+            if (!this.HasShownTrayBalloon)
+            {
+                this.HasShownTrayBalloon = true;
+                this.SysTrayIcon.ShowBalloonTip(3000, "Still running",
+                    "The DSP engine is still processing audio. Right-click this icon for Open/Close.",
+                    ToolTipIcon.Info);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Performs a real application shutdown, bypassing the hide-to-tray behaviour.
+    /// </summary>
+    public void ExitToDesktop()
+    {
+        this.SafeInvoke(() =>
+        {
+            this.IsExitingToDesktop = true;
+            this.Close();
+        });
+    }
     #endregion
 
     #region Public Functions
@@ -95,6 +168,51 @@ public partial class FormMain : Form
     #region Event Handlers
     protected void FormMain_Load(object? sender, EventArgs e)
     {
+        // Deliberately not set in the designer: the tray icon is only registered with the shell
+        // once the app is actually running, so merely constructing a FormMain (as the test suite
+        // does) does not leave an orphaned icon in the notification area.
+        this.SysTrayIcon.Visible = true;
+    }
+
+    /// <summary>
+    /// The window close button hides the app to the system tray instead of exiting, so the
+    /// ASIO engine keeps processing. Only the tray "Close" command, Application.Exit or a
+    /// Windows shutdown performs a real exit.
+    /// </summary>
+    protected void FormMain_FormClosing(object? sender, FormClosingEventArgs e)
+    {
+        try
+        {
+            if (!this.IsExitingToDesktop && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                this.HideToSysTray();
+                return;
+            }
+
+            // Real shutdown: drop the icon now rather than waiting for Dispose, otherwise a
+            // stale icon can linger in the notification area until the user hovers over it.
+            this.SysTrayIcon.Visible = false;
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+
+    protected void SysTrayIcon_DoubleClick(object? sender, EventArgs e)
+    {
+        this.RestoreFromSysTray();
+    }
+
+    protected void SysTrayMenu_Open_Click(object? sender, EventArgs e)
+    {
+        this.RestoreFromSysTray();
+    }
+
+    protected void SysTrayMenu_Close_Click(object? sender, EventArgs e)
+    {
+        this.ExitToDesktop();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -112,9 +230,17 @@ public partial class FormMain : Form
                 // Perform StartUp Delay (gives the ASIO driver time to load for auto-startup appliances)
                 if (temp.StartUpDelay > 0)
                 {
+                    //DEFECT FIX: without the finally, a ThreadInterruptedException during the sleep
+                    //left the main form permanently disabled with no way for the user to recover.
                     this.Enabled = false;
-                    System.Threading.Thread.Sleep(temp.StartUpDelay);
-                    this.Enabled = true;
+                    try
+                    {
+                        System.Threading.Thread.Sleep(temp.StartUpDelay);
+                    }
+                    finally
+                    {
+                        this.Enabled = true;
+                    }
                 }
 
                 // Perform startup using DSP file settings
@@ -135,7 +261,7 @@ public partial class FormMain : Form
         catch (AsioException ex)
         {
             _ = ex;
-            _ = MessageBox.Show("Could not successfully load the DSP config file. " + ex.Message, "ASIO init error");
+            _ = Debug.ShowMessage("Could not successfully load the DSP config file. " + ex.Message, "ASIO init error");
         }
         catch (Exception ex)
         {

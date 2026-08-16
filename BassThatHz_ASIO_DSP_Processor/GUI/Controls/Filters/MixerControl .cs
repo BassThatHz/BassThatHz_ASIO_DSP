@@ -44,9 +44,20 @@ public partial class MixerControl : UserControl, IFilterControl
     #endregion
 
     #region Helpers
+    /// <summary>
+    /// Constructs the FormMixer instance backing this control. Virtual purely as a test seam, so a
+    /// fixture can supply a form with a synthetic ASIO channel list; production always gets a plain
+    /// <see cref="FormMixer"/>.
+    /// </summary>
+    /// <returns>The new, not-yet-wired mixer form.</returns>
+    protected virtual FormMixer NewMixerFormInstance()
+    {
+        return new FormMixer();
+    }
+
     private FormMixer CreateMixerForm()
     {
-        var fm = new FormMixer();
+        var fm = this.NewMixerFormInstance();
         // Attach callbacks so the form and control interact correctly
         AttachMixerFormCallbacks(fm);
         // When the form is disposed we should release our reference so it can be GC'd
@@ -73,7 +84,8 @@ public partial class MixerControl : UserControl, IFilterControl
             this.MixerForm.Height = this.ParentForm.Height - 22;
 
         // Display the form as a modal dialog, only one instance per constructor is ever created.
-        this.MixerForm.ShowDialog();
+        // Routed through Debug so a non-interactive/test host can never block on it.
+        _ = Debug.ShowDialogSafe(this.MixerForm);
     }
     #endregion
 
@@ -121,7 +133,11 @@ public partial class MixerControl : UserControl, IFilterControl
                     this.listBox1.Items.Clear();
                     if (enabledList.Count > 0)
                     {
-                        var display = enabledList.Select(item => $"({item.ChannelIndex}) {item.ChannelName} : {item.Attenuation} | {item.StreamAttenuation}").ToArray();
+                        //ChannelName is hardware-derived and is not a dependable round-trip value: an
+                        //entry preserved for a channel this machine does not have simply has no name.
+                        //Show a neutral placeholder rather than an empty gap or an invented name.
+                        var display = enabledList.Select(item =>
+                            $"({item.ChannelIndex}) {(string.IsNullOrEmpty(item.ChannelName) ? "(unknown)" : item.ChannelName)} : {item.Attenuation} | {item.StreamAttenuation}").ToArray();
                         this.listBox1.Items.AddRange(display);
                     }
                 }

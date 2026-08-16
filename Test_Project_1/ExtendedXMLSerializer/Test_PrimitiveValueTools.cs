@@ -220,5 +220,41 @@ namespace Test_Project_1.ExtendedXMLSerializer
         {
             Assert.AreEqual("1.23", PrimitiveValueTools.DecimalSeparator("1,23"));
         }
+
+        // ---------------------------------------------------------------------------------
+        // Regression coverage for the allocation pass: DecimalSeparator now probes with
+        // IndexOf(',') and returns the ORIGINAL string instance when there is no comma,
+        // instead of relying on string.Replace's internal no-match shortcut. This runs for
+        // every Single/Double/Decimal property on every deserialize (and therefore on every
+        // CommonFunctions.DeepClone), so it must stay behaviourally identical.
+        // ---------------------------------------------------------------------------------
+
+        [TestMethod]
+        public void DecimalSeparator_NoComma_ReturnsSameInstance_NoAllocation()
+        {
+            var Local_Input = string.Concat("12", ".", "5");
+            var Local_Result = PrimitiveValueTools.DecimalSeparator(Local_Input);
+            Assert.AreEqual("12.5", Local_Result);
+            Assert.AreSame(Local_Input, Local_Result);
+        }
+
+        [TestMethod]
+        public void DecimalSeparator_MultipleCommas_AllReplaced()
+        {
+            Assert.AreEqual("1.234.567", PrimitiveValueTools.DecimalSeparator("1,234,567"));
+        }
+
+        [TestMethod]
+        public void DecimalSeparator_CommaOnly_IsReplaced()
+        {
+            Assert.AreEqual(".", PrimitiveValueTools.DecimalSeparator(","));
+        }
+
+        [TestMethod]
+        public void GetPrimitiveValue_NegativeDoubleWithoutComma_StillParses()
+        {
+            var v = PrimitiveValueTools.GetPrimitiveValue("-3.5", typeof(double), "n");
+            Assert.AreEqual(-3.5d, (double)v, 1e-12);
+        }
     }
 }

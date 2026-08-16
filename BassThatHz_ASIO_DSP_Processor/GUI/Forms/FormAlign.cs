@@ -187,14 +187,22 @@ public partial class FormAlign : Form
                 this.NewDataAvailable = false;
                 this.RefreshTimer.Stop();
 
+                //DEFECT FIX: double.Parse/int.Parse on user-editable text boxes, executed every
+                //200 ms tick. A half-typed value ("-", ".", "1e") threw FormatException, which
+                //this.Error escalated into the "A fatal error has occured / abort the app?" dialog.
+                //Keep the previous value when the text is not (yet) a valid number.
                 this.SafeInvoke(() =>
                 {
-                    this.alpha = double.Parse(this.Averaging_TXT.Text);
-                    this.cohMin = double.Parse(this.Coherence_Mask_TXT.Text);
+                    if (double.TryParse(this.Averaging_TXT.Text, out double Local_Alpha))
+                        this.alpha = Local_Alpha;
 
-                    int size = string.IsNullOrEmpty(this.FFTSize_CBO.SelectedText) ? 4096 :
-                                        int.Parse(this.FFTSize_CBO.SelectedText);
-                    this.FFTSize = size;
+                    if (double.TryParse(this.Coherence_Mask_TXT.Text, out double Local_CohMin))
+                        this.cohMin = Local_CohMin;
+
+                    if (string.IsNullOrEmpty(this.FFTSize_CBO.SelectedText))
+                        this.FFTSize = 4096;
+                    else if (int.TryParse(this.FFTSize_CBO.SelectedText, out int Local_Size))
+                        this.FFTSize = Local_Size;
                 });
 
                 // Reuse temporary buffers to avoid per-tick allocations

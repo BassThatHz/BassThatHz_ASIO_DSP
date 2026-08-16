@@ -34,6 +34,13 @@ public partial class FIRControl : UserControl, IFilterControl
 {
     #region Variables
     protected FIR Filter = new();
+
+    /// <summary>
+    /// Line separators for the taps textbox. Hoisted to a static so the split no longer allocates
+    /// a fresh two-element char[] on every btnApply_Click / ApplySettings call (StreamControl's
+    /// REW import runs ApplySettings once per imported filter).
+    /// </summary>
+    protected static readonly char[] TapsLineSeparators = new[] { '\r', '\n' };
     #endregion
 
     #region Constructor
@@ -61,7 +68,7 @@ public partial class FIRControl : UserControl, IFilterControl
             var tapsText = this.txtTaps.Text;
             if (!string.IsNullOrWhiteSpace(tapsText))
             {
-                var parts = tapsText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var parts = tapsText.Split(TapsLineSeparators, StringSplitOptions.RemoveEmptyEntries);
                 var list = new List<double>(parts.Length);
                 foreach (var p in parts)
                 {

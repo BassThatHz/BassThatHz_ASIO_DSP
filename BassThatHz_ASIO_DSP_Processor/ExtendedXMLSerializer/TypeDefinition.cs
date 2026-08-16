@@ -118,8 +118,7 @@ namespace ExtendedXmlSerialization.Cache
                     continue;
                 }
 
-                bool ignore = propertyInfo.GetCustomAttributes(false).Any(a => a is XmlIgnoreAttribute);
-                if (ignore)
+                if (IsIgnoredMember(propertyInfo))
                 {
                     continue;
                 }
@@ -153,8 +152,7 @@ namespace ExtendedXmlSerialization.Cache
                 {
                     continue;
                 }
-                bool ignore = field.GetCustomAttributes(false).Any(a => a is XmlIgnoreAttribute);
-                if (ignore)
+                if (IsIgnoredMember(field))
                 {
                     continue;
                 }
@@ -162,6 +160,57 @@ namespace ExtendedXmlSerialization.Cache
                 result.Add(new PropertieDefinition(type, field));
             }
             return result;
+        }
+
+        /// <summary>
+        /// Returns true when a member is explicitly marked "do not persist".
+        /// </summary>
+        /// <param name="member">The property or field being considered for serialization.</param>
+        /// <returns>true if the member must be excluded from the serialized output.</returns>
+        /// <remarks>
+        /// Only <see cref="XmlIgnoreAttribute"/> used to be honored here, so
+        /// <see cref="System.Runtime.Serialization.IgnoreDataMemberAttribute"/> - and the
+        /// field-level <see cref="NonSerializedAttribute"/> - were silently ignored and the
+        /// members carrying them were written into every saved config.
+        /// <para>
+        /// Every member marked that way in this codebase is COMPUTED RUNTIME STATE, never a user
+        /// setting (Limiter.CompressionApplied / PeakValue / IsBrickwall and DEQ.GainApplied are
+        /// written by Transform and only read back by the meter UI; MixerInput.ChannelName is
+        /// derived from the live ASIO device list), so honoring the attributes loses no user data.
+        /// </para>
+        /// <para>
+        /// Configs written by older builds DO still contain those elements, and
+        /// <c>ExtendedXmlSerializer.ReadXml</c> throws on an element it cannot map to a member,
+        /// so <c>CommonFunctions.RemoveDeprecatedXMLInputTags</c> /
+        /// <c>RemoveDeprecatedXMLOutputTags</c> strip them before deserialization.
+        /// </para>
+        /// <para>
+        /// <see cref="NonSerializedAttribute"/> is only legal on fields; testing for it on
+        /// properties as well is harmless and keeps the rule in one place. It is a pseudo custom
+        /// attribute (a metadata flag), but the .NET runtime reconstitutes it from
+        /// <c>GetCustomAttributes</c>, so no <c>FieldInfo.IsNotSerialized</c> fallback is needed -
+        /// and that property is obsolete under SYSLIB0050. Covered by
+        /// <c>Test_IgnoreAttributes.Serializer_HonorsEveryIgnoreAttribute_OnFieldsAndProperties</c>.
+        /// </para>
+        /// </remarks>
+        protected static bool IsIgnoredMember(MemberInfo member)
+        {
+            // Allocation: the previous `GetCustomAttributes(false).Any(a => a is XmlIgnoreAttribute)`
+            // allocated a delegate per member. TypeDefinition instances are cached per type, so this
+            // runs once per type, but the indexed loop is both allocation-free and clearer.
+            var Local_Attributes = member.GetCustomAttributes(false);
+            for (int Local_i = 0; Local_i < Local_Attributes.Length; Local_i++)
+            {
+                var Local_Attribute = Local_Attributes[Local_i];
+                if (Local_Attribute is XmlIgnoreAttribute
+                    || Local_Attribute is System.Runtime.Serialization.IgnoreDataMemberAttribute
+                    || Local_Attribute is NonSerializedAttribute)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public bool IsPrimitive { get; protected set; }
@@ -182,7 +231,22 @@ namespace ExtendedXmlSerialization.Cache
 
         public PropertieDefinition GetProperty(string name)
         {
-            return Properties.FirstOrDefault(p => p.Name == name);
+            // Allocation: this is called once per XML element per deserialize (and therefore on
+            // every CommonFunctions.DeepClone). The previous Properties.FirstOrDefault(p => p.Name
+            // == name) captured `name`, so it allocated a closure object AND a delegate on every
+            // single call. An indexed loop over the (small) property list is allocation-free and
+            // returns exactly the same "first match, else null" result.
+            var Local_Properties = this.Properties;
+            if (Local_Properties == null)
+                return null;
+
+            for (int Local_i = 0; Local_i < Local_Properties.Count; Local_i++)
+            {
+                var Local_Property = Local_Properties[Local_i];
+                if (Local_Property.Name == name)
+                    return Local_Property;
+            }
+            return null;
         }
 
         protected static bool IsTypPrimitive(Type type)

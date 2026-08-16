@@ -23,6 +23,10 @@ namespace Test_Project_1
         {
             _control = new TestableGPEQControl();
             _filtersListBox = new ListBox();
+            // GPEQControl updates the list via ListBox.DataSource. A standalone ListBox that is not
+            // parented to a form has no BindingContext, so complex data binding never runs and
+            // Items stays empty. Give it one so the production DataSource path is actually exercised.
+            _filtersListBox.BindingContext = new BindingContext();
             _configButton = new Button();
 
             // Set up test controls
@@ -133,12 +137,17 @@ namespace Test_Project_1
             Assert.IsTrue(_filtersListBox.Items[1].ToString().Contains("-3"));
         }
 
-        private BiQuadFilter CreateBiQuadFilter(float frequency, float gain)
+        private static BiQuadFilter CreateBiQuadFilter(double frequency, double gain)
         {
-            var filter = new BiQuadFilter();
-            typeof(BiQuadFilter).GetProperty("Frequency")?.SetValue(filter, frequency);
-            typeof(BiQuadFilter).GetProperty("Gain")?.SetValue(filter, gain);
-            return filter;
+            // Frequency and Gain are public FIELDS on BiQuadFilter (they were converted from
+            // auto-properties to reduce hot-path property overhead), so the previous
+            // typeof(BiQuadFilter).GetProperty("Frequency")?.SetValue(...) helper resolved to null
+            // and silently set nothing - every "filter" it produced was left at 0/0.
+            return new BiQuadFilter
+            {
+                Frequency = frequency,
+                Gain = gain
+            };
         }
 
         [TestMethod]
@@ -231,21 +240,32 @@ namespace Test_Project_1
         {
             // Set SavedChanges through reflection
             typeof(FormGPEQ).GetProperty("SavedChanges")?.SetValue(form, true);
-            
-            // Force an error by causing an invalid operation
-            var filtersListBox = typeof(GPEQControl).GetField("Filters_LSB", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(this) as ListBox;
-            if (filtersListBox != null)
-            {
-                filtersListBox.DataSource = new object(); // This will cause an error when updating
-            }
 
-            // Simulate form closing
-            var args = new FormClosingEventArgs(CloseReason.UserClosing, false);
-            typeof(Form).GetMethod("OnFormClosing", BindingFlags.NonPublic | BindingFlags.Instance)
-                ?.Invoke(form, new object[] { args });
+            // Force an error INSIDE the production FormClosing handler. The previous version set
+            // Filters_LSB.DataSource = new object(), but WinForms rejects a non-IList/IListSource
+            // data source with an ArgumentException thrown synchronously *here*, so the production
+            // try/catch was never reached. Nulling the field instead makes
+            // "this.Filters_LSB.BeginUpdate()" inside the handler throw, which is exactly the path
+            // the catch(Exception) -> this.Error(ex) block exists for.
+            var field = typeof(GPEQControl).GetField("Filters_LSB", BindingFlags.NonPublic | BindingFlags.Instance);
+            var original = field?.GetValue(this);
+            field?.SetValue(this, null);
+            try
+            {
+                // Simulate form closing
+                var args = new FormClosingEventArgs(CloseReason.UserClosing, false);
+                typeof(Form).GetMethod("OnFormClosing", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.Invoke(form, new object[] { args });
+            }
+            finally
+            {
+                field?.SetValue(this, original);
+            }
         }
 
-        new public void Error(Exception ex)
+        // Overrides (not hides) the production error hook - GPEQControl calls this.Error(ex)
+        // through its own static type, so a `new` method here would never have been invoked.
+        protected override void Error(Exception ex)
         {
             ErrorOccurred?.Invoke(ex);
             base.Error(ex);

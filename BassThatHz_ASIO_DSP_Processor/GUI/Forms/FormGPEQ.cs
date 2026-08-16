@@ -175,10 +175,11 @@ public partial class FormGPEQ : Form
     {
         try
         {
-            DialogResult result = MessageBox.Show(
+            //Suppressed (non-interactive/test) default is Yes: the save was explicitly requested.
+            DialogResult result = Debug.ShowMessage(
             "Are you sure you want to save changes and close this form?",
             "Confirm Save Changes",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question, DialogResult.Yes);
 
             if (result == DialogResult.Yes)
             {
@@ -386,11 +387,12 @@ public partial class FormGPEQ : Form
     {
         try
         {
-            DialogResult result = MessageBox.Show(
+            //Suppressed (non-interactive/test) default is Yes: the discard was explicitly requested.
+            DialogResult result = Debug.ShowMessage(
             "Are you sure you want to discard changes and close this form?",
             "Confirm Discard Changes",
             MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question);
+            MessageBoxIcon.Question, DialogResult.Yes);
 
             if (result == DialogResult.Yes)
                 this.Close();
@@ -614,8 +616,13 @@ public partial class FormGPEQ : Form
         // Configure magnitude axis (primary Y-axis)
         chartArea.AxisY.Interval = 12;
         chartArea.AxisY.IntervalType = DateTimeIntervalType.Number;
-        chartArea.AxisY.Maximum = double.Parse(this.maxdB_TXT.Text);
-        chartArea.AxisY.Minimum = double.Parse(this.mindB_TXT.Text);
+        //DEFECT FIX: double.Parse on user-editable text boxes escalated a half-typed value into
+        //the "A fatal error has occured / abort the app?" dialog. Fall back to the existing axis
+        //bounds when the text is not a valid number.
+        if (double.TryParse(this.maxdB_TXT.Text, out double Local_MaxDb))
+            chartArea.AxisY.Maximum = Local_MaxDb;
+        if (double.TryParse(this.mindB_TXT.Text, out double Local_MinDb))
+            chartArea.AxisY.Minimum = Local_MinDb;
         chartArea.AxisY.MinorGrid.Enabled = true;
         chartArea.AxisY.MinorGrid.Interval = 3;
         chartArea.AxisY.Title = "Magnitude (dB)";

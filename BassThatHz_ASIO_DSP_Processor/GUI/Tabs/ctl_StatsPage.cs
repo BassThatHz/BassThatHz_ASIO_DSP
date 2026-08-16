@@ -7,6 +7,7 @@ using NAudio.Wave.Asio;
 #region Usings
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -76,6 +77,68 @@ public partial class ctl_StatsPage : UserControl
     protected long No_GC_CleanupLimitMB = 900L;
     #endregion
 
+    #region Per-tick label caches
+    //PERF: Update_Stats_Timer_Tick runs every second and used to allocate ~16 strings per tick
+    //(plus a Label.Text set + repaint each) regardless of whether anything had actually changed.
+    //These caches hold the LAST RAW VALUE so the ToString() is skipped entirely when it repeats,
+    //which is the steady state whenever the DSP is idle.
+    private long Last_RAM_Limit_MB = long.MinValue;
+    private string? Last_RAM_Limit_Text;
+    private long Last_RAM_MB = long.MinValue;
+    private ProcessPriorityClass Last_PriorityClass = (ProcessPriorityClass)int.MinValue;
+    private int Last_Underruns = int.MinValue;
+    private int Last_UI_ThreadID = int.MinValue;
+    private int Last_ASIO_ThreadID = int.MinValue;
+    private int Last_TotalStreams = int.MinValue;
+    private int Last_FilterCount = int.MinValue;
+    private int Last_EnabledFilterCount = int.MinValue;
+    private double Last_InputBufferConversion_ms = double.NaN;
+    private double Last_OutputBufferConversion_ms = double.NaN;
+    private double Last_TotalDSP_ms = double.NaN;
+    private double Last_DSP_ms = double.NaN;
+    private double Last_AverageDSP_ms = double.NaN;
+    private double Last_MaxDSP_ms = double.NaN;
+    private double Last_CurrentLoad_pct = double.NaN;
+    private double Last_AverageLoad_pct = double.NaN;
+    private double Last_MaxLoad_pct = double.NaN;
+    private TimeSpan Last_AppUpTime = TimeSpan.MinValue;
+    private TimeSpan Last_DSPRunTime = TimeSpan.MinValue;
+    #endregion
+
+    #endregion
+
+    #region Per-tick Label Helpers
+    /// <summary>
+    /// Sets a label from a double only when the source value actually changed, so the
+    /// ToString allocation and the WinForms text-change/repaint are both skipped otherwise.
+    /// </summary>
+    /// <param name="label">The label to update.</param>
+    /// <param name="value">The current value.</param>
+    /// <param name="format">The numeric format string.</param>
+    /// <param name="cache">The caller's cache of the previously rendered value.</param>
+    private static void SetTextIfChanged(Control label, double value, string format, ref double cache)
+    {
+        if (value.Equals(cache)) //Equals (not ==) so NaN == NaN compares true for the seed value.
+            return;
+
+        cache = value;
+        label.Text = value.ToString(format);
+    }
+
+    /// <summary>
+    /// Sets a label from an int only when the source value actually changed.
+    /// </summary>
+    /// <param name="label">The label to update.</param>
+    /// <param name="value">The current value.</param>
+    /// <param name="cache">The caller's cache of the previously rendered value.</param>
+    private static void SetTextIfChanged(Control label, int value, ref int cache)
+    {
+        if (value == cache)
+            return;
+
+        cache = value;
+        label.Text = value.ToString(CultureInfo.InvariantCulture);
+    }
     #endregion
 
     #region Constructor
@@ -144,7 +207,7 @@ public partial class ctl_StatsPage : UserControl
 
             if (String.IsNullOrEmpty(DSPInfo.ASIO_InputDevice))
             {
-                _ = MessageBox.Show("Cannot start. No ASIO Device found.");
+                _ = BassThatHz_ASIO_DSP_Processor.Debug.ShowMessage("Cannot start. No ASIO Device found.");
                 return;
             }
 
@@ -156,7 +219,7 @@ public partial class ctl_StatsPage : UserControl
             catch (Exception ex)
             {
                 _ = ex;
-                _ = MessageBox.Show("Cannot start. Can't fetch Driver Capabilities.");
+                _ = BassThatHz_ASIO_DSP_Processor.Debug.ShowMessage("Cannot start. Can't fetch Driver Capabilities.");
             }
             if (Capabilities == null)
                 return;
@@ -314,10 +377,28 @@ public partial class ctl_StatsPage : UserControl
                 this.TrySetNoGC_Limit();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort; ignore failures here
+            // Best-effort working-set poll; recorded rather than silently discarded.
+            BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
         }
+    }
+
+    /// <summary>
+    /// Sets the RAM-limit label, skipping the format when the value has not changed.
+    /// Avoids the per-call boxing of <c>long + string</c> (String.Concat(object, object)).
+    /// </summary>
+    protected void Set_RAM_Limit_Text()
+    {
+        if (this.No_GC_CleanupLimitMB == this.Last_RAM_Limit_MB && this.Last_RAM_Limit_Text != null)
+        {
+            this.lblRAM_Limit.Text = this.Last_RAM_Limit_Text;
+            return;
+        }
+
+        this.Last_RAM_Limit_MB = this.No_GC_CleanupLimitMB;
+        this.Last_RAM_Limit_Text = this.No_GC_CleanupLimitMB.ToString(CultureInfo.InvariantCulture) + "MB";
+        this.lblRAM_Limit.Text = this.Last_RAM_Limit_Text;
     }
 
     protected void TrySetNoGC_Limit()
@@ -326,8 +407,7 @@ public partial class ctl_StatsPage : UserControl
         {
             if (this.No_GC_Set)
             {
-                GC.EndNoGCRegion();
-                this.No_GC_Set = false;
+                this.TryEndNoGCRegion();
                 GC.Collect();
             }
 
@@ -347,14 +427,41 @@ public partial class ctl_StatsPage : UserControl
                 this.No_GC_CleanupLimitMB = this.No_GC_Set ? 1000L : 900L;
             }
 
-            this.lblRAM_Limit.Text = this.No_GC_CleanupLimitMB + "MB";
+            this.Set_RAM_Limit_Text();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // If TryStartNoGCRegion throws or fails for any reason, ensure flags reflect that
-            this.No_GC_Set = false;
+            //DEFECT FIX: this used to blindly record No_GC_Set = false. TryStartNoGCRegion throws
+            //InvalidOperationException when a no-GC region is ALREADY in progress, so the old code
+            //claimed the GC was enabled while it was in fact still suppressed - unbounded working
+            //set growth in a long-running real-time audio process. Ask the runtime instead of
+            //guessing, and make the failure observable.
+            BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
+            this.No_GC_Set = GCSettings.LatencyMode == GCLatencyMode.NoGCRegion;
             this.No_GC_CleanupLimitMB = 900L;
-            this.lblRAM_Limit.Text = this.No_GC_CleanupLimitMB + "MB";
+            this.Set_RAM_Limit_Text();
+        }
+    }
+
+    /// <summary>
+    /// Ends the no-GC region if one is active, keeping <see cref="No_GC_Set"/> in sync with the
+    /// runtime's actual latency mode rather than with what the caller assumed.
+    /// </summary>
+    protected void TryEndNoGCRegion()
+    {
+        try
+        {
+            if (GCSettings.LatencyMode == GCLatencyMode.NoGCRegion)
+                GC.EndNoGCRegion();
+        }
+        catch (Exception ex)
+        {
+            //The runtime may already have exited the region on its own (budget exhausted).
+            BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
+        }
+        finally
+        {
+            this.No_GC_Set = GCSettings.LatencyMode == GCLatencyMode.NoGCRegion;
         }
     }
     
@@ -363,19 +470,25 @@ public partial class ctl_StatsPage : UserControl
         //If on, turn off
         if (this.No_GC_Set)
         {
-            GC.EndNoGCRegion();
-            this.No_GC_Set = false;
+            //DEFECT FIX: GC.EndNoGCRegion() throws InvalidOperationException when the runtime has
+            //already exited the region on its own (budget exhausted). Unguarded, that escaped a
+            //CheckedChanged handler that has no try/catch of its own.
+            this.TryEndNoGCRegion();
             this.NoGC_Timer.Enabled = false;
         }
 
         if (this.chkNoGCMode.Checked)
         {
-            var result = MessageBox.Show("This is an experimental feature which disables the\n" +
+            //Suppressed (non-interactive/test) default is Cancel: never silently reserve 1-2GB
+            //of NoGC region when nobody is there to confirm it.
+            var result = BassThatHz_ASIO_DSP_Processor.Debug.ShowMessage(
+                                          "This is an experimental feature which disables the\n" +
                                           ".Net memory-manager for processing of critical audio.\n" +
-                                          "This trades high memory usage for less audio glitches.\n" + 
+                                          "This trades high memory usage for less audio glitches.\n" +
                                           "This is useful for critical audio sessions.\n" +
                                           "It can use up to 1-2gb of additional ram. Would you like to try it?"
-                                    , "Warning", MessageBoxButtons.OKCancel, MessageBoxIcon.Exclamation);
+                                    , "Warning", MessageBoxButtons.OKCancel, MessageBoxIcon.Exclamation,
+                                    DialogResult.Cancel);
             if (result == DialogResult.OK)
             {
                 this.TrySetNoGC_Limit();
@@ -458,8 +571,8 @@ public partial class ctl_StatsPage : UserControl
         var Lat = Program.ASIO.PlaybackLatency;
         if (Lat != null)
         {
-            this.Input_Lat_ms = (double)Lat.Item1 / (double)Program.ASIO.SampleRate_Current * 1000;
-            this.Output_Lat_ms = (double)Lat.Item2 / (double)Program.ASIO.SampleRate_Current * 1000;
+            this.Input_Lat_ms = (double)Lat.Value.InputLatency / (double)Program.ASIO.SampleRate_Current * 1000;
+            this.Output_Lat_ms = (double)Lat.Value.OutputLatency / (double)Program.ASIO.SampleRate_Current * 1000;
 
             this.lbl_ASIO_Input_Latency.Text = Math.Round(this.Input_Lat_ms, 4).ToString(this.ms_TimeFormat);
             this.lbl_ASIO_Output_Latency.Text = Math.Round(this.Output_Lat_ms, 4).ToString(this.ms_TimeFormat);
@@ -487,15 +600,28 @@ public partial class ctl_StatsPage : UserControl
         {
             // Refresh cached process info to get up-to-date values without allocating
             this.CurrentProcess.Refresh();
-            this.lbl_ProcessPriorityLevel.Text = this.CurrentProcess.PriorityClass.ToString();
+
+            //PERF: PriorityClass only changes on user action, but the enum-to-string allocated a
+            //fresh string every single tick.
+            var Local_Priority = this.CurrentProcess.PriorityClass;
+            if (Local_Priority != this.Last_PriorityClass)
+            {
+                this.Last_PriorityClass = Local_Priority;
+                this.lbl_ProcessPriorityLevel.Text = Local_Priority.ToString();
+            }
 
             long totalBytesOfMemoryUsed_MB = this.CurrentProcess.WorkingSet64 / 1024 / 1024;
-            this.lblRAM.Text = totalBytesOfMemoryUsed_MB.ToString();
+            if (totalBytesOfMemoryUsed_MB != this.Last_RAM_MB)
+            {
+                this.Last_RAM_MB = totalBytesOfMemoryUsed_MB;
+                this.lblRAM.Text = totalBytesOfMemoryUsed_MB.ToString(CultureInfo.InvariantCulture);
+            }
         }
         catch (Exception ex)
         {
-            // If anything goes wrong, report via error helper but don't throw from UI timer
-            _ = ex;
+            //DEFECT FIX: the old comment claimed this reported via the error helper, but the body
+            //was a bare '_ = ex;'. Do not throw from a UI timer, but do keep it observable.
+            BassThatHz_ASIO_DSP_Processor.Debug.ReportSwallowed(ex);
         }
     }
     protected void Show_CPU_Usage()
@@ -517,42 +643,75 @@ public partial class ctl_StatsPage : UserControl
         TimeSpan outputBufferTime = asio.OutputBufferConversion_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
         TimeSpan dspProcessingTime = asio.DSP_ProcessingTime?.Elapsed ?? TimeSpan.Zero;
 
-        this.lbl_InputBufferConversionLatency.Text = inputBufferTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
-        this.lbl_OutputBufferConversionLatency.Text = outputBufferTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
-        this.lbl_TotalDSP_Processing_Latency.Text = dspProcessingTime.TotalMilliseconds.ToString(this.ms_TimeFormat);
-
-        this.lbl_DSP_Processing_Latency.Text = (dspProcessingTime - inputBufferTime - outputBufferTime).TotalMilliseconds.ToString(this.ms_TimeFormat);
+        //PERF: 9 unconditional string allocations + 9 Label.Text sets per tick became 9 cheap
+        //double comparisons; nothing is formatted unless the underlying value moved.
+        SetTextIfChanged(this.lbl_InputBufferConversionLatency, inputBufferTime.TotalMilliseconds,
+                         this.ms_TimeFormat, ref this.Last_InputBufferConversion_ms);
+        SetTextIfChanged(this.lbl_OutputBufferConversionLatency, outputBufferTime.TotalMilliseconds,
+                         this.ms_TimeFormat, ref this.Last_OutputBufferConversion_ms);
+        SetTextIfChanged(this.lbl_TotalDSP_Processing_Latency, dspProcessingTime.TotalMilliseconds,
+                         this.ms_TimeFormat, ref this.Last_TotalDSP_ms);
+        SetTextIfChanged(this.lbl_DSP_Processing_Latency,
+                         (dspProcessingTime - inputBufferTime - outputBufferTime).TotalMilliseconds,
+                         this.ms_TimeFormat, ref this.Last_DSP_ms);
 
         // Update averages/peaks
         this.AverageDSP_Processing_Lat_ms = (this.TotalDSP_Processing_Lat_ms + dspProcessingTime.TotalMilliseconds) * 0.5;
         this.TotalDSP_Processing_Lat_ms = dspProcessingTime.TotalMilliseconds;
-        this.lbl_Average_DSP_Latency.Text = this.AverageDSP_Processing_Lat_ms.ToString(this.ms_TimeFormat);
+        SetTextIfChanged(this.lbl_Average_DSP_Latency, this.AverageDSP_Processing_Lat_ms,
+                         this.ms_TimeFormat, ref this.Last_AverageDSP_ms);
 
         this.MaxDSP_Processing_Lat_ms = asio.DSP_PeakProcessingTime.TotalMilliseconds;
-        this.lbl_Max_Detected_DSP_Latency.Text = this.MaxDSP_Processing_Lat_ms.ToString(this.ms_TimeFormat);
+        SetTextIfChanged(this.lbl_Max_Detected_DSP_Latency, this.MaxDSP_Processing_Lat_ms,
+                         this.ms_TimeFormat, ref this.Last_MaxDSP_ms);
 
         // Avoid Div by 0 error.
         if (this.BufferSize_Lat_ms > 0)
         {
-            this.lbl_Current_DSP_Load.Text = (this.TotalDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100).ToString(this.Percentage_StringFormat);
-            this.lbl_Average_DSP_Load.Text = (this.AverageDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100).ToString(this.Percentage_StringFormat);
-            this.lbl_Max_DSP_Load.Text = (this.MaxDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100).ToString(this.Percentage_StringFormat);
+            SetTextIfChanged(this.lbl_Current_DSP_Load, this.TotalDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100,
+                             this.Percentage_StringFormat, ref this.Last_CurrentLoad_pct);
+            SetTextIfChanged(this.lbl_Average_DSP_Load, this.AverageDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100,
+                             this.Percentage_StringFormat, ref this.Last_AverageLoad_pct);
+            SetTextIfChanged(this.lbl_Max_DSP_Load, this.MaxDSP_Processing_Lat_ms / this.BufferSize_Lat_ms * 100,
+                             this.Percentage_StringFormat, ref this.Last_MaxLoad_pct);
         }
     }
 
     protected void Show_Total_Streams()
     {
-        this.lbl_TotalStreams.Text = Program.DSP_Info.Streams.Count.ToString();
+        SetTextIfChanged(this.lbl_TotalStreams, Program.DSP_Info.Streams.Count, ref this.Last_TotalStreams);
     }
 
     protected void Show_UpTimes()
     {
-        this.lbl_AppUpTime.Text = (DateTime.Now - Program.App_StartTime).ToString(this.TimeSpanFormat);
+        //PERF: TimeSpan.ToString(format) allocates; the label only changes once a second at most,
+        //so compare at whole-second resolution and skip the format when it has not ticked over.
+        var Local_Now = DateTime.Now;
 
+        var Local_AppUpTime = Local_Now - Program.App_StartTime;
+        if (Local_AppUpTime.Seconds != this.Last_AppUpTime.Seconds
+            || Local_AppUpTime.Days != this.Last_AppUpTime.Days
+            || Local_AppUpTime.Hours != this.Last_AppUpTime.Hours
+            || Local_AppUpTime.Minutes != this.Last_AppUpTime.Minutes)
+        {
+            this.Last_AppUpTime = Local_AppUpTime;
+            this.lbl_AppUpTime.Text = Local_AppUpTime.ToString(this.TimeSpanFormat);
+        }
+
+        TimeSpan Local_RunTime;
         if (this.DSP_StartTime != DateTime.MinValue && this.DSP_StopTime == DateTime.MinValue)
-            this.lbl_DSPRunTime.Text = (DateTime.Now - this.DSP_StartTime).ToString(this.TimeSpanFormat);
+            Local_RunTime = Local_Now - this.DSP_StartTime;
         else
-            this.lbl_DSPRunTime.Text = (this.DSP_StopTime - this.DSP_StartTime).ToString(this.TimeSpanFormat);
+            Local_RunTime = this.DSP_StopTime - this.DSP_StartTime;
+
+        if (Local_RunTime.Seconds != this.Last_DSPRunTime.Seconds
+            || Local_RunTime.Days != this.Last_DSPRunTime.Days
+            || Local_RunTime.Hours != this.Last_DSPRunTime.Hours
+            || Local_RunTime.Minutes != this.Last_DSPRunTime.Minutes)
+        {
+            this.Last_DSPRunTime = Local_RunTime;
+            this.lbl_DSPRunTime.Text = Local_RunTime.ToString(this.TimeSpanFormat);
+        }
     }
 
     protected void Show_Total_DSP_Filters()
@@ -565,16 +724,22 @@ public partial class ctl_StatsPage : UserControl
             var streams = Program.DSP_Info?.Streams;
             if (streams != null)
             {
-                foreach (var stream in streams)
+                //PERF: ObservableCollection<T> derives from Collection<T>, which has no public
+                //struct enumerator - 'foreach' here boxed an IEnumerator<T> on the heap every tick.
+                //Index instead.
+                for (int s = 0; s < streams.Count; s++)
                 {
+                    var stream = streams[s];
                     if (stream == null || stream.Filters == null || stream.InputSource == null || stream.OutputDestination == null)
                         continue;
 
                     if (stream.InputSource.Index == -1 || stream.OutputDestination.Index == -1)
                         continue;
 
-                    foreach (var filter in stream.Filters)
+                    var Local_Filters = stream.Filters;
+                    for (int f = 0; f < Local_Filters.Count; f++)
                     {
+                        var filter = Local_Filters[f];
                         if (filter == null) continue;
                         FilterCount++;
                         if (filter.FilterEnabled) EnabledFilterCount++;
@@ -589,18 +754,20 @@ public partial class ctl_StatsPage : UserControl
             //Once they stop messing with the config, the stats will show up correctly on the next pass
             _ = ex;
         }
-        this.lbl_Total_DSP_Filters.Text = FilterCount.ToString();
-        this.lbl_Total_Enabled_DSP_Filters.Text = EnabledFilterCount.ToString();
+
+        SetTextIfChanged(this.lbl_Total_DSP_Filters, FilterCount, ref this.Last_FilterCount);
+        SetTextIfChanged(this.lbl_Total_Enabled_DSP_Filters, EnabledFilterCount, ref this.Last_EnabledFilterCount);
     }
 
     protected void Show_Underruns()
     {
-        this.lbl_Underruns.Text = Program.ASIO.Underruns.ToString();
+        SetTextIfChanged(this.lbl_Underruns, Program.ASIO.Underruns, ref this.Last_Underruns);
     }
     protected void Show_ThreadID()
     {
-        this.lbl_UI_Thread_ID.Text = Thread.CurrentThread.ManagedThreadId.ToString();
-        this.lbl_ASIO_Thread_ID.Text = Program.ASIO.ASIO_THreadID.ToString();
+        //PERF: the UI thread id never changes, and the ASIO thread id changes only on start/stop.
+        SetTextIfChanged(this.lbl_UI_Thread_ID, Environment.CurrentManagedThreadId, ref this.Last_UI_ThreadID);
+        SetTextIfChanged(this.lbl_ASIO_Thread_ID, Program.ASIO.ASIO_THreadID, ref this.Last_ASIO_ThreadID);
     }
 
     #endregion

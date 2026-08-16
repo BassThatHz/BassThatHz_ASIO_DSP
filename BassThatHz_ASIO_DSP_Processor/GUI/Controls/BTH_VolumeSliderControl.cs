@@ -93,8 +93,12 @@ public partial class BTH_VolumeSliderControl : UserControl
             if (this._volume != TempVal)
             {
                 this._volume = TempVal;
-                this.lblDB.Text = String.Format("{0:F2} dB", this.VolumedB);
-                this.txtDB.Text = String.Format("{0:F2}", this.VolumedB);
+                //PERF: String.Format(string, object) BOXES the double on every change. This setter
+                //is driven by the 500 ms RefreshTimer_Tick of five filter controls, so use the
+                //allocation-free double.ToString(format) overload instead.
+                var Local_VolumeDb = this.VolumedB;
+                this.lblDB.Text = Local_VolumeDb.ToString("F2") + " dB";
+                this.txtDB.Text = Local_VolumeDb.ToString("F2");
                 this.VolumeChanged?.Invoke(this, EventArgs.Empty);
                 this.Invalidate();
             }

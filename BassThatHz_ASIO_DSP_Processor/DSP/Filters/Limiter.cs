@@ -52,6 +52,21 @@ public class Limiter : IFilter
     protected double ReleaseCoeff = 1;
     protected double Gain_Linear = 1;
     protected double SampleRate = 1;
+
+    /// <summary>
+    /// The largest double strictly below 1.0 (that is, 1 - 2^-53): the "just below full scale"
+    /// output ceiling both output clamps in <see cref="Transform"/> were written to express.
+    /// </summary>
+    /// <remarks>
+    /// Both clamps originally read <c>double limit = 1.0 - double.Epsilon;</c>, which does NOT
+    /// express that. <c>double.Epsilon</c> is the smallest positive SUBNORMAL (about 4.9e-324),
+    /// which is far below the ULP of 1.0 (about 2.2e-16), so <c>1.0 - double.Epsilon</c> rounds
+    /// straight back to exactly 1.0 and the intended sub-unity ceiling never existed - the limiter
+    /// was free to emit a sample of exactly full scale. <see cref="Math.BitDecrement(double)"/> of
+    /// 1.0 is the value that was meant, and it keeps the output strictly inside full scale so a
+    /// downstream converter cannot wrap at 0 dBFS.
+    /// </remarks>
+    private static readonly double OutputCeiling = Math.BitDecrement(1.0);
     #endregion
 
     #region Public Functions
@@ -125,11 +140,25 @@ public class Limiter : IFilter
 
             if (gainReductionLinear < 1.0)
             {
-                double limit = 1.0 - double.Epsilon;
+                // CLAMP FIX (brickwall path) - the previous lines were
+                //     double limit = 1.0 - double.Epsilon;
+                //     input[i] = v < limit ? v : limit;
+                // which carried TWO defects:
+                //  (a) the ceiling did not exist. 1.0 - double.Epsilon is exactly 1.0, because
+                //      double.Epsilon is the smallest positive SUBNORMAL (~4.9e-324) and is far
+                //      below the ULP of 1.0 (~2.2e-16), so the subtraction rounds straight back to
+                //      1.0. The "just below full scale" guard was really a full-scale guard, and a
+                //      sample of exactly 1.0 could leave the limiter. See OutputCeiling.
+                //  (b) the clamp was ONE-SIDED. `v < limit ? v : limit` is Math.Min, which bounds
+                //      only from above, so the NEGATIVE side had no bound at all.
+                // This is a hard output ceiling, not a soft-knee target - the gain reduction itself
+                // is gainReductionLinear2, applied by the multiply above - so the correct form is a
+                // symmetric Math.Clamp against +/-OutputCeiling. Anything already inside the
+                // ceiling is returned untouched, bit for bit, so normal audio is not perturbed.
                 for (int i = 0; i < len; i++)
                 {
                     double v = input[i] * gainReductionLinear2;
-                    input[i] = v < limit ? v : limit;
+                    input[i] = Math.Clamp(v, -OutputCeiling, OutputCeiling);
                 }
             }
         }
@@ -163,11 +192,19 @@ public class Limiter : IFilter
 
             if (gainLinearLocal < 1.0)
             {
-                double limit = 1.0 - double.Epsilon;
+                // CLAMP FIX (smoothed / soft-knee path) - identical defect to the brickwall clamp
+                // above: 1.0 - double.Epsilon is exactly 1.0 (double.Epsilon is the smallest
+                // positive SUBNORMAL, ~4.9e-324, far below the ULP of 1.0, ~2.2e-16), so no
+                // sub-unity ceiling existed, and `v < limit ? v : limit` is Math.Min, so the
+                // negative side was unbounded.
+                // The soft-knee/attack-release shaping lives in gainLinearLocal and is applied by
+                // the multiply below; `limit` was only ever the hard output bound applied AFTER it.
+                // So the constant is corrected AND the bound made symmetric, exactly as in the
+                // brickwall path. In-range audio is returned bit for bit unchanged.
                 for (int i = 0; i < len; i++)
                 {
                     double v = input[i] * gainLinearLocal;
-                    input[i] = v < limit ? v : limit;
+                    input[i] = Math.Clamp(v, -OutputCeiling, OutputCeiling);
                 }
             }
 

@@ -31,7 +31,12 @@ namespace BassThatHz_ASIO_DSP_Processor
         /// </summary>
         protected void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormMain));
+            SysTrayMenu = new System.Windows.Forms.ContextMenuStrip(components);
+            SysTrayMenu_Open = new System.Windows.Forms.ToolStripMenuItem();
+            SysTrayMenu_Close = new System.Windows.Forms.ToolStripMenuItem();
+            SysTrayIcon = new System.Windows.Forms.NotifyIcon(components);
             tabControl1 = new System.Windows.Forms.TabControl();
             GeneralConfigPage = new System.Windows.Forms.TabPage();
             ctl_GeneralConfigPage1 = new ctl_GeneralConfigPage();
@@ -58,10 +63,39 @@ namespace BassThatHz_ASIO_DSP_Processor
             DSPConfigPage.SuspendLayout();
             StatsPage.SuspendLayout();
             Monitor.SuspendLayout();
+            SysTrayMenu.SuspendLayout();
             SuspendLayout();
-            // 
+            //
+            // SysTrayMenu
+            //
+            SysTrayMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { SysTrayMenu_Open, SysTrayMenu_Close });
+            SysTrayMenu.Name = "SysTrayMenu";
+            SysTrayMenu.Size = new System.Drawing.Size(104, 48);
+            //
+            // SysTrayMenu_Open
+            //
+            SysTrayMenu_Open.Name = "SysTrayMenu_Open";
+            SysTrayMenu_Open.Size = new System.Drawing.Size(103, 22);
+            SysTrayMenu_Open.Text = "Open";
+            SysTrayMenu_Open.Click += SysTrayMenu_Open_Click;
+            //
+            // SysTrayMenu_Close
+            //
+            SysTrayMenu_Close.Name = "SysTrayMenu_Close";
+            SysTrayMenu_Close.Size = new System.Drawing.Size(103, 22);
+            SysTrayMenu_Close.Text = "Close";
+            SysTrayMenu_Close.Click += SysTrayMenu_Close_Click;
+            //
+            // SysTrayIcon
+            //
+            SysTrayIcon.ContextMenuStrip = SysTrayMenu;
+            SysTrayIcon.Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
+            SysTrayIcon.Text = "BassThatHz ASIO DSP Processor";
+            SysTrayIcon.Visible = false;
+            SysTrayIcon.DoubleClick += SysTrayIcon_DoubleClick;
+            //
             // tabControl1
-            // 
+            //
             tabControl1.Controls.Add(GeneralConfigPage);
             tabControl1.Controls.Add(InputsConfigPage);
             tabControl1.Controls.Add(OutputsConfigPage);
@@ -253,9 +287,11 @@ namespace BassThatHz_ASIO_DSP_Processor
             Margin = new System.Windows.Forms.Padding(2);
             MinimumSize = new System.Drawing.Size(836, 320);
             Name = "FormMain";
-            Text = "BassThatHz_ASIO_DSP_Processor 2.0.5  Alpha";
+            Text = "BassThatHz_ASIO_DSP_Processor 2.0.6  Alpha";
             WindowState = System.Windows.Forms.FormWindowState.Maximized;
+            FormClosing += FormMain_FormClosing;
             Load += FormMain_Load;
+            SysTrayMenu.ResumeLayout(false);
             tabControl1.ResumeLayout(false);
             GeneralConfigPage.ResumeLayout(false);
             InputsConfigPage.ResumeLayout(false);
@@ -287,5 +323,9 @@ namespace BassThatHz_ASIO_DSP_Processor
         protected GUI.Tabs.ctl_UpmixerPage ctl_UpmixerPage1;
         protected System.Windows.Forms.TabPage BusesPage;
         protected System.Windows.Forms.TabPage Upmixer;
+        protected System.Windows.Forms.NotifyIcon SysTrayIcon;
+        protected System.Windows.Forms.ContextMenuStrip SysTrayMenu;
+        protected System.Windows.Forms.ToolStripMenuItem SysTrayMenu_Open;
+        protected System.Windows.Forms.ToolStripMenuItem SysTrayMenu_Close;
     }
 }

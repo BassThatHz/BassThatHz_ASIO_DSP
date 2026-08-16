@@ -115,5 +115,56 @@ namespace Test_Project_1.ExtendedXMLSerializer
             var def = new TypeDefinition(typeof(SimplePoco));
             Assert.AreEqual(typeof(SimplePoco).FullName, def.FullName);
         }
+
+        // ---------------------------------------------------------------------------------
+        // Regression coverage for the allocation pass: GetProperty was
+        // Properties.FirstOrDefault(p => p.Name == name), which allocated a closure AND a
+        // delegate on every call (once per XML element per deserialize). It is now an indexed
+        // loop. These tests pin the exact "first match, else null" contract, including the
+        // ordinal/case-sensitive comparison and the empty-Properties case.
+        // ---------------------------------------------------------------------------------
+
+        [TestMethod]
+        public void GetProperty_FindsEveryDeclaredProperty()
+        {
+            var def = new TypeDefinition(typeof(SimplePoco));
+            Assert.IsNotNull(def.Properties);
+
+            for (int Local_i = 0; Local_i < def.Properties.Count; Local_i++)
+            {
+                var Local_Expected = def.Properties[Local_i];
+                var Local_Actual = def.GetProperty(Local_Expected.Name);
+                Assert.AreSame(Local_Expected, Local_Actual, "GetProperty failed for " + Local_Expected.Name);
+            }
+        }
+
+        [TestMethod]
+        public void GetProperty_ReturnsFirstMatch()
+        {
+            var def = new TypeDefinition(typeof(SimplePoco));
+            Assert.IsNotNull(def.Properties);
+
+            var Local_First = def.Properties[0];
+            Assert.AreSame(Local_First, def.GetProperty(Local_First.Name));
+        }
+
+        [TestMethod]
+        public void GetProperty_IsCaseSensitive()
+        {
+            var def = new TypeDefinition(typeof(SimplePoco));
+            Assert.IsNotNull(def.GetProperty("IntValue"));
+            Assert.IsNull(def.GetProperty("intvalue"));
+            Assert.IsNull(def.GetProperty("INTVALUE"));
+        }
+
+        [TestMethod]
+        public void GetProperty_OnTypeWithNoProperties_ReturnsNull()
+        {
+            // A primitive definition never populates Properties at all, so GetProperty must
+            // tolerate a null list rather than throwing.
+            var def = new TypeDefinition(typeof(int));
+            Assert.IsNull(def.Properties);
+            Assert.IsNull(def.GetProperty("Anything"));
+        }
     }
 }

@@ -82,7 +82,7 @@ public partial class GPEQControl : UserControl, IFilterControl
             }
         };
 
-        form.Show(this);
+        Debug.ShowFormSafe(form, this);
     }
     #endregion
 
@@ -139,7 +139,13 @@ public partial class GPEQControl : UserControl, IFilterControl
     #endregion
 
     #region Error Handling
-    protected void Error(Exception ex)
+    /// <summary>
+    /// Reports an exception raised inside this control. Virtual purely as a testability seam so a
+    /// test double can observe the error instead of hiding it with `new` (a hidden method is never
+    /// reached, because this class calls this.Error(...) through its own static type).
+    /// </summary>
+    /// <param name="ex">The exception to report.</param>
+    protected virtual void Error(Exception ex)
     {
         Debug.Error(ex);
     }

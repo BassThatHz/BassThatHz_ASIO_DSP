@@ -60,12 +60,31 @@ public partial class FilterControl : UserControl
     #endregion
 
     #region Constructor
-    public FilterControl()
+    public FilterControl() : this(false)
+    {
+    }
+
+    /// <summary>
+    /// Creates a FilterControl, optionally deferring the initial filter creation.
+    /// </summary>
+    /// <param name="deferInitialFilterCreation">
+    /// When true, assigning the ComboBox DataSource does NOT synchronously create the default
+    /// filter, so the owner can subscribe to <see cref="FilterCreated"/>/<see cref="FilterDiscarded"/>
+    /// first and then call <see cref="CreateInitialFilter"/>. Without this the very first
+    /// FilterCreated notification is raised inside the constructor and is silently lost.
+    /// </param>
+    public FilterControl(bool deferInitialFilterCreation)
     {
         InitializeComponent();
 
+        //Suppress the SelectedIndexChanged handler for the duration of the DataSource
+        //assignment below, which otherwise fires CreateNewFilter() before anyone can subscribe.
+        this.Handle_cboFilterType_SelectedIndexChanged = !deferInitialFilterCreation;
+
         // Use DataSource to avoid extra allocations/boxing from Cast<object>().ToArray()
         this.cboFilterType.DataSource = Enum.GetValues(typeof(FilterTypes));
+
+        this.Handle_cboFilterType_SelectedIndexChanged = true;
     }
     #endregion
 
@@ -100,6 +119,18 @@ public partial class FilterControl : UserControl
     #endregion
 
     #region Public Functions
+    /// <summary>
+    /// Creates the default filter for the currently selected filter type, raising
+    /// <see cref="FilterDiscarded"/> and <see cref="FilterCreated"/>. Intended to be called by
+    /// the owning control after it has subscribed, when the control was constructed with
+    /// deferInitialFilterCreation = true.
+    /// </summary>
+    public void CreateInitialFilter()
+    {
+        if (this.CurrentFilterControl == null)
+            this.CreateNewFilter();
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public void LoadConfigRefresh(IFilter input)
     {

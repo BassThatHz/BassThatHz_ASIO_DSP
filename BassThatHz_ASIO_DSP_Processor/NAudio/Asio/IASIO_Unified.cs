@@ -36,7 +36,12 @@ public interface IASIO_Unified : IDisposable
     AsioDriverCapability GetDriverCapabilities { get; }
     int DriverInputChannelCount { get; }
     int DriverOutputChannelCount { get; }
-    Tuple<int, int> PlaybackLatency { get; }
+    /// <summary>
+    /// The driver's reported hardware latencies, in samples.
+    /// A named ValueTuple so that reading it - which happens on a repeating stats timer -
+    /// does not heap-allocate the way the previous <c>Tuple&lt;int, int&gt;</c> did.
+    /// </summary>
+    (int InputLatency, int OutputLatency) PlaybackLatency { get; }
 
     // Public Methods
     string AsioInputChannelName(int channel);

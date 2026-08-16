@@ -44,6 +44,14 @@ public class NetworkConfigAPI
     #endregion
 
     #region Variables
+
+    /// <summary>
+    /// The last exception that terminated the listener loop (for example a port-in-use or
+    /// access-denied failure while starting). Null while the listener is healthy. Exposed so the
+    /// failure is observable instead of being silently swallowed.
+    /// </summary>
+    public Exception? LastListenerError { get; protected set; }
+
     protected HttpListener? Listener;
     public CancellationTokenSource? CancellationTokenSource;
     #endregion
@@ -114,22 +122,45 @@ public class NetworkConfigAPI
         }
         catch (Exception ex) //Error Handling
         {
-            _ = ex; //Debug networking errors here
+            //DEFECT FIX: this used to be a bare '_ = ex;'. Prefixes.Add/Start failures (port in
+            //use, or HttpListenerException 5 "Access denied" for a non-admin http://+:port/ prefix)
+            //were completely invisible: the user was left with the checkbox ticked and nothing
+            //listening. Record it so it is observable, and expose it to the caller.
+            this.LastListenerError = ex;
+            Debug.ReportSwallowed(ex);
         }
         finally
         {
             #region Exit Cleanup
+            //DEFECT FIX: Stop()/Close()/Dispose() here can throw ObjectDisposedException or
+            //HttpListenerException. Thrown from a finally, that exception escaped an
+            //already-handled method into an async void caller = unhandled UI-thread crash, and it
+            //also masked whatever was propagating. Cleanup is now individually guarded.
             //We are exiting, if the Listener is listening, stop and close it
-            if (this.Listener != null && this.Listener.IsListening)
+            try
             {
-                this.Listener.Stop();
-                this.Listener.Close();
+                if (this.Listener != null && this.Listener.IsListening)
+                {
+                    this.Listener.Stop();
+                    this.Listener.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.ReportSwallowed(ex);
             }
 
-            if (this.CancellationTokenSource != null && this.CancellationTokenSource.IsCancellationRequested)
+            try
             {
-                this.CancellationTokenSource.Dispose();
-                this.CancellationTokenSource = new CancellationTokenSource();
+                if (this.CancellationTokenSource != null && this.CancellationTokenSource.IsCancellationRequested)
+                {
+                    this.CancellationTokenSource.Dispose();
+                    this.CancellationTokenSource = new CancellationTokenSource();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.ReportSwallowed(ex);
             }
             #endregion
         }

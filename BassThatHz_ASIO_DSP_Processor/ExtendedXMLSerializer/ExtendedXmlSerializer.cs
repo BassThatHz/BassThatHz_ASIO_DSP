@@ -43,6 +43,22 @@ namespace ExtendedXmlSerialization
 
         protected readonly Dictionary<string, object> _referencesObjects = new Dictionary<string, object>();
         protected readonly Dictionary<string, object> _reservedReferencesObjects = new Dictionary<string, object>();
+
+        /// <summary>
+        /// Shared, immutable writer settings. These were previously rebuilt on every Serialize()
+        /// call - and Serialize() backs CommonFunctions.DeepClone&lt;T&gt;, so it is not a one-time
+        /// path. XmlWriter.Create never mutates the instance it is handed (it clones internally
+        /// when it needs a writable copy), so a single shared instance is safe to reuse and to
+        /// share across threads.
+        /// </summary>
+        protected static readonly XmlWriterSettings DefaultWriterSettings = new XmlWriterSettings
+        {
+            NewLineChars = Environment.NewLine,
+            Indent = true,
+            IndentChars = "  ",
+            Encoding = Encoding.UTF8,
+            DoNotEscapeUriAttributes = true
+        };
         /// <summary>
         /// Creates an instance of <see cref="ExtendedXmlSerializer"/>
         /// </summary>
@@ -80,14 +96,7 @@ namespace ExtendedXmlSerialization
             string xml;
             using (var ms = new MemoryStream())
             {
-                using (XmlWriter xw = XmlWriter.Create(ms, new XmlWriterSettings
-                {
-                    NewLineChars = Environment.NewLine,
-                    Indent = true,
-                    IndentChars = "  ",
-                    Encoding = Encoding.UTF8,
-                    DoNotEscapeUriAttributes = true
-                }))
+                using (XmlWriter xw = XmlWriter.Create(ms, DefaultWriterSettings))
                 {
                     WriteXml(xw, o, def);
                 }
@@ -103,7 +112,11 @@ namespace ExtendedXmlSerialization
         public void WriteXmlArray(object o, XmlWriter writer, TypeDefinition def, string name)
         {
             writer.WriteStartElement(name ?? def.Name);
-            List<string> toWriteReservedObject = new();
+            // Allocation: this list used to be built unconditionally for every array/list element
+            // written, even though it is only ever touched on the object-reference path. It is now
+            // created lazily so the common (no IsObjectReference configuration) case allocates
+            // nothing here at all.
+            List<string> toWriteReservedObject = null;
             var array =  o as Array;
             var list = o as IEnumerable;
             if (array != null || list != null)
@@ -120,6 +133,7 @@ namespace ExtendedXmlSerialization
                 var conf = GetConfiguration(type);
                 if (conf != null && conf.IsObjectReference)
                 {
+                    toWriteReservedObject = new List<string>();
                     foreach (var item in array ?? list)
                     {
                         var objectId = conf.GetObjectId(item);
@@ -140,7 +154,7 @@ namespace ExtendedXmlSerialization
                     {
                         var objectId = conf.GetObjectId(item);
                         var key = type.FullName + "_" + objectId;
-                        if (toWriteReservedObject.Contains(key))
+                        if (toWriteReservedObject != null && toWriteReservedObject.Contains(key))
                         {
                             writeReservedObject = true;
                         }
@@ -231,9 +245,9 @@ namespace ExtendedXmlSerialization
                     if (!string.IsNullOrEmpty(refId))
                     {
                         var key = currentNodeDef.FullName + "_" + refId;
-                        if (_referencesObjects.ContainsKey(key))
+                        if (_referencesObjects.TryGetValue(key, out var Local_Existing))
                         {
-                            return _referencesObjects[key];
+                            return Local_Existing;
                         }
                         _referencesObjects.Add(key, currentObject);
                     }
@@ -241,9 +255,9 @@ namespace ExtendedXmlSerialization
                     if (!string.IsNullOrEmpty(objectId))
                     {
                         var key = currentNodeDef.FullName + "_" + objectId;
-                        if (_referencesObjects.ContainsKey(key))
+                        if (_referencesObjects.TryGetValue(key, out var Local_Existing))
                         {
-                            currentObject = _referencesObjects[key];
+                            currentObject = Local_Existing;
                         }
                         else
                         {
@@ -264,10 +278,13 @@ namespace ExtendedXmlSerialization
                     throw new InvalidOperationException("Missing property " + currentNode.Name.LocalName + "\\" + localName);
                 }
                 var propertyDef = TypeDefinitionCache.GetDefinition(propertyInfo.Type);
-                if (xElement.HasAttributes && xElement.Attribute("type") != null)
+                // XElement.Attribute(name) is a linear scan of the attribute list; it was being
+                // walked twice per element. Resolve it once.
+                var Local_TypeAttribute = xElement.HasAttributes ? xElement.Attribute("type") : null;
+                if (Local_TypeAttribute != null)
                 {
-                    // If type of property is saved in xml, we need check type of object actual assigned to property. There may be a base type. 
-                    Type targetType = TypeDefinitionCache.GetType(xElement.Attribute("type").Value);
+                    // If type of property is saved in xml, we need check type of object actual assigned to property. There may be a base type.
+                    Type targetType = TypeDefinitionCache.GetType(Local_TypeAttribute.Value);
                     var targetTypeDef = TypeDefinitionCache.GetDefinition(targetType);
                     var obj = propertyInfo.GetValue(currentObject);
                     if (obj == null || obj.GetType() != targetType)
@@ -296,6 +313,16 @@ namespace ExtendedXmlSerialization
                 {
                     if (string.IsNullOrEmpty(value))
                     {
+                        // The element IS present (this loop only ever sees present elements), it
+                        // just has empty text. For a string property that means the value really
+                        // was "" and must be restored - skipping it silently left the property at
+                        // its default and lost data across a save/load round trip.
+                        // Other primitives (int, double, bool, enums, ...) cannot be parsed from an
+                        // empty string, so those are still skipped and keep their default.
+                        if (propertyInfo.Type == typeof(string))
+                        {
+                            propertyInfo.SetValue(currentObject, string.Empty);
+                        }
                         continue;
                     }
                     object primitive = PrimitiveValueTools.GetPrimitiveValue(value, propertyInfo.Type, xElement.Name.LocalName);
@@ -307,8 +334,11 @@ namespace ExtendedXmlSerialization
 
         public object ReadXmlArray(XElement currentNode, TypeDefinition type, object instance = null)
         {
-            int arrayCount = currentNode.Elements().Count();
+            // Allocation: this used to enumerate currentNode.Elements() TWICE - once for Count()
+            // and again for ToArray() - allocating two LINQ iterators and walking the whole child
+            // list twice. Materialise once and take the length from the array.
             var elements = currentNode.Elements().ToArray();
+            int arrayCount = elements.Length;
 
             object list = null;
             Array array = null;
@@ -357,88 +387,86 @@ namespace ExtendedXmlSerialization
 
         public void WriteXml(XmlWriter writer, object o, TypeDefinition type, string name = null, bool writeReservedObject = false)
         {
-            try
+            // NOTE: this method deliberately does NOT catch exceptions. It used to be wrapped in
+            // `catch (Exception ex) { _ = ex; }`, which silently abandoned serialization part-way
+            // through and handed the caller a TRUNCATED config file that looked like a successful
+            // save. This class persists the user's whole DSP configuration (and backs
+            // CommonFunctions.DeepClone<T>), so a failure here must surface to the caller.
+            if (type.IsPrimitive)
             {
-                if (type.IsPrimitive)
-                {
-                    WriteXmlPrimitive(o, writer, type, name);
-                    return;
-                }
-                if (type.IsArray || type.IsEnumerable)
-                {
-                    WriteXmlArray(o, writer, type, name);
-                    return;
-                }
-                writer.WriteStartElement(name ?? type.Name);
-                writer.WriteAttributeString("type", type.FullName);
+                WriteXmlPrimitive(o, writer, type, name);
+                return;
+            }
+            if (type.IsArray || type.IsEnumerable)
+            {
+                WriteXmlArray(o, writer, type, name);
+                return;
+            }
+            writer.WriteStartElement(name ?? type.Name);
+            writer.WriteAttributeString("type", type.FullName);
 
-                // Get configuration for type
-                var configuration = GetConfiguration(type.Type);
+            // Get configuration for type
+            var configuration = GetConfiguration(type.Type);
 
-                if (configuration != null)
+            if (configuration != null)
+            {
+                if (configuration.IsObjectReference)
                 {
-                    if (configuration.IsObjectReference)
+                    var objectId = configuration.GetObjectId(o);
+
+                    var key = type.FullName + "_" + objectId;
+                    if (writeReservedObject && _reservedReferencesObjects.ContainsKey(key))
                     {
-                        var objectId = configuration.GetObjectId(o);
-
-                        var key = type.FullName + "_" + objectId;
-                        if (writeReservedObject && _reservedReferencesObjects.ContainsKey(key))
-                        {
-                            _ = _reservedReferencesObjects.Remove(key);
-                        }
-                        else if (_referencesObjects.ContainsKey(key) || _reservedReferencesObjects.ContainsKey(key))
-                        {
-                            writer.WriteAttributeString("ref", objectId);
-                            writer.WriteEndElement();
-                            return;
-                        }
-                        writer.WriteAttributeString("id", objectId);
-                        _referencesObjects.Add(key, o);
+                        _ = _reservedReferencesObjects.Remove(key);
                     }
-
-                    if (configuration.Version > 0)
+                    else if (_referencesObjects.ContainsKey(key) || _reservedReferencesObjects.ContainsKey(key))
                     {
-                        writer.WriteAttributeString("serializeVersion",
-                            configuration.Version.ToString(CultureInfo.InvariantCulture));
-                    }
-                    if (configuration.IsCustomSerializer)
-                    {
-                        configuration.WriteObject(writer, o);
+                        writer.WriteAttributeString("ref", objectId);
                         writer.WriteEndElement();
                         return;
                     }
+                    writer.WriteAttributeString("id", objectId);
+                    _referencesObjects.Add(key, o);
                 }
 
-                var properties = type.Properties;
-                foreach (var propertyInfo in properties)
+                if (configuration.Version > 0)
                 {
-                    var propertyValue = propertyInfo.GetValue(o);
-                    if (propertyValue == null)
-                        continue;
-
-                    var defType = TypeDefinitionCache.GetDefinition(propertyValue.GetType());
-
-                    if (defType.IsObjectToSerialize || defType.IsArray || defType.IsEnumerable)
-                    {
-                        WriteXml(writer, propertyValue, defType, propertyInfo.Name);
-                    }
-                    else if (defType.IsEnum)
-                    {
-                        writer.WriteStartElement(propertyInfo.Name);
-                        writer.WriteString(propertyValue.ToString());
-                        writer.WriteEndElement();
-                    }
-                    else
-                    {
-                        WriteXmlPrimitive(propertyValue, writer, defType, propertyInfo.Name);
-                    }
+                    writer.WriteAttributeString("serializeVersion",
+                        configuration.Version.ToString(CultureInfo.InvariantCulture));
                 }
-                writer.WriteEndElement();
+                if (configuration.IsCustomSerializer)
+                {
+                    configuration.WriteObject(writer, o);
+                    writer.WriteEndElement();
+                    return;
+                }
             }
-            catch (Exception ex)
+
+            var properties = type.Properties;
+            foreach (var propertyInfo in properties)
             {
-                _ = ex;
+                var propertyValue = propertyInfo.GetValue(o);
+                if (propertyValue == null)
+                    continue;
+
+                var defType = TypeDefinitionCache.GetDefinition(propertyValue.GetType());
+
+                if (defType.IsObjectToSerialize || defType.IsArray || defType.IsEnumerable)
+                {
+                    WriteXml(writer, propertyValue, defType, propertyInfo.Name);
+                }
+                else if (defType.IsEnum)
+                {
+                    writer.WriteStartElement(propertyInfo.Name);
+                    writer.WriteString(propertyValue.ToString());
+                    writer.WriteEndElement();
+                }
+                else
+                {
+                    WriteXmlPrimitive(propertyValue, writer, defType, propertyInfo.Name);
+                }
             }
+            writer.WriteEndElement();
         }
 
         protected IExtendedXmlSerializerConfig GetConfiguration(Type type)

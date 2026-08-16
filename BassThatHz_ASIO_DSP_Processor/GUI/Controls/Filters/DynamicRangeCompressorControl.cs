@@ -33,8 +33,6 @@ public partial class DynamicRangeCompressorControl : UserControl, IFilterControl
 {
     #region Variables
     protected DynamicRangeCompressor Filter = new();
-    // Guard to avoid mapping event handlers multiple times (which would cause duplicates)
-    private bool _handlersMapped = false;
     private const double ThresholdEpsilon = 1e-6;
     #endregion
 
@@ -48,13 +46,16 @@ public partial class DynamicRangeCompressorControl : UserControl, IFilterControl
 
     public void MapEventHandlers()
     {
-        if (_handlersMapped)
-            return;
-
+        // Unsubscribe-then-subscribe, matching ClassicLimiterControl/LimiterControl. This keeps the
+        // method idempotent (no double registration on the static SampleRateChanged event) while
+        // still letting a repeat call re-wire onto the CURRENT Threshold control. The previous
+        // one-shot `_handlersMapped` guard made every call after the constructor's a silent no-op,
+        // so the handler stayed bound to whatever control existed at construction time.
+        SampleRateChangeNotifier.SampleRateChanged -= SampleRateChangeNotifier_SampleRateChanged;
         SampleRateChangeNotifier.SampleRateChanged += SampleRateChangeNotifier_SampleRateChanged;
-        this.Threshold.VolumeChanged += Threshold_VolumeChanged;
 
-        _handlersMapped = true;
+        this.Threshold.VolumeChanged -= Threshold_VolumeChanged;
+        this.Threshold.VolumeChanged += Threshold_VolumeChanged;
     }
     #endregion
 

@@ -51,20 +51,33 @@ public class REW_API
         // Serialize using shared options and reuse static HttpClient
         var targetSettingsJson = JsonSerializer.Serialize(REW_TargetSettings, s_jsonOptions);
         using var targetSettingsContent = new StringContent(targetSettingsJson, Encoding.UTF8, "application/json");
-        var targetSettingsResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings"), targetSettingsContent).ConfigureAwait(false);
-        _ = targetSettingsResponse.IsSuccessStatusCode;
+        //DEFECT FIX: HttpResponseMessage (and its HttpContent/stream) is IDisposable and was never
+        //disposed on either the success or the throw path, leaking a connection per call/retry.
+        using (var targetSettingsResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings"), targetSettingsContent).ConfigureAwait(false))
+        {
+            //DEFECT FIX: the status code used to be read and discarded, so a failed POST was
+            //reported to the user as a successful export.
+            if (!targetSettingsResponse.IsSuccessStatusCode)
+                throw new HttpRequestException("REW target-settings POST failed with response code: "
+                                               + targetSettingsResponse.StatusCode.ToString());
+        }
 
         // Wrap filters into an object to avoid manual string concatenation
         var filtersWrapper = new { filters = REW_Filters };
         var filtersJson = JsonSerializer.Serialize(filtersWrapper, s_jsonOptions);
         using var filtersContent = new StringContent(filtersJson, Encoding.UTF8, "application/json");
-        var filtersResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters"), filtersContent).ConfigureAwait(false);
-        _ = filtersResponse.IsSuccessStatusCode;
+        using (var filtersResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters"), filtersContent).ConfigureAwait(false))
+        {
+            if (!filtersResponse.IsSuccessStatusCode)
+                throw new HttpRequestException("REW filters POST failed with response code: "
+                                               + filtersResponse.StatusCode.ToString());
+        }
     }
 
     public async Task<REW_TargetSettings?> GetTargetSettingsFromREW_API(string REW_ID)
     {
-        var targetSettingsResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings")).ConfigureAwait(false);
+        //DEFECT FIX: response was never disposed - the throw path below leaked a connection.
+        using var targetSettingsResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings")).ConfigureAwait(false);
         if (targetSettingsResponse.IsSuccessStatusCode)
         {
             string jsonContent = await targetSettingsResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -78,7 +91,8 @@ public class REW_API
 
     public async Task<List<REW_Filter>?> GetFiltersFromREW_API(string REW_ID)
     {
-        var filtersResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters")).ConfigureAwait(false);
+        //DEFECT FIX: response was never disposed - the throw path below leaked a connection.
+        using var filtersResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters")).ConfigureAwait(false);
         if (filtersResponse.IsSuccessStatusCode)
         {
             string jsonContent = await filtersResponse.Content.ReadAsStringAsync().ConfigureAwait(false);

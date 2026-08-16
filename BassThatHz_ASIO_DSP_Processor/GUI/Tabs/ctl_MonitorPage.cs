@@ -69,8 +69,11 @@ public partial class ctl_MonitorPage : UserControl
                 Program.Form_Monitoring = new();
 
                 // populate controls for the monitoring form
-                foreach (var item in Program.DSP_Info.Streams)
-                    Program.Form_Monitoring.CreateStreamVolumeLevelControl(item);
+                //PERF: ObservableCollection<T> has no public struct enumerator, so foreach boxed
+                //an IEnumerator<T>. Index instead.
+                var Local_Streams = Program.DSP_Info.Streams;
+                for (int i = 0; i < Local_Streams.Count; i++)
+                    Program.Form_Monitoring.CreateStreamVolumeLevelControl(Local_Streams[i]);
 
                 // ensure we clear references when the form closes to avoid leaks
                 Program.Form_Monitoring.FormClosed += (s, ev) =>
@@ -80,7 +83,9 @@ public partial class ctl_MonitorPage : UserControl
                         this.Form_Monitoring_Thread = null;
                     }
 
-                    try { Program.Form_Monitoring = null; } catch { }
+                    //A static field assignment cannot throw; the try/catch here was dead code
+                    //that read as if something risky were being guarded.
+                    Program.Form_Monitoring = null;
                 };
 
                 this.Form_Monitoring_Thread = new(() => Application.Run(Program.Form_Monitoring));
@@ -106,7 +111,8 @@ public partial class ctl_MonitorPage : UserControl
                         this.Form_Align_Thread = null;
                     }
 
-                    try { Program.Form_Align = null; } catch { }
+                    //A static field assignment cannot throw; the try/catch here was dead code.
+                    Program.Form_Align = null;
                 };
 
                 this.Form_Align_Thread = new(() => Application.Run(Program.Form_Align));

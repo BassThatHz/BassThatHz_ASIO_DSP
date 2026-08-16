@@ -254,7 +254,10 @@
             /// <returns>double[] array of the calculated window coefficients</returns>
             public static double[] Coefficients(Type windowName, int points)
             {
-                double[] winCoeffs = new double[points];
+                // Only the four non-cosine-sum branches (and the unknown-type fallback) need an
+                // array allocated here; every SineExpansion branch below returns its own, so
+                // allocating up front discarded a double[points] on ~30 of the 33 window types.
+                double[] winCoeffs;
                 double N = points;
 
                 switch (windowName)
@@ -262,6 +265,7 @@
                     case Window.Type.None:
                     case Window.Type.Rectangular:
                         //wc = ones(N,1);
+                        winCoeffs = new double[points];
                         for (int i = 0; i < points; i++)
                             winCoeffs[i] = 1.0;
 
@@ -274,6 +278,7 @@
                     case Window.Type.Bartlett:
                         //n = (0:N-1)';
                         //wc = 2/N*(N/2-abs(n-(N-1)/2));
+                        winCoeffs = new double[points];
                         for (int i = 0; i < points; i++)
                             winCoeffs[i] = 2.0 / N * (N / 2.0 - System.Math.Abs(i - (N - 1.0) / 2.0));
 
@@ -282,6 +287,7 @@
                     case Window.Type.Welch:
                         //n = (0:N-1)';
                         //wc = 1 - ( ((2*n)/N) - 1).^2;
+                        winCoeffs = new double[points];
                         for (int i = 0; i < points; i++)
                             winCoeffs[i] = 1.0 - System.Math.Pow(2.0 * i / N - 1.0, 2.0);
                         break;
@@ -436,6 +442,7 @@
 
                     default:
                         //throw new NotImplementedException("Window type fell through to 'Default'.");
+                        winCoeffs = new double[points];
                         break;
                 }
 
@@ -764,14 +771,19 @@
             if (threshold >= dataLength || threshold <= 0)
                 return data; // Nothing to do
 
-            var sampled = new List<double>(threshold);
+            // Exactly one point is emitted per bucket, plus the first and last, so the output
+            // length is known up front: fill a right-sized array directly instead of a List plus
+            // a ToArray() copy (which allocated the payload twice). A threshold of 1 still skips
+            // the bucket loop entirely and emits the two endpoints, as it always did.
+            var sampled = new double[Math.Max(threshold, 2)];
+            int sampledCount = 0;
 
             // Bucket size. Leave room for start and end data points
             double every = (double)(dataLength - 2) / (threshold - 2);
 
             int a = 0;
 
-            sampled.Add(data[a]); // Always add the first point
+            sampled[sampledCount++] = data[a]; // Always add the first point
 
             for (int i = 0; i < threshold - 2; i++)
             {
@@ -821,13 +833,13 @@
                     }
                 }
 
-                sampled.Add(maxAreaPoint); // Pick this point from the bucket
+                sampled[sampledCount++] = maxAreaPoint; // Pick this point from the bucket
                 a = nextA; // This a is the next a (chosen b)
             }
 
-            sampled.Add(data[dataLength - 1]); // Always add last
+            sampled[sampledCount++] = data[dataLength - 1]; // Always add last
 
-            return sampled.ToArray();
+            return sampled;
         }
 
     }

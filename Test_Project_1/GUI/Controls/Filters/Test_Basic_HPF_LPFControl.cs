@@ -163,6 +163,145 @@ public class Test_Basic_HPF_LPFControl
     //    Assert.ThrowsExactly<ArgumentException>(() => control.SetDeepClonedFilter(invalidFilter));
     //}
 
+    // ---------------------------------------------------------------------------------
+    // Regression coverage for the allocation pass: ShowBiQuads used to allocate a fresh
+    // 1024-char StringBuilder on every call. It now reuses one per-control buffer and
+    // Clear()s it first. If the Clear() were ever dropped the text would accumulate, so
+    // these tests pin that repeated calls produce IDENTICAL, non-growing output.
+    // ---------------------------------------------------------------------------------
+
+    private static TextBoxBase GetBiQuadsTextBox(Basic_HPF_LPFControl input)
+    {
+        var Local_Field = typeof(Basic_HPF_LPFControl).GetField(
+            "txtBiQuads",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.IsNotNull(Local_Field, "txtBiQuads field not found on Basic_HPF_LPFControl");
+        var Local_Value = Local_Field.GetValue(input) as TextBoxBase;
+        Assert.IsNotNull(Local_Value, "txtBiQuads was not a TextBoxBase");
+        return Local_Value;
+    }
+
+    [TestMethod]
+    public void ShowBiQuads_RepeatedApply_ProducesIdenticalNonGrowingText()
+    {
+        var Local_TextBox = GetBiQuadsTextBox(control);
+
+        control.ApplySettings();
+        var Local_First = Local_TextBox.Text;
+
+        control.ApplySettings();
+        var Local_Second = Local_TextBox.Text;
+
+        control.ApplySettings();
+        var Local_Third = Local_TextBox.Text;
+
+        Assert.IsFalse(string.IsNullOrEmpty(Local_First));
+        Assert.AreEqual(Local_First, Local_Second);
+        Assert.AreEqual(Local_First, Local_Third);
+        Assert.AreEqual(Local_First.Length, Local_Third.Length);
+    }
+
+    [TestMethod]
+    public void ShowBiQuads_EmitsAllEightBiQuadBlocks()
+    {
+        var Local_TextBox = GetBiQuadsTextBox(control);
+        control.ApplySettings();
+        var Local_Text = Local_TextBox.Text;
+
+        for (int Local_i = 1; Local_i <= 8; Local_i++)
+            StringAssert.Contains(Local_Text, "biquad" + Local_i.ToString());
+
+        // Exactly 8 blocks - not 16 from a buffer that was never cleared.
+        int Local_Count = 0;
+        int Local_Index = Local_Text.IndexOf("biquad1", StringComparison.Ordinal);
+        while (Local_Index >= 0)
+        {
+            Local_Count++;
+            Local_Index = Local_Text.IndexOf("biquad1", Local_Index + 1, StringComparison.Ordinal);
+        }
+        Assert.AreEqual(1, Local_Count, "biquad1 should appear exactly once per render");
+    }
+
+    #region StackOverflow regression (nyquist == 0 infinite TextChanged recursion)
+    // These pin the fix for a PRE-EXISTING defect: with Program.DSP_Info.InSampleRate == 0 the
+    // nyquist clamp in TxtHPFFreq_TextChanged / TxtLPFFreq_TextChanged clamped any entered value
+    // to "0", which the same handler rewrote to "0.01", which was again > nyquist(0) - infinite
+    // recursion ending in an UNCATCHABLE StackOverflowException that kills the process (and,
+    // previously, the whole test host). The handlers now only apply the clamp when nyquist > 0.
+
+    [TestMethod]
+    public void TxtHPFFreq_WithNoSampleRateConfigured_DoesNotRecurseInfinitely()
+    {
+        int Local_Original = Program.DSP_Info.InSampleRate;
+        try
+        {
+            Program.DSP_Info.InSampleRate = 0; //no ASIO device configured yet
+            this.control.Get_txtHPFFreq.Text = "5";
+            //Reaching this line at all is the assertion: before the fix this stack-overflowed.
+            Assert.AreEqual("5", this.control.Get_txtHPFFreq.Text,
+                "With no sample rate configured the value must be left alone, not clamped to 0.");
+        }
+        finally
+        {
+            Program.DSP_Info.InSampleRate = Local_Original;
+        }
+    }
+
+    [TestMethod]
+    public void TxtLPFFreq_WithNoSampleRateConfigured_DoesNotRecurseInfinitely()
+    {
+        int Local_Original = Program.DSP_Info.InSampleRate;
+        try
+        {
+            Program.DSP_Info.InSampleRate = 0;
+            this.control.Get_txtLPFFreq.Text = "5";
+            Assert.AreEqual("5", this.control.Get_txtLPFFreq.Text);
+        }
+        finally
+        {
+            Program.DSP_Info.InSampleRate = Local_Original;
+        }
+    }
+
+    [TestMethod]
+    public void TxtFreq_WithNoSampleRateConfigured_ZeroStillBecomesMinimum()
+    {
+        int Local_Original = Program.DSP_Info.InSampleRate;
+        try
+        {
+            Program.DSP_Info.InSampleRate = 0;
+            this.control.Get_txtHPFFreq.Text = "0";
+            //The zero-guard must still run and must itself settle rather than ping-pong.
+            Assert.AreEqual("0.01", this.control.Get_txtHPFFreq.Text);
+        }
+        finally
+        {
+            Program.DSP_Info.InSampleRate = Local_Original;
+        }
+    }
+
+    [TestMethod]
+    public void TxtFreq_WithValidSampleRate_StillClampsToNyquist_AndSettles()
+    {
+        int Local_Original = Program.DSP_Info.InSampleRate;
+        try
+        {
+            Program.DSP_Info.InSampleRate = 48000; //nyquist = 24000
+            this.control.Get_txtLPFFreq.Text = "30000";
+            Assert.AreEqual("24000", this.control.Get_txtLPFFreq.Text,
+                "Existing clamp behaviour must be unchanged when a sample rate IS configured.");
+
+            this.control.Get_txtHPFFreq.Text = "100";
+            Assert.AreEqual("100", this.control.Get_txtHPFFreq.Text,
+                "A value below nyquist must pass through untouched.");
+        }
+        finally
+        {
+            Program.DSP_Info.InSampleRate = Local_Original;
+        }
+    }
+    #endregion
+
     private class DummyFilter : IFilter
     {
         public bool FilterEnabled { get; set; }

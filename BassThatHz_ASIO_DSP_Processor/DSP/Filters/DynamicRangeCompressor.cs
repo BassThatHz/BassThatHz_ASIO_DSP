@@ -42,6 +42,20 @@ public class DynamicRangeCompressor : IFilter
     [XmlIgnoreAttribute]
     [IgnoreDataMember]
     public double CompressionApplied = 1;
+
+    /// <summary>
+    /// The largest double strictly below 1.0 (that is, 1 - 2^-53): the "just below full scale"
+    /// output ceiling, identical to the one in <see cref="ClassicLimiter"/>.
+    /// </summary>
+    /// <remarks>
+    /// The sibling clamp in ClassicLimiter was written as <c>1 - double.Epsilon</c>, which does NOT
+    /// express that. <c>double.Epsilon</c> is the smallest positive SUBNORMAL (about 4.9e-324),
+    /// which is far below the ULP of 1.0 (about 2.2e-16), so <c>1 - double.Epsilon</c> rounds
+    /// straight back to exactly 1.0. <see cref="Math.BitDecrement(double)"/> of 1.0 is the value
+    /// that was meant, and it keeps the output strictly inside full scale so a downstream converter
+    /// cannot wrap at 0 dBFS.
+    /// </remarks>
+    private static readonly double OutputCeiling = Math.BitDecrement(1.0);
     #endregion
 
     #region Public Properties 
@@ -166,7 +180,17 @@ public class DynamicRangeCompressor : IFilter
                     double desiredReductionDb = thresholdDb + (inputDb - thresholdDb) * inverseRatioFactor;
                     gainReductionLinear = Decibels.DecibelsToLinear(desiredReductionDb - inputDb);
                     if (peakSuffix > thresholdLinear)
-                        gainReductionLinear = Math.Max(gainReductionLinear, peakSuffix - thresholdLinear);
+                    {
+                        // UNIT FIX: gainReductionLinear is a GAIN MULTIPLIER (<= 1 attenuates), but
+                        // (peakSuffix - thresholdLinear) is an amplitude DIFFERENCE. Mixing the two was a
+                        // unit error: a peak of 8.0 against a 0.1 threshold produced 7.9, and Math.Max
+                        // then selected a 7.9x BOOST, so hot material was amplified by the "compressor".
+                        // The multiplier that brings peakSuffix down to thresholdLinear is
+                        // thresholdLinear / peakSuffix, and "more reduction" is the SMALLER multiplier,
+                        // hence Math.Min. peakSuffix > thresholdLinear >= 0 here, so the divide is safe.
+                        double Local_LookAheadGain = thresholdLinear / peakSuffix;
+                        gainReductionLinear = Math.Min(gainReductionLinear, Local_LookAheadGain);
+                    }
                 }
 
                 if (thresholdExceeded)
@@ -176,7 +200,20 @@ public class DynamicRangeCompressor : IFilter
                     else
                         gainLinearLocal = release * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
 
-                    input[i] *= gainLinearLocal;
+                    // CLAMP FIX (stackalloc path) - this line was a bare `input[i] *= gainLinearLocal;`
+                    // with NO output bound at all, the extreme form of the two-part clamp defect the
+                    // sibling ClassicLimiter carried:
+                    //  (a) the ceiling ClassicLimiter used, 1 - double.Epsilon, is exactly 1.0 because
+                    //      double.Epsilon is the smallest positive SUBNORMAL (~4.9e-324), far below the
+                    //      ULP of 1.0 (~2.2e-16), so no sub-unity ceiling existed anywhere; and
+                    //  (b) that clamp was ONE-SIDED (Math.Min bounds only from above), leaving negative
+                    //      peaks unbounded. Here BOTH signs were unbounded - a -8.0 block left the
+                    //      compressor at roughly -7.9, because the attack ramp has not converged at the
+                    //      start of the block.
+                    // Math.Clamp against +/-OutputCeiling fixes both: a genuinely sub-unity ceiling,
+                    // applied symmetrically. Anything already inside the ceiling is returned untouched,
+                    // bit for bit, so normal audio is not perturbed.
+                    input[i] = Math.Clamp(input[i] * gainLinearLocal, -OutputCeiling, OutputCeiling);
                 }
             }
         }
@@ -217,7 +254,17 @@ public class DynamicRangeCompressor : IFilter
                         double desiredReductionDb = thresholdDb + (inputDb - thresholdDb) * inverseRatioFactor;
                         gainReductionLinear = Decibels.DecibelsToLinear(desiredReductionDb - inputDb);
                         if (peakSuffix > thresholdLinear)
-                            gainReductionLinear = Math.Max(gainReductionLinear, peakSuffix - thresholdLinear);
+                        {
+                            // UNIT FIX (duplicated loop - keep identical to the stackalloc path above):
+                            // gainReductionLinear is a GAIN MULTIPLIER (<= 1 attenuates), whereas
+                            // (peakSuffix - thresholdLinear) is an amplitude DIFFERENCE. Mixing the two
+                            // was a unit error that turned a hot peak into a BOOST via Math.Max. The
+                            // multiplier that brings peakSuffix down to thresholdLinear is
+                            // thresholdLinear / peakSuffix, and "more reduction" is the SMALLER
+                            // multiplier, hence Math.Min. peakSuffix > thresholdLinear >= 0 here.
+                            double Local_LookAheadGain = thresholdLinear / peakSuffix;
+                            gainReductionLinear = Math.Min(gainReductionLinear, Local_LookAheadGain);
+                        }
                     }
 
                     if (thresholdExceeded)
@@ -227,7 +274,14 @@ public class DynamicRangeCompressor : IFilter
                         else
                             gainLinearLocal = release * (gainLinearLocal - gainReductionLinear) + gainReductionLinear;
 
-                        input[i] *= gainLinearLocal;
+                        // CLAMP FIX (ArrayPool path - duplicated loop, keep identical to the stackalloc
+                        // path above). This line was a bare `input[i] *= gainLinearLocal;` with NO output
+                        // bound at all: (a) no sub-unity ceiling existed anywhere (the sibling
+                        // ClassicLimiter's 1 - double.Epsilon is exactly 1.0, double.Epsilon being the
+                        // smallest positive SUBNORMAL, ~4.9e-324, far below the ULP of 1.0, ~2.2e-16), and
+                        // (b) nothing bounded the NEGATIVE side. Math.Clamp against +/-OutputCeiling fixes
+                        // both, symmetrically, and leaves in-range audio bit-for-bit untouched.
+                        input[i] = Math.Clamp(input[i] * gainLinearLocal, -OutputCeiling, OutputCeiling);
                     }
                 }
             }

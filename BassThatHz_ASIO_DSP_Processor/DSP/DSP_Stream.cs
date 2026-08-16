@@ -43,6 +43,28 @@ public sealed class DSP_Stream
     }
 
     [XmlIgnoreAttribute]
+    private double[]? _fallbackOutputBuffer;
+
+    /// <summary>
+    /// A per-stream, pre-allocated, throw-away output buffer used by the DSP engine only when a
+    /// stream's configured output Bus does not exist. Keeping it per-stream (instead of using a
+    /// single shared writable scratch buffer) avoids introducing a data race between the DSP
+    /// chains, which run concurrently. Its contents are never read by anything downstream.
+    /// </summary>
+    /// <param name="length">The required sample count.</param>
+    /// <returns>A buffer of exactly <paramref name="length"/> samples.</returns>
+    public double[] GetFallbackOutputBuffer(int length)
+    {
+        var Local_Buffer = this._fallbackOutputBuffer;
+        if (Local_Buffer is null || Local_Buffer.Length != length)
+        {
+            Local_Buffer = new double[length];
+            this._fallbackOutputBuffer = Local_Buffer;
+        }
+        return Local_Buffer;
+    }
+
+    [XmlIgnoreAttribute]
     private double[][]? _auxBuffer;
     [XmlIgnoreAttribute]
     public double[][] AuxBuffer

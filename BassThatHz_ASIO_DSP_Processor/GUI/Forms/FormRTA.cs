@@ -82,6 +82,39 @@ public partial class FormRTA : Form
     protected CircularBuffer RTA_OutputULFBuffer;
     #endregion
 
+    #region FFT Read Scratch Buffers
+    //PERF: one reusable read buffer per FFT direction. Each is filled from its circular buffer,
+    //consumed by the FFT and dropped within the same timer tick (the timer disables itself and
+    //awaits Task.WhenAll before re-arming), so no consumer outlives the tick that produced it.
+    //Kept at EXACTLY the requested length because Compute_*_FFT_Data derives its FFT size from
+    //timeSeries.Length.
+    protected double[]? InputULF_Scratch;
+    protected double[]? OutputULF_Scratch;
+    protected double[]? InputTop_Scratch;
+    protected double[]? OutputTop_Scratch;
+
+    /// <summary>
+    /// Returns a scratch buffer of exactly <paramref name="length"/> entries, re-allocating only
+    /// when the required length changes (sample-rate or FFT-size change).
+    /// </summary>
+    /// <param name="buffer">The field holding the current buffer.</param>
+    /// <param name="length">The exact required length.</param>
+    /// <returns>A buffer whose Length equals <paramref name="length"/>.</returns>
+    protected static double[] EnsureExactScratch(ref double[]? buffer, int length)
+    {
+        if (length < 0)
+            length = 0;
+
+        var Local_Buffer = buffer;
+        if (Local_Buffer == null || Local_Buffer.Length != length)
+        {
+            Local_Buffer = new double[length];
+            buffer = Local_Buffer;
+        }
+        return Local_Buffer;
+    }
+    #endregion
+
     #region WaveFormAutoReset State Flags
     protected bool chart_InputWaveform_ResetAutoRange = false;
     protected bool chart_OutputWaveform_ResetAutoRange = false;
@@ -198,7 +231,9 @@ public partial class FormRTA : Form
         }
         catch (Exception ex)
         {
-            _ = ex;
+            //The form is closing: in-flight FFT/waveform tasks may fault on a disposed chart or a
+            //torn buffer. Nothing useful can be done at this point, but do not lose the error.
+            Debug.ReportSwallowed(ex);
         }
     }
     #endregion
@@ -329,7 +364,11 @@ public partial class FormRTA : Form
         {
             if (this.Output_Channel == null)
                 return;
-            this.OutputBuffer = CommonFunctions.GetStreamOutputDataByStreamItem(this.Output_Channel).ToArray();
+            //Snapshot helper does exactly one copy; the old GetStream...().ToArray() did two,
+            //once per ASIO buffer switch while the RTA window is open. The array must still be
+            //freshly allocated (not pooled): it is published to the plotting timer thread, and
+            //re-using one buffer would let the plot read a half-updated block.
+            this.OutputBuffer = CommonFunctions.GetStreamOutputDataSnapshotByStreamItem(this.Output_Channel);
 
             if (this.chart_Output_ULF_FFT.Visible)
                 _ = this.RTA_OutputULFBuffer.Write(this.OutputBuffer, 0, this.OutputBuffer.Length);
@@ -350,7 +389,8 @@ public partial class FormRTA : Form
         {
             if (this.Input_Channel == null)
                 return;
-            this.InputBuffer = CommonFunctions.GetStreamInputDataByStreamItem(this.Input_Channel).ToArray();
+            //See ASIO_OutputDataAvailable: one copy instead of two, still a fresh array.
+            this.InputBuffer = CommonFunctions.GetStreamInputDataSnapshotByStreamItem(this.Input_Channel);
 
             if (this.chart_Input_ULF_FFT.Visible)
                 _ = this.RTA_InputULFBuffer.Write(this.InputBuffer, 0, this.InputBuffer.Length);
@@ -453,7 +493,32 @@ public partial class FormRTA : Form
         }
         finally
         {
-            this.timer_PlotWaveforms.Enabled = !this.Pause_CHK.Checked;
+            //DEFECT FIX: this is an 'async void' handler that awaits; the form can be closed and
+            //disposed during the await. Touching this.timer_*/this.Pause_CHK unguarded threw
+            //ObjectDisposedException FROM A FINALLY - unhandled (async void) and masking whatever
+            //was propagating. Every other member access in this method already has this guard.
+            this.RestartTimerIfAlive(this.timer_PlotWaveforms);
+        }
+    }
+
+    /// <summary>
+    /// Re-arms a plot timer unless the form is closing/disposed, and unless the user has paused.
+    /// Safe to call from the finally of an async void handler.
+    /// </summary>
+    /// <param name="timer">The timer to re-arm.</param>
+    protected void RestartTimerIfAlive(System.Windows.Forms.Timer? timer)
+    {
+        try
+        {
+            if (timer == null || this.IsClosing || this.IsDisposed || this.Disposing)
+                return;
+
+            timer.Enabled = !this.Pause_CHK.Checked;
+        }
+        catch (ObjectDisposedException ex)
+        {
+            //The form was disposed between the guard and the assignment - nothing left to re-arm.
+            Debug.ReportSwallowed(ex);
         }
     }
     #endregion
@@ -476,9 +541,14 @@ public partial class FormRTA : Form
             if (this.chart_Input_ULF_FFT.Visible &&
                 this.RTA_InputULFBuffer.Count > inSampleRate * overlapAdd)
             {
+                //PERF: this allocated a fresh double[InSampleRate] (384 KB at 96 kHz) on a timer
+                //whose interval can be as low as 1 ms. The array is filled from the circular
+                //buffer, consumed by the FFT and dropped, and the timer disables itself and awaits
+                //WhenAll before the next tick, so a per-direction reusable buffer is safe.
+                var Local_InputULF_Scratch = EnsureExactScratch(ref this.InputULF_Scratch, inSampleRate);
                 this.ULF_FFT_Tasks.Add(Task.Run(() =>
                 {
-                    var data = new double[inSampleRate];
+                    var data = Local_InputULF_Scratch;
                     _ = this.RTA_InputULFBuffer.Read(data, 0, inSampleRate);
                     return this.Compute_ULF_FFT_Data(this.InputULF_FFT, data);
                 })
@@ -500,9 +570,10 @@ public partial class FormRTA : Form
             if (this.chart_Output_ULF_FFT.Visible &&
                 this.RTA_OutputULFBuffer.Count > inSampleRate * overlapAdd)
             {
+                var Local_OutputULF_Scratch = EnsureExactScratch(ref this.OutputULF_Scratch, inSampleRate);
                 this.ULF_FFT_Tasks.Add(Task.Run(() =>
                 {
-                    var data = new double[inSampleRate];
+                    var data = Local_OutputULF_Scratch;
                     _ = this.RTA_OutputULFBuffer.Read(data, 0, inSampleRate);
                     return this.Compute_ULF_FFT_Data(this.OutputULF_FFT, data);
                 })
@@ -528,7 +599,9 @@ public partial class FormRTA : Form
         }
         finally
         {
-            this.timer_Plot_ULF_FFT.Enabled = !this.Pause_CHK.Checked;
+            //DEFECT FIX: see RestartTimerIfAlive - unguarded member access from the finally of an
+            //async void handler crashed the app when the form closed mid-await.
+            this.RestartTimerIfAlive(this.timer_Plot_ULF_FFT);
         }
     }
 
@@ -549,9 +622,11 @@ public partial class FormRTA : Form
             if (this.chart_Input_Top_FFT.Visible &&
                 this.RTA_InputTopBuffer.Count > fftSize * overlapAdd)
             {
+                //PERF: reusable per-direction scratch, see Plot_ULF_FFT_Timer_Tick.
+                var Local_InputTop_Scratch = EnsureExactScratch(ref this.InputTop_Scratch, fftSize);
                 this.Top_FFT_Tasks.Add(Task.Run(() =>
                 {
-                    var data = new double[fftSize];
+                    var data = Local_InputTop_Scratch;
                     _ = this.RTA_InputTopBuffer.Read(data, 0, fftSize);
                     return this.Compute_Top_FFT_Data(this.InputTop_FFT, data);
                 })
@@ -573,9 +648,10 @@ public partial class FormRTA : Form
             if (this.chart_Output_Top_FFT.Visible &&
                 this.RTA_OutputTopBuffer.Count > fftSize * overlapAdd)
             {
+                var Local_OutputTop_Scratch = EnsureExactScratch(ref this.OutputTop_Scratch, fftSize);
                 this.Top_FFT_Tasks.Add(Task.Run(() =>
                 {
-                    var data = new double[fftSize];
+                    var data = Local_OutputTop_Scratch;
                     _ = this.RTA_OutputTopBuffer.Read(data, 0, fftSize);
                     return this.Compute_Top_FFT_Data(this.OutputTop_FFT, data);
                 })
@@ -601,7 +677,9 @@ public partial class FormRTA : Form
         }
         finally
         {
-            this.timer_Plot_Top_FFTs.Enabled = !this.Pause_CHK.Checked;
+            //DEFECT FIX: see RestartTimerIfAlive - unguarded member access from the finally of an
+            //async void handler crashed the app when the form closed mid-await.
+            this.RestartTimerIfAlive(this.timer_Plot_Top_FFTs);
         }
     }
 
@@ -708,6 +786,11 @@ public partial class FormRTA : Form
     #endregion
 
     #region IntervalChanged
+    //DEFECT FIX: these three TextChanged handlers used int.Parse on live keystrokes. Typing "-",
+    //"." or an over-long number raised FormatException/OverflowException, which this.Error routed
+    //to Debug.Error - i.e. the user got "A fatal error has occured" and "Press Yes to abort the
+    //app" for a partially typed number. TryParse and simply ignore incomplete input, matching the
+    //existing TryParse handlers in ctl_GeneralConfigPage and FormMixer.
     protected void Msb_WaveForm_RefreshInterval_TextChanged(object? sender, EventArgs e)
     {
         try
@@ -715,7 +798,8 @@ public partial class FormRTA : Form
             if (string.IsNullOrEmpty(this.msb_WaveForm_RefreshInterval.Text))
                 this.msb_WaveForm_RefreshInterval.Text = "1";
 
-            this.timer_PlotWaveforms.Interval = Math.Max(1, int.Parse(this.msb_WaveForm_RefreshInterval.Text));
+            if (int.TryParse(this.msb_WaveForm_RefreshInterval.Text, out int Local_Interval))
+                this.timer_PlotWaveforms.Interval = Math.Max(1, Local_Interval);
         }
         catch (Exception ex)
         {
@@ -730,7 +814,8 @@ public partial class FormRTA : Form
             if (string.IsNullOrEmpty(this.msb_Top_FFT_RefreshInterval.Text))
                 this.msb_Top_FFT_RefreshInterval.Text = "1";
 
-            this.timer_Plot_Top_FFTs.Interval = Math.Max(1, int.Parse(this.msb_Top_FFT_RefreshInterval.Text));
+            if (int.TryParse(this.msb_Top_FFT_RefreshInterval.Text, out int Local_Interval))
+                this.timer_Plot_Top_FFTs.Interval = Math.Max(1, Local_Interval);
         }
         catch (Exception ex)
         {
@@ -745,7 +830,8 @@ public partial class FormRTA : Form
             if (string.IsNullOrEmpty(this.msb_ULF_FFT_RefreshInterval.Text))
                 this.msb_ULF_FFT_RefreshInterval.Text = "1";
 
-            this.timer_Plot_ULF_FFT.Interval = Math.Max(1, int.Parse(this.msb_ULF_FFT_RefreshInterval.Text));
+            if (int.TryParse(this.msb_ULF_FFT_RefreshInterval.Text, out int Local_Interval))
+                this.timer_Plot_ULF_FFT.Interval = Math.Max(1, Local_Interval);
         }
         catch (Exception ex)
         {
@@ -871,9 +957,12 @@ public partial class FormRTA : Form
             //If one checked item remains, find it
             if (!Checked)
             {
-                foreach (var item in this.checkedListBox1.CheckedIndices)
+                //PERF: CheckedIndexCollection is non-generic IEnumerable - foreach allocated an
+                //enumerator AND boxed every int only to immediately unbox it. Index instead.
+                var Local_CheckedIndices = this.checkedListBox1.CheckedIndices;
+                for (int i = 0; i < Local_CheckedIndices.Count; i++)
                 {
-                    var CheckedIndex = (int)item;
+                    var CheckedIndex = Local_CheckedIndices[i];
                     if (CheckedIndex != e.Index)
                     {
                         Control = this.GetChartByCheckboxIndex(CheckedIndex);
@@ -1031,7 +1120,9 @@ public partial class FormRTA : Form
         }
         catch (Exception ex)
         {
-            _ = ex;
+            //Cosmetic min/max chart titles only - never fail a plot over them, but keep the error
+            //observable rather than discarding it silently.
+            Debug.ReportSwallowed(ex);
         }
     }
 
@@ -1082,15 +1173,19 @@ public partial class FormRTA : Form
     [SupportedOSPlatform("windows")]
     protected void UpdateChartWithPlotData(Chart chartControl, WaveformPlotData plotData, bool resetAutoRange)
     {
-        if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
-            return;
-        if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
-            return;
-        if (chartControl.Series.IndexOf("Series1") < 0)
-            return;
-
+        //DEFECT FIX: these four early-returns sat OUTSIDE the try, so whenever the form was
+        //closing / the chart was not ready the rented ArrayPool buffers were dropped on the floor
+        //instead of being returned - a slow pool drain on exactly the path that runs most often
+        //during shutdown. Ownership of the rented arrays is now released in a finally.
         try
         {
+            if (this.IsClosing || this.IsDisposed || !this.IsHandleCreated)
+                return;
+            if (chartControl.IsDisposed || !chartControl.IsHandleCreated || chartControl.ChartAreas.Count < 1)
+                return;
+            if (chartControl.Series.IndexOf("Series1") < 0)
+                return;
+
             // Perform one‑time initialization if not already done.
             this.InitializeChart(chartControl);
 
@@ -1125,7 +1220,13 @@ public partial class FormRTA : Form
             }
 
             chartControl.ResumeLayout();
-
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+        finally
+        {
             // Return rented arrays to the shared pool to reduce GC pressure.
             try
             {
@@ -1141,14 +1242,12 @@ public partial class FormRTA : Form
                     plotData.RentedYArray = null;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Swallow: returning to pool should not crash UI updates.
+                // Returning to the pool must never crash a UI update, but do keep it observable -
+                // a repeated failure here means the pool is being corrupted.
+                Debug.ReportSwallowed(ex);
             }
-        }
-        catch (Exception ex)
-        {
-            this.Error(ex);
         }
     }
 

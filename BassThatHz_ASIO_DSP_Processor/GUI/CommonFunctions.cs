@@ -55,6 +55,70 @@ public static class CommonFunctions
         }
     }
 
+    /// <summary>
+    /// Returns a fresh, private SNAPSHOT of a stream item's input data.
+    /// <para>
+    /// <see cref="GetStreamInputDataByStreamItem"/> returns a LIVE reference for Bus sources, so
+    /// callers that need a stable snapshot had to append <c>.ToArray()</c> - which for the
+    /// Channel case copied an array that had already been defensively copied, i.e. two
+    /// allocations per call on a path that runs once per ASIO buffer switch. This helper does
+    /// exactly one copy and is otherwise value-for-value identical.
+    /// </para>
+    /// </summary>
+    /// <param name="source">The stream item to snapshot.</param>
+    /// <returns>A newly allocated array owned by the caller.</returns>
+    public static double[] GetStreamInputDataSnapshotByStreamItem(IStreamItem source)
+    {
+        switch (source.StreamType)
+        {
+            case StreamType.Bus:
+            {
+                //Live buffer, mutated by the audio thread - must be copied.
+                var Local_Live = Program.DSP_Info.Buses[source.Index].Buffer;
+                var Local_Snapshot = new double[Local_Live.Length];
+                Local_Live.AsSpan().CopyTo(Local_Snapshot);
+                return Local_Snapshot;
+            }
+            case StreamType.AbstractBus:
+            case StreamType.Stream:
+                return new double[Program.ASIO.SamplesPerChannel];
+            case StreamType.Channel:
+            default:
+                //GetInputAudioData already returns a private defensive copy.
+                return Program.ASIO.GetInputAudioData(source.Index)
+                       ?? new double[Program.ASIO.SamplesPerChannel];
+        }
+    }
+
+    /// <summary>
+    /// Returns a fresh, private SNAPSHOT of a stream item's output data.
+    /// See <see cref="GetStreamInputDataSnapshotByStreamItem"/> for why this exists.
+    /// </summary>
+    /// <param name="destination">The stream item to snapshot.</param>
+    /// <returns>A newly allocated array owned by the caller.</returns>
+    public static double[] GetStreamOutputDataSnapshotByStreamItem(IStreamItem destination)
+    {
+        switch (destination.StreamType)
+        {
+            case StreamType.Bus:
+            {
+                //Live buffer, mutated by the audio thread - must be copied.
+                var Local_Live = Program.DSP_Info.Buses[destination.Index].Buffer;
+                var Local_Snapshot = new double[Local_Live.Length];
+                Local_Live.AsSpan().CopyTo(Local_Snapshot);
+                return Local_Snapshot;
+            }
+            case StreamType.AbstractBus:
+            case StreamType.Stream:
+                return new double[Program.ASIO.SamplesPerChannel];
+            case StreamType.Channel:
+            default:
+                //GetOutputAudioData already returns a private defensive copy.
+                return Program.ASIO.GetOutputAudioData(destination.Index)
+                       ?? new double[Program.ASIO.SamplesPerChannel];
+        }
+    }
+
     public static T DeepClone<T>(T source) where T : class
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -118,9 +182,13 @@ public static class CommonFunctions
                 {
                     capabilities = asio.GetDriverCapabilities(dsp.ASIO_InputDevice);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // ignore failures fetching capabilities; leave lists empty
+                    // Deliberate: this helper populates dropdown lists and must not throw at the
+                    // caller. The user-facing message for a failed capability fetch is raised by
+                    // ctl_InputsConfigPage / ctl_StatsPage; here the lists are simply left empty.
+                    // Recorded so the cause is still observable.
+                    Debug.ReportSwallowed(ex);
                 }
 
                 if (capabilities == null)
@@ -225,30 +293,43 @@ public static class CommonFunctions
         }
     }
 
+    /// <summary>
+    /// Removes elements that no longer map to a serializable member, so that configs saved by
+    /// older builds still load.
+    /// <para>
+    /// <c>ExtendedXmlSerializer.ReadXml</c> THROWS <see cref="InvalidOperationException"/>
+    /// ("Missing property ...") on any element it cannot map, so a config containing an element
+    /// for a member that has since been removed - or that is now excluded from serialization -
+    /// would otherwise fail to load entirely and the user would see
+    /// "Could not successfully load the DSP config file".
+    /// </para>
+    /// <para>
+    /// The runtime-state elements below were written by builds that did not yet honor
+    /// <see cref="System.Runtime.Serialization.IgnoreDataMemberAttribute"/>. They are computed
+    /// meter/telemetry values (or, for MixerInput.ChannelName, a value derived from the live ASIO
+    /// device list), never user settings, so discarding them loses nothing.
+    /// </para>
+    /// </summary>
+    /// <param name="input">The XML config text as read from disk or received over the network API.</param>
+    /// <returns>The XML with deprecated/no-longer-serialized elements removed.</returns>
     public static string RemoveDeprecatedXMLInputTags(string input)
     {
         XDocument doc = XDocument.Parse(input);
-
-        foreach (XElement limiter in doc.Descendants("Limiter"))
-        {
-            // Remove elements if they exist
-            limiter.Element("PeakHoldDecayEnabled")?.Remove();
-            limiter.Element("PeakHoldDecay")?.Remove();
-        }
-
+        RemoveDeprecatedElements(doc);
         return doc.ToString();
     }
 
+    /// <summary>
+    /// Removes deprecated elements on the SAVE side (and on the network API's validate-then-apply
+    /// path). Kept deliberately in step with <see cref="RemoveDeprecatedXMLInputTags"/> so that
+    /// anything stripped on load is also stripped on save.
+    /// </summary>
+    /// <param name="input">The freshly serialized XML config text.</param>
+    /// <returns>The XML with deprecated/no-longer-serialized elements removed.</returns>
     public static string RemoveDeprecatedXMLOutputTags(string input)
     {
         XDocument doc = XDocument.Parse(input);
-
-        foreach (XElement limiter in doc.Descendants("Limiter"))
-        {
-            // Remove elements if they exist
-            limiter.Element("PeakHoldDecayEnabled")?.Remove();
-            limiter.Element("PeakHoldDecay")?.Remove();
-        }
+        RemoveDeprecatedElements(doc);
 
         foreach (XElement stream in doc.Descendants("DSP_Stream"))
         {
@@ -260,6 +341,38 @@ public static class CommonFunctions
         return doc.ToString();
     }
 
+    /// <summary>
+    /// The element removals shared by the input and output migrations.
+    /// </summary>
+    /// <param name="doc">The parsed config document, mutated in place.</param>
+    private static void RemoveDeprecatedElements(XDocument doc)
+    {
+        foreach (XElement Local_Limiter in doc.Descendants("Limiter"))
+        {
+            // Remove elements if they exist
+            Local_Limiter.Element("PeakHoldDecayEnabled")?.Remove();
+            Local_Limiter.Element("PeakHoldDecay")?.Remove();
+
+            //Runtime meter state: written by Limiter.Transform, reset by ApplySettings, and only
+            //read back by LimiterControl for its display. Marked [IgnoreDataMember].
+            Local_Limiter.Element("CompressionApplied")?.Remove();
+            Local_Limiter.Element("PeakValue")?.Remove();
+            Local_Limiter.Element("IsBrickwall")?.Remove();
+        }
+
+        foreach (XElement Local_DEQ in doc.Descendants("DEQ"))
+        {
+            //Computed in DEQ.Transform and read by DEQControl for its meter. Marked [IgnoreDataMember].
+            Local_DEQ.Element("GainApplied")?.Remove();
+        }
+
+        foreach (XElement Local_MixerInput in doc.Descendants("MixerInput"))
+        {
+            //Derived from the live ASIO device channel list, not from the config. Marked [IgnoreDataMember].
+            Local_MixerInput.Element("ChannelName")?.Remove();
+        }
+    }
+
     public static bool TryParseXml(string xmlString, out XDocument? xDocument)
     {
         try
@@ -267,8 +380,12 @@ public static class CommonFunctions
             xDocument = XDocument.Parse(xmlString);
             return true;
         }
-        catch (Exception)
+        catch (System.Xml.XmlException ex)
         {
+            //Narrowed from catch (Exception): malformed XML is the only failure this method is
+            //meant to report as "false". ArgumentNullException/OutOfMemoryException used to be
+            //silently converted into "not valid XML".
+            Debug.ReportSwallowed(ex);
             xDocument = null;
             return false;
         }

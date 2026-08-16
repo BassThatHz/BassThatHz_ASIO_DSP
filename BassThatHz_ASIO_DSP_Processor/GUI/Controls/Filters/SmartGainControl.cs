@@ -34,6 +34,16 @@ public partial class SmartGainControl : UserControl, IFilterControl
 {
     #region Variables
     protected SmartGain Filter = new();
+
+    //Caches of the last rendered stats values. RefreshStats_Timer_Tick used to allocate three
+    //strings on every tick regardless of whether anything moved; formatting only on a real change
+    //matches the SetTextIfChanged pattern already used by ctl_StatsPage and BTH_VolumeLevelControl.
+    //Seeded with NaN so the first tick always renders (NaN.Equals(NaN) is true, NaN == NaN is not).
+    protected double Last_AppliedGain_Rendered = double.NaN;
+    protected double Last_PeakLevel_Rendered = double.NaN;
+    protected double Last_Headroom_Rendered = double.NaN;
+
+    protected const string StatsFormat = "000.0";
     #endregion
 
     #region Constructor and MapEventHandlers
@@ -138,15 +148,32 @@ public partial class SmartGainControl : UserControl, IFilterControl
             var peak = Decibels.LinearToDecibels(filter.PeakLevelLinear);
             var head = Decibels.LinearToDecibels(filter.HeadroomLinear);
 
-            var fmt = "000.0";
-            this.lblAppliedGain.Text = applied.ToString(fmt, CultureInfo.InvariantCulture);
-            this.lblPeakLevel.Text = peak.ToString(fmt, CultureInfo.InvariantCulture);
-            this.lblHeadroom.Text = head.ToString(fmt, CultureInfo.InvariantCulture);
+            SetStatIfChanged(this.lblAppliedGain, applied, ref this.Last_AppliedGain_Rendered);
+            SetStatIfChanged(this.lblPeakLevel, peak, ref this.Last_PeakLevel_Rendered);
+            SetStatIfChanged(this.lblHeadroom, head, ref this.Last_Headroom_Rendered);
         }
         catch (Exception ex)
         {
             this.Error(ex);
         }
+    }
+
+    /// <summary>
+    /// Formats and assigns a stats label only when the value it would render actually changed,
+    /// so a steady reading costs a single double comparison instead of a fresh string per tick.
+    /// </summary>
+    /// <param name="label">The label to update.</param>
+    /// <param name="value">The current value.</param>
+    /// <param name="cache">The caller's cache of the previously rendered value.</param>
+    protected static void SetStatIfChanged(Control label, double value, ref double cache)
+    {
+        //Round to the precision actually displayed so sub-display-resolution jitter is free.
+        double Local_Rounded = Math.Round(value, 1);
+        if (Local_Rounded.Equals(cache)) //Equals so the NaN seed compares true against itself.
+            return;
+
+        cache = Local_Rounded;
+        label.Text = Local_Rounded.ToString(StatsFormat, CultureInfo.InvariantCulture);
     }
     #endregion
 

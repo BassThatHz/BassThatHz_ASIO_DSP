@@ -37,6 +37,15 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
 {
     #region Variables
     protected Basic_HPF_LPF Filter = new();
+
+    /// <summary>
+    /// Reusable scratch buffer for <see cref="ShowBiQuads"/>. That method used to allocate a
+    /// fresh 1024-char StringBuilder on every call, and it is called from btnApply_Click - i.e.
+    /// from ApplySettings(), which StreamControl's REW import runs once per imported filter, and
+    /// which SampleRateChangeNotifier fires on every sample-rate change. Reusing one buffer per
+    /// control turns that into a single long-lived allocation. UI-thread only, so no locking.
+    /// </summary>
+    protected StringBuilder? BiQuadTextBuffer;
     #endregion
 
     #region Public Properties
@@ -118,7 +127,16 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
         if (double.TryParse(this.txtLPFFreq.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double result))
         {
             var nyquist = Program.DSP_Info.InSampleRate * 0.5;
-            if (result > nyquist)
+            //DEFECT FIX (StackOverflow): the nyquist clamp must only run when a sample rate is
+            //actually configured. With InSampleRate == 0 nyquist is 0, so any entered value was
+            //clamped to "0", which re-entered this handler, matched the zero branch and became
+            //"0.01", which is again > 0 and clamped back to "0" - an infinite TextChanged
+            //recursion that ends in an UNCATCHABLE StackOverflowException (instant process kill,
+            //no error dialog, no config save). Reachable by typing in this box before an ASIO
+            //device has been configured. Guarding on nyquist > 0 makes the loop terminate; when a
+            //valid rate IS set the behaviour is unchanged (clamping to nyquist re-enters once,
+            //then result == nyquist is neither > nyquist nor 0, so it settles).
+            if (nyquist > 0 && result > nyquist)
                 this.txtLPFFreq.Text = nyquist.ToString(CultureInfo.InvariantCulture);
             else if (result == 0 || result <= double.Epsilon)
                 this.txtLPFFreq.Text = "0.01";
@@ -139,7 +157,9 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
         if (double.TryParse(this.txtHPFFreq.Text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double result))
         {
             var nyquist = Program.DSP_Info.InSampleRate * 0.5;
-            if (result > nyquist)
+            //DEFECT FIX (StackOverflow): see TxtLPFFreq_TextChanged above - identical infinite
+            //TextChanged recursion when InSampleRate == 0 makes nyquist 0.
+            if (nyquist > 0 && result > nyquist)
                 this.txtHPFFreq.Text = nyquist.ToString(CultureInfo.InvariantCulture);
             else if (result == 0 || result <= double.Epsilon)
                 this.txtHPFFreq.Text = "0.01";
@@ -190,7 +210,8 @@ public partial class Basic_HPF_LPFControl : UserControl, IFilterControl
 
     protected void ShowBiQuads()
     {
-        var sb = new StringBuilder(1024);
+        var sb = this.BiQuadTextBuffer ??= new StringBuilder(1024);
+        _ = sb.Clear();
         for (int i = 0; i < 8; i++)
         {
             var biquad = this.Filter.BiQuads[i];

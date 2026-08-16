@@ -436,16 +436,16 @@ public class Test_ASIOSampleConvertor
     [TestMethod]
     public unsafe void ConvertorIntToShortGeneric_MultiChannel_ShiftsRightBy16Bits()
     {
-        // SUSPECTED REAL DEFECT: NAudio\Asio\ASIOSampleConvertor.cs ConvertorIntToShortGeneric (around line 269-288) â€”
-        // the output buffers are declared/advanced as `int*[] samples` (4-byte stride) even though each written
-        // value is cast to `short` and the method name/contract implies a 16-bit (2-byte) SHORT output buffer,
-        // consistent with the optimized ConvertorIntToShort2Channels sibling which correctly uses `short*`.
-        // This test documents the CORRECT expected behavior (2-byte packed short buffer) and is expected to FAIL
-        // against the current implementation, which instead writes 4-byte-strided int-sized slots.
+        // REGRESSION COVERAGE for a FIXED defect (DefectPin Defect 4): ConvertorIntToShortGeneric
+        // declared/advanced its output cursors as `int*[] samples` (4-byte stride) even though every
+        // written value is cast to `short` and the destination is a 16-bit SHORT buffer - so samples
+        // were written into 4-byte slots with a 2-byte hole between them. The sibling
+        // ConvertorIntToShort2Channels always used `short*` correctly. The implementation now uses
+        // `short*[]`; this test locks in the correct 2-byte packed short output.
         int[] input = { 100 << 16, 200 << 16, 300 << 16, 400 << 16 };
         IntPtr inputPtr = Marshal.AllocHGlobal(input.Length * sizeof(int));
-        // NOTE: allocate generously (sized for the buggy 4-byte-stride write path) to avoid heap corruption
-        // regardless of whether the implementation is fixed to the correct 2-byte stride in the future.
+        // NOTE: allocate generously (sized for the old 4-byte-stride write path) so the buffers stay
+        // safely oversized for the correct 2-byte-stride implementation.
         IntPtr[] channels = { Marshal.AllocHGlobal(2 * sizeof(int)), Marshal.AllocHGlobal(2 * sizeof(int)) };
         try
         {

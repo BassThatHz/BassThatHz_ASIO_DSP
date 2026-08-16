@@ -44,6 +44,18 @@ public class ULF_FIR : IFilter
     protected Complex[]? ThreadLocal_Taps_FFT_Complex;
     protected double[] OverlapBuffer = Array.Empty<double>();
     protected FFT? ThreadLocalFFT;
+
+    /// <summary>
+    /// Per-instance scratch for the forward FFT spectrum, so <see cref="Transform"/> does not
+    /// allocate a Complex[FFTSize] on every buffer callback.
+    /// </summary>
+    protected Complex[] SpectrumBuffer = Array.Empty<Complex>();
+
+    /// <summary>
+    /// Per-instance scratch for the inverse FFT time series, so <see cref="Transform"/> does not
+    /// allocate a double[FFTSize] on every buffer callback.
+    /// </summary>
+    protected double[] IFFTResultBuffer = Array.Empty<double>();
     #endregion
 
     #region Public Functions
@@ -65,7 +77,26 @@ public class ULF_FIR : IFilter
 
             // Use cached FFT instance if available
             var fft = this.ThreadLocalFFT ?? new FFT(this.FFTSize, 0);
-            Complex[] inputFft = fft.Perform_FFT(this.OverlapBuffer, false);
+
+            // Reusable scratch, sized off the FFT instance itself so the allocated length is
+            // exactly what Perform_*_Into writes. Steady state hits neither allocation.
+            int Local_Points = fft.PointCount;
+
+            var Local_Spectrum = this.SpectrumBuffer;
+            if (Local_Spectrum.Length != Local_Points)
+            {
+                Local_Spectrum = new Complex[Local_Points];
+                this.SpectrumBuffer = Local_Spectrum;
+            }
+
+            var Local_ResultBuffer = this.IFFTResultBuffer;
+            if (Local_ResultBuffer.Length != Local_Points)
+            {
+                Local_ResultBuffer = new double[Local_Points];
+                this.IFFTResultBuffer = Local_ResultBuffer;
+            }
+
+            Complex[] inputFft = fft.Perform_FFT_Into(this.OverlapBuffer, Local_Spectrum, false);
 
             // Precompute ratios
             double tapsSampleRate = this.TapsSampleRate;
@@ -102,7 +133,7 @@ public class ULF_FIR : IFilter
                     inputFft[this.FFTSize - n] = Complex.Conjugate(val);
             }
 
-            double[] result = fft.Perform_IFFT(inputFft, false);
+            double[] result = fft.Perform_IFFT_Into(inputFft, Local_ResultBuffer, false);
             Array.Copy(result, overlapSize, input, 0, inputLength);
         }
         catch (Exception ex)
