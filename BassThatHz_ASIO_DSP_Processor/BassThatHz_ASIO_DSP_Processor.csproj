@@ -64,6 +64,9 @@
     <Compile Update="GUI\Controls\BTH_VolumeLevel_SimpleControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Update="GUI\Controls\BTH_VolumeLevel_MonitorControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Update="GUI\Controls\Filters\AuxGetControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

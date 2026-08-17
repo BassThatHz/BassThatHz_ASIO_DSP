@@ -40,7 +40,22 @@ public partial class BTH_VolumeLevelControl : UserControl
     protected IStreamItem? InputChannel;
     protected IStreamItem? OutputChannel;
 
-    protected double ClipLevel = 1;
+    /// <summary>
+    /// Clip threshold in dB, i.e. 0 dBFS.
+    /// <para>
+    /// DEFECT FIX: this used to be 1 while every value compared against it
+    /// (<see cref="Input_DB"/>, <see cref="Input_DB_Peak"/>, ...) is in dB, so the box only lit
+    /// at +1 dBFS - unreachable for samples clamped to +/-1.0, which is 0 dBFS exactly. That is
+    /// why the indicator looked dead.
+    /// </para>
+    /// </summary>
+    protected double ClipLevel = 0;
+
+    /// <summary>Latched until the box is clicked or the Monitor screen's Reset button is pressed.</summary>
+    protected bool Input_Clipped;
+
+    /// <summary>Latched until the box is clicked or the Monitor screen's Reset button is pressed.</summary>
+    protected bool Output_Clipped;
 
     protected double Input_Peak = 0;
     protected double Input_RMS = 0;
@@ -51,6 +66,30 @@ public partial class BTH_VolumeLevelControl : UserControl
     protected double Output_RMS = 0;
     protected double Output_DB_Peak = 0;
     protected double Output_DB = 0;
+
+    /// <summary>
+    /// How many refreshes the red peak bar holds its maximum for. Raise it to make the bar linger
+    /// longer; at the default 100 ms refresh interval 3 refreshes is roughly a third of a second.
+    /// </summary>
+    protected const int PeakHoldRefreshCount = 3;
+
+    /// <summary>Rolling window of the last <see cref="PeakHoldRefreshCount"/> raw input peaks, in dB.</summary>
+    protected readonly double[] Input_PeakWindow = CreatePeakWindow();
+
+    /// <summary>Rolling window of the last <see cref="PeakHoldRefreshCount"/> raw output peaks, in dB.</summary>
+    protected readonly double[] Output_PeakWindow = CreatePeakWindow();
+
+    /// <summary>Write position for both windows; they advance together, exactly once per refresh.</summary>
+    protected int PeakWindowIndex;
+
+    /// <summary>
+    /// Maximum of the last <see cref="PeakHoldRefreshCount"/> input peaks. This - not the raw
+    /// per-refresh peak - is what the red peak bar and the peak dB label show, so the two agree.
+    /// </summary>
+    protected double Input_DB_Peak_Held = double.NegativeInfinity;
+
+    /// <summary>Maximum of the last <see cref="PeakHoldRefreshCount"/> output peaks.</summary>
+    protected double Output_DB_Peak_Held = double.NegativeInfinity;
     // Last rendered values to avoid unnecessary UI updates
     protected double Prev_Input_DB = double.NaN;
     protected double Prev_Input_DB_Peak = double.NaN;
@@ -85,7 +124,11 @@ public partial class BTH_VolumeLevelControl : UserControl
         try
         {
             this.pnl_OutputClip.BackColor = System.Drawing.Color.Black;
+            this.Output_Clipped = false;
             this.Output_Peak = 0;
+
+            ClearPeakWindow(this.Output_PeakWindow);
+            this.Output_DB_Peak_Held = double.NegativeInfinity;
         }
         catch (Exception ex)
         {
@@ -98,7 +141,13 @@ public partial class BTH_VolumeLevelControl : UserControl
         try
         {
             this.pnl_InputClip.BackColor = System.Drawing.Color.Black;
+            this.Input_Clipped = false;
             this.Input_Peak = 0;
+
+            //"Reset Peak and Clip Indicators" - drop the held peak too, so the red bar falls away
+            //at once instead of lingering for up to PeakHoldRefreshCount refreshes.
+            ClearPeakWindow(this.Input_PeakWindow);
+            this.Input_DB_Peak_Held = double.NegativeInfinity;
         }
         catch (Exception ex)
         {
@@ -106,6 +155,16 @@ public partial class BTH_VolumeLevelControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Low-rate backstop for the dB labels.
+    /// <para>
+    /// ComputeLevels is the authoritative update: it pushes the meters and the labels from one
+    /// snapshot so they always agree. This tick only re-asserts the current field values, and
+    /// SetDbLabel skips the write when the rounded value has not moved, so it is a no-op
+    /// whenever the refresh timer is running. FormMonitoring still owns this timer's Enabled
+    /// flag for its Pause checkbox.
+    /// </para>
+    /// </summary>
     protected void timer_Refresh_Tick(object? sender, EventArgs e)
     {
         try
@@ -192,7 +251,24 @@ public partial class BTH_VolumeLevelControl : UserControl
             this.CalculateOutputLevels();
             if (this.Disposing || this.IsDisposed)
                 return;
+
+            //Must run exactly once per refresh, and BEFORE the displays are pushed: the peak bar
+            //shows a rolling maximum rather than the raw per-buffer peak.
+            this.Update_PeakHold();
+            if (this.Disposing || this.IsDisposed)
+                return;
             this.Set_VolAndClipIndicators();
+            if (this.Disposing || this.IsDisposed)
+                return;
+
+            //DEFECT FIX: the dB labels used to be driven ONLY by this control's own 1000 ms
+            //timer_Refresh, while the meters were driven by FormMonitoring's refresh timer
+            //(100 ms by default, user-settable down to 1 ms). Both paths read the same
+            //Input_DB / Input_DB_Peak / Output_DB / Output_DB_Peak fields, so the two sampled
+            //them up to a second apart and the numbers beside a meter belonged to a different
+            //audio buffer than its bar and peak bar. Every display now comes from the one
+            //snapshot the Calculate* calls above just produced.
+            this.Set_DB_Lables();
         });
     }
     #endregion
@@ -363,9 +439,11 @@ public partial class BTH_VolumeLevelControl : UserControl
         //PERF: the old code always built all 4 strings (a ToString + a Concat each) and only then
         //compared them against the label text, so it allocated 8 strings per refresh even when
         //nothing had changed. Compare the ROUNDED SOURCE VALUE instead and format only on a change.
-        SetDbLabel(this.lbl_Input_DB_Peak, this.Input_DB_Peak, ref this.Last_Input_DB_Peak_Rounded);
+        //The peak labels read the HELD peak, the same value the red bars are drawn from, so a
+        //label always describes the bar beside it.
+        SetDbLabel(this.lbl_Input_DB_Peak, this.Input_DB_Peak_Held, ref this.Last_Input_DB_Peak_Rounded);
         SetDbLabel(this.lbl_Input_DB, this.Input_DB, ref this.Last_Input_DB_Rounded);
-        SetDbLabel(this.lbl_Output_DB_Peak, this.Output_DB_Peak, ref this.Last_Output_DB_Peak_Rounded);
+        SetDbLabel(this.lbl_Output_DB_Peak, this.Output_DB_Peak_Held, ref this.Last_Output_DB_Peak_Rounded);
         SetDbLabel(this.lbl_Output_DB, this.Output_DB, ref this.Last_Output_DB_Rounded);
     }
 
@@ -389,7 +467,95 @@ public partial class BTH_VolumeLevelControl : UserControl
             return;
 
         cache = Local_Rounded;
-        label.Text = Local_Rounded.ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
+        label.Text = FormatDbLabel(Local_Rounded);
+    }
+
+    /// <summary>
+    /// Renders a whole-dB reading for a level label.
+    /// </summary>
+    /// <param name="rounded">The already-rounded dB value.</param>
+    /// <returns>The text to show.</returns>
+    /// <remarks>
+    /// DEFECT FIX: silence makes Decibels.LinearToDecibels(0) return negative infinity, which
+    /// ToString renders as "-Infinity" - so an idle channel read "-InfinitydB" beside an empty
+    /// meter. Non-finite readings now use the conventional infinity glyph, written as an escape
+    /// so this file stays plain ASCII (the same trick NAudio's own meter used).
+    /// </remarks>
+    private static string FormatDbLabel(double rounded)
+    {
+        if (double.IsNegativeInfinity(rounded))
+            return "-\x221edB";
+        if (double.IsPositiveInfinity(rounded))
+            return "+\x221edB";
+        if (double.IsNaN(rounded))
+            return "--dB";
+
+        return rounded.ToString(System.Globalization.CultureInfo.InvariantCulture) + "dB";
+    }
+
+    /// <summary>
+    /// Creates a peak-hold window that starts empty.
+    /// </summary>
+    /// <returns>A window filled with negative infinity.</returns>
+    private static double[] CreatePeakWindow()
+    {
+        var Local_Window = new double[PeakHoldRefreshCount];
+
+        //Deliberately not the 0.0 a plain array would give: an all-zero window would park the red
+        //bar at 0 dBFS - a full-scale reading - until enough refreshes had overwritten it.
+        for (int i = 0; i < Local_Window.Length; i++)
+            Local_Window[i] = double.NegativeInfinity;
+
+        return Local_Window;
+    }
+
+    /// <summary>
+    /// Advances the peak-hold windows by one refresh and recomputes the held maxima.
+    /// </summary>
+    /// <remarks>
+    /// The red bar used to jump straight to the raw peak of the buffer that had just been measured,
+    /// so a transient was on screen for a single refresh and was easy to miss. It now shows the
+    /// largest of the last <see cref="PeakHoldRefreshCount"/> refreshes.
+    /// </remarks>
+    protected void Update_PeakHold()
+    {
+        int Local_Slot = this.PeakWindowIndex;
+        this.Input_PeakWindow[Local_Slot] = this.Input_DB_Peak;
+        this.Output_PeakWindow[Local_Slot] = this.Output_DB_Peak;
+
+        Local_Slot++;
+        this.PeakWindowIndex = Local_Slot >= PeakHoldRefreshCount ? 0 : Local_Slot;
+
+        this.Input_DB_Peak_Held = MaxOf(this.Input_PeakWindow);
+        this.Output_DB_Peak_Held = MaxOf(this.Output_PeakWindow);
+    }
+
+    /// <summary>
+    /// Returns the largest value in a peak window.
+    /// </summary>
+    /// <param name="values">The window to scan.</param>
+    /// <returns>The maximum, or negative infinity for an empty window.</returns>
+    private static double MaxOf(double[] values)
+    {
+        double Local_Max = double.NegativeInfinity;
+        for (int i = 0; i < values.Length; i++)
+        {
+            //A '>' test means a NaN entry can never win, so one bad buffer cannot poison the hold.
+            if (values[i] > Local_Max)
+                Local_Max = values[i];
+        }
+
+        return Local_Max;
+    }
+
+    /// <summary>
+    /// Empties a peak-hold window so the red bar drops immediately instead of lingering.
+    /// </summary>
+    /// <param name="window">The window to clear.</param>
+    private static void ClearPeakWindow(double[] window)
+    {
+        for (int i = 0; i < window.Length; i++)
+            window[i] = double.NegativeInfinity;
     }
 
     protected void Set_VolAndClipIndicators()
@@ -397,45 +563,70 @@ public partial class BTH_VolumeLevelControl : UserControl
         // Local refs to reduce repeated property access
         var volIn = this.vol_In;
         var volOut = this.vol_Out;
-        var pnlIn = this.pnl_InputClip;
-        var pnlOut = this.pnl_OutputClip;
 
         // Only update DB level if changed beyond a small threshold to avoid frequent redraws
         const double threshold = 0.1; // dB
         if (double.IsNaN(this.Prev_Input_DB) || Math.Abs(this.Input_DB - this.Prev_Input_DB) > threshold)
         {
+            //The setter repaints only the bar strip when the value actually moved.
             volIn.DB_Level = this.Input_DB;
-            volIn.Invalidate();
             this.Prev_Input_DB = this.Input_DB;
         }
 
-        if (double.IsNaN(this.Prev_Input_DB_Peak) || Math.Abs(this.Input_DB_Peak - this.Prev_Input_DB_Peak) > threshold)
+        if (double.IsNaN(this.Prev_Input_DB_Peak) || Math.Abs(this.Input_DB_Peak_Held - this.Prev_Input_DB_Peak) > threshold)
         {
-            // If clip threshold reached, set to red. Only change color when different to avoid repaint churn.
-            if ((this.Input_DB >= this.ClipLevel || this.Input_DB_Peak >= this.ClipLevel) && pnlIn.BackColor != System.Drawing.Color.Red)
-                pnlIn.BackColor = System.Drawing.Color.Red;
-            else if (this.Input_DB < this.ClipLevel && this.Input_DB_Peak < this.ClipLevel && pnlIn.BackColor != System.Drawing.Color.Black)
-                pnlIn.BackColor = System.Drawing.Color.Black;
-
-            this.Prev_Input_DB_Peak = this.Input_DB_Peak;
+            //Drives the red peak bar on the meter, from the held maximum rather than the raw peak.
+            volIn.DB_Peak = this.Input_DB_Peak_Held;
+            this.Prev_Input_DB_Peak = this.Input_DB_Peak_Held;
         }
 
         if (double.IsNaN(this.Prev_Output_DB) || Math.Abs(this.Output_DB - this.Prev_Output_DB) > threshold)
         {
             volOut.DB_Level = this.Output_DB;
-            volOut.Invalidate();
             this.Prev_Output_DB = this.Output_DB;
         }
 
-        if (double.IsNaN(this.Prev_Output_DB_Peak) || Math.Abs(this.Output_DB_Peak - this.Prev_Output_DB_Peak) > threshold)
+        if (double.IsNaN(this.Prev_Output_DB_Peak) || Math.Abs(this.Output_DB_Peak_Held - this.Prev_Output_DB_Peak) > threshold)
         {
-            if ((this.Output_DB >= this.ClipLevel || this.Output_DB_Peak >= this.ClipLevel) && pnlOut.BackColor != System.Drawing.Color.Red)
-                pnlOut.BackColor = System.Drawing.Color.Red;
-            else if (this.Output_DB < this.ClipLevel && this.Output_DB_Peak < this.ClipLevel && pnlOut.BackColor != System.Drawing.Color.Black)
-                pnlOut.BackColor = System.Drawing.Color.Black;
-
-            this.Prev_Output_DB_Peak = this.Output_DB_Peak;
+            volOut.DB_Peak = this.Output_DB_Peak_Held;
+            this.Prev_Output_DB_Peak = this.Output_DB_Peak_Held;
         }
+
+        //DEFECT FIX: the clip test used to live INSIDE the 'peak moved by more than 0.1 dB'
+        //blocks above, so a steadily clipped signal - whose peak sits still at full scale -
+        //stopped being evaluated and the box never lit. Clipping is now tested on every refresh,
+        //independently of the repaint throttling.
+        this.Latch_ClipIndicator(this.pnl_InputClip, this.Input_DB, this.Input_DB_Peak, ref this.Input_Clipped);
+        this.Latch_ClipIndicator(this.pnl_OutputClip, this.Output_DB, this.Output_DB_Peak, ref this.Output_Clipped);
+    }
+
+    /// <summary>
+    /// Latches a clip indicator red once the level reaches <see cref="ClipLevel"/>, and leaves it
+    /// red until the box is clicked or the Reset button at the top of the Monitor screen is used.
+    /// </summary>
+    /// <param name="indicator">The clip box to colour.</param>
+    /// <param name="db">The current RMS level, in dB.</param>
+    /// <param name="dbPeak">The current peak level, in dB.</param>
+    /// <param name="latched">The caller's latch flag for this direction.</param>
+    /// <remarks>
+    /// DEFECT FIX: the old code cleared the box back to black as soon as the level dropped below
+    /// the threshold, so a clip that lasted less than one refresh interval was invisible and a
+    /// clip that had happened was forgotten. A clip indicator is a latch by definition - that is
+    /// what the Reset button exists for - so nothing here clears it.
+    /// </remarks>
+    protected void Latch_ClipIndicator(Control indicator, double db, double dbPeak, ref bool latched)
+    {
+        if (latched)
+            return;
+
+        //Written as a positive test so a NaN level cannot latch the box.
+        bool Local_IsClipping = db >= this.ClipLevel || dbPeak >= this.ClipLevel;
+        if (!Local_IsClipping)
+            return;
+
+        latched = true;
+        if (indicator.BackColor != System.Drawing.Color.Red)
+            indicator.BackColor = System.Drawing.Color.Red;
     }
     #endregion
 
