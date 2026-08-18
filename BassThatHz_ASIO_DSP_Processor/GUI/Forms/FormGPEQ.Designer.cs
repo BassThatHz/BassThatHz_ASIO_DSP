@@ -347,7 +347,6 @@
             // ShowIndividualMag_CHK
             // 
             ShowIndividualMag_CHK.AutoSize = true;
-            ShowIndividualMag_CHK.Enabled = false;
             ShowIndividualMag_CHK.Location = new System.Drawing.Point(14, 68);
             ShowIndividualMag_CHK.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
             ShowIndividualMag_CHK.Name = "ShowIndividualMag_CHK";
@@ -355,11 +354,11 @@
             ShowIndividualMag_CHK.TabIndex = 292;
             ShowIndividualMag_CHK.Text = "Show Individual Mag";
             ShowIndividualMag_CHK.UseVisualStyleBackColor = true;
+            ShowIndividualMag_CHK.CheckedChanged += ShowIndividualMag_CHK_CheckedChanged;
             // 
             // ShowIndividualPhase_CHK
             // 
             ShowIndividualPhase_CHK.AutoSize = true;
-            ShowIndividualPhase_CHK.Enabled = false;
             ShowIndividualPhase_CHK.Location = new System.Drawing.Point(14, 87);
             ShowIndividualPhase_CHK.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
             ShowIndividualPhase_CHK.Name = "ShowIndividualPhase_CHK";
@@ -367,11 +366,11 @@
             ShowIndividualPhase_CHK.TabIndex = 293;
             ShowIndividualPhase_CHK.Text = "Show Individual Phase";
             ShowIndividualPhase_CHK.UseVisualStyleBackColor = true;
+            ShowIndividualPhase_CHK.CheckedChanged += ShowIndividualPhase_CHK_CheckedChanged;
             // 
             // ShowComponentPhase_CHK
             // 
             ShowComponentPhase_CHK.AutoSize = true;
-            ShowComponentPhase_CHK.Enabled = false;
             ShowComponentPhase_CHK.Location = new System.Drawing.Point(14, 135);
             ShowComponentPhase_CHK.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
             ShowComponentPhase_CHK.Name = "ShowComponentPhase_CHK";
@@ -379,11 +378,11 @@
             ShowComponentPhase_CHK.TabIndex = 295;
             ShowComponentPhase_CHK.Text = "Show Component Phase";
             ShowComponentPhase_CHK.UseVisualStyleBackColor = true;
+            ShowComponentPhase_CHK.CheckedChanged += ShowComponentPhase_CHK_CheckedChanged;
             // 
             // ShowComponentMag_CHK
             // 
             ShowComponentMag_CHK.AutoSize = true;
-            ShowComponentMag_CHK.Enabled = false;
             ShowComponentMag_CHK.Location = new System.Drawing.Point(14, 116);
             ShowComponentMag_CHK.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
             ShowComponentMag_CHK.Name = "ShowComponentMag_CHK";
@@ -391,6 +390,7 @@
             ShowComponentMag_CHK.TabIndex = 294;
             ShowComponentMag_CHK.Text = "Show Component Mag";
             ShowComponentMag_CHK.UseVisualStyleBackColor = true;
+            ShowComponentMag_CHK.CheckedChanged += ShowComponentMag_CHK_CheckedChanged;
             // 
             // Refresh_BTN
             // 

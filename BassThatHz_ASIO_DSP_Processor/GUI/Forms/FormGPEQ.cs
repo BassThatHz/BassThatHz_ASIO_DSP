@@ -49,6 +49,21 @@ public partial class FormGPEQ : Form
     private Series? _seriesMag;
     private Series? _seriesPhase;
     private Series? _seriesDummy;
+
+    // Per-filter (Component / Individual) traces. Unlike the three series above these are created
+    // and destroyed on demand, because how many of them there are depends on the filter list.
+    private readonly List<Series> _perFilterSeries = new();
+
+    // Every trace gets its own colour - a filter's magnitude and phase included - so each one can be
+    // picked out of a chart that carries all of them at once. Colours are keyed on the filter
+    // INSTANCE, not on its list index, so they survive a filter being moved up/down or deleted. A
+    // plain list is enough: the lookup runs once per filter per redraw over a handful of filters.
+    private readonly List<(IFilter Filter, System.Drawing.Color MagColor, System.Drawing.Color PhaseColor)> _filterColors = new();
+
+    // Where the last trace colour was taken from along the usable hue arcs. Negative until the
+    // first colour is handed out, which is when the random starting point is chosen.
+    private double _nextHuePosition = -1;
+    private readonly Random _colorRandom = new();
     #endregion
 
     #region Constructor and Init
@@ -83,49 +98,9 @@ public partial class FormGPEQ : Form
         {
             foreach (var Filter in filters)
             {
-                if (Filter == null)
-                    continue;
-
-                if (Filter is BiQuadFilter BiQuadFilter)
-                {
-                    var TempFilter = new BiQuadFilter()
-                    {
-                        aa0 = BiQuadFilter.aa0,
-                        aa1 = BiQuadFilter.aa1,
-                        aa2 = BiQuadFilter.aa2,
-                        a0 = BiQuadFilter.a0,
-                        a1 = BiQuadFilter.a1,
-                        a2 = BiQuadFilter.a2,
-                        a3 = BiQuadFilter.a3,
-                        a4 = BiQuadFilter.a4,
-                        b0 = BiQuadFilter.b0,
-                        b1 = BiQuadFilter.b1,
-                        b2 = BiQuadFilter.b2,
-                        FilterEnabled = BiQuadFilter.FilterEnabled,
-                        BiQuadFilterType = BiQuadFilter.BiQuadFilterType,
-                        FilterType = BiQuadFilter.FilterType,
-                        Frequency = BiQuadFilter.Frequency,
-                        Gain = BiQuadFilter.Gain,
-                        Q = BiQuadFilter.Q,
-                        Slope = BiQuadFilter.Slope,
-                        SampleRate = BiQuadFilter.SampleRate,
-                    };
-                    TempFilter.ApplySettings();
+                var TempFilter = CopyFilter(Filter);
+                if (TempFilter != null)
                     this.Filters.Add(TempFilter);
-                }
-                else if (Filter is Basic_HPF_LPF HPF_LPF)
-                {
-                    var TempFilter = new Basic_HPF_LPF()
-                    {
-                        FilterEnabled = HPF_LPF.FilterEnabled,
-                        HPFFreq = HPF_LPF.HPFFreq,
-                        LPFFreq = HPF_LPF.LPFFreq,
-                        HPFFilter = HPF_LPF.HPFFilter,
-                        LPFFilter = HPF_LPF.LPFFilter,
-                    };
-                    TempFilter.ApplySettings();
-                    this.Filters.Add(TempFilter);
-                }
             }
         }
 
@@ -171,6 +146,26 @@ public partial class FormGPEQ : Form
             _chartArea0.AxisY2.Enabled = AxisEnabled.True;
     }
 
+    protected void ShowComponentMag_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        this.RedrawChart();
+    }
+
+    protected void ShowComponentPhase_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        this.RedrawChart();
+    }
+
+    protected void ShowIndividualMag_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        this.RedrawChart();
+    }
+
+    protected void ShowIndividualPhase_CHK_CheckedChanged(object sender, EventArgs e)
+    {
+        this.RedrawChart();
+    }
+
     protected void SaveAndClose_BTN_Click(object sender, EventArgs e)
     {
         try
@@ -200,14 +195,7 @@ public partial class FormGPEQ : Form
 
     protected void Refresh_BTN_Click(object sender, EventArgs e)
     {
-        try
-        {
-            this.DisplayMagnitudeResponse();
-        }
-        catch (Exception ex)
-        {
-            this.Error(ex);
-        }
+        this.RedrawChart();
     }
 
     protected void Filters_LSB_SelectedIndexChanged(object sender, EventArgs e)
@@ -245,6 +233,12 @@ public partial class FormGPEQ : Form
                     }
                 }
             }
+
+            // The Individual traces follow the list selection, so they have to be recomputed here.
+            // Nothing to do when the Component traces are the ones on screen: they already cover
+            // every filter and do not depend on which one is selected.
+            if (this.IsIndividualMagVisible || this.IsIndividualPhaseVisible)
+                this.DisplayMagnitudeResponse();
         }
         catch (Exception ex)
         {
@@ -539,6 +533,18 @@ public partial class FormGPEQ : Form
         }
     }
 
+    protected void RedrawChart()
+    {
+        try
+        {
+            this.DisplayMagnitudeResponse();
+        }
+        catch (Exception ex)
+        {
+            this.Error(ex);
+        }
+    }
+
     protected void DisplayMagnitudeResponse()
     {
         int FFTSize = this.FFTSize_CBO.SelectedIndex == 0 ? 8192 : 262144; // Size of FFT
@@ -548,19 +554,12 @@ public partial class FormGPEQ : Form
         double sampleRate = Program.DSP_Info.InSampleRate;
         var temp_FFT = new FFT(FFTSize, ZeroPadding);
 
-        // Create test signal (symmetric spectrum -> real time-domain signal)
-        var TestSignal = new Complex[FFTSize];
-        for (int i = 0; i < FFTSize; i++)
-        {
-            if (i <= FFTSize / 2)
-                TestSignal[i] = new Complex(1.0, 0.0); // Flat magnitude, zero phase
-            else
-                TestSignal[i] = Complex.Conjugate(TestSignal[FFTSize - i]);
-        }
+        double[] TestSignal = BuildTestSignal(temp_FFT, FFTSize);
 
-        double[] DataBuffer = temp_FFT.Perform_IFFT(TestSignal);
-
-        // Put test signal through the filter stack, and collect the output results
+        // Put test signal through the filter stack, and collect the output results.
+        // Transform() works in place, so the total pass gets its own copy of the test signal and
+        // leaves the original for the per-filter passes below.
+        double[] DataBuffer = (double[])TestSignal.Clone();
         int FilterCount = this.Filters.Count;
         for (int i = 0; i < FilterCount; i++)
         {
@@ -572,38 +571,305 @@ public partial class FormGPEQ : Form
         var WindowCoefficients = DSP.Window.Coefficients(WindowType, FFTSize);
         WindowScaleFactor = DSP.Window.ScaleFactor.Signal(WindowCoefficients);
 
-        // Perform FFT of the result
-        Complex[] freqResponseFFT = temp_FFT.Perform_FFT(DataBuffer, WindowCoefficients);
-
         // Calculate frequency axis for plotting
         double[] freqSpan = temp_FFT.FrequencySpan(sampleRate);
         freqSpan[0] = 0.0001; // avoid log(0)
 
-        // Keep only the real (non-mirrored) half of the spectrum
-        int halfLen = freqResponseFFT.Length / 2 + 1;
-        var realHalf = new Complex[halfLen];
-        Array.Copy(freqResponseFFT, realHalf, halfLen);
-
         // Convert FFT results to magnitude in decibels and phase
-        double[] mag = DSP.ConvertComplex.ToMagnitude(realHalf);
-        double[] magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(mag);
-        double[] phaseDeg = DSP.ConvertComplex.ToPhaseDegrees(realHalf);
-
-        // ---------------------
-        // PHASE CALCULATION
-        // ---------------------
-        // Compute phase in degrees: atan2(imag, real) * 180/π
-        //double[] phaseDeg = new double[halfLen];
-        //for (int i = 0; i < halfLen; i++)
-        //{
-        //    // Phase in degrees
-        //    phaseDeg[i] = Math.Atan2(realHalf[i].Imaginary, realHalf[i].Real) * (180.0 / Math.PI);
-        //}
+        ComputeResponse(temp_FFT, WindowCoefficients, DataBuffer, out var magLog, out var phaseDeg);
 
         // Plot both magnitude and phase
         int MinHz = 1;
         int MaxHz = (int)(sampleRate / 2.0);
         Plot_FFT(this.GPEQ_Chart, MinHz, MaxHz, freqSpan, magLog, phaseDeg);
+
+        // Plot the Component / Individual traces on top of the total
+        this.Plot_PerFilterResponses(temp_FFT, WindowCoefficients, TestSignal, freqSpan);
+    }
+
+    /// <summary>
+    /// Builds the flat-magnitude / zero-phase test signal that every response measurement uses.
+    /// </summary>
+    protected static double[] BuildTestSignal(FFT fft, int fftSize)
+    {
+        // Create test signal (symmetric spectrum -> real time-domain signal)
+        var TestSignal = new Complex[fftSize];
+        for (int i = 0; i < fftSize; i++)
+        {
+            if (i <= fftSize / 2)
+                TestSignal[i] = new Complex(1.0, 0.0); // Flat magnitude, zero phase
+            else
+                TestSignal[i] = Complex.Conjugate(TestSignal[fftSize - i]);
+        }
+
+        return fft.Perform_IFFT(TestSignal);
+    }
+
+    /// <summary>
+    /// FFTs a filtered test signal and hands back the real (non-mirrored) half of the spectrum as
+    /// magnitude in dBV and phase in degrees.
+    /// </summary>
+    protected static void ComputeResponse(FFT fft, double[] windowCoefficients, double[] dataBuffer,
+                                          out double[] magLog, out double[] phaseDeg)
+    {
+        // Perform FFT of the result
+        Complex[] FreqResponseFFT = fft.Perform_FFT(dataBuffer, windowCoefficients);
+
+        // Keep only the real (non-mirrored) half of the spectrum
+        int HalfLen = FreqResponseFFT.Length / 2 + 1;
+        var RealHalf = new Complex[HalfLen];
+        Array.Copy(FreqResponseFFT, RealHalf, HalfLen);
+
+        double[] Mag = DSP.ConvertComplex.ToMagnitude(RealHalf);
+        magLog = DSP.ConvertMagnitude.ToMagnitudeDBV(Mag);
+        phaseDeg = DSP.ConvertComplex.ToPhaseDegrees(RealHalf);
+    }
+
+    /// <summary>
+    /// True when the Individual Mag trace should be drawn. The Component trace wins when both are
+    /// ticked, because the Individual trace would only duplicate one of the Component traces.
+    /// </summary>
+    protected bool IsIndividualMagVisible =>
+        this.ShowIndividualMag_CHK.Checked && !this.ShowComponentMag_CHK.Checked;
+
+    /// <summary>
+    /// True when the Individual Phase trace should be drawn. See <see cref="IsIndividualMagVisible"/>.
+    /// </summary>
+    protected bool IsIndividualPhaseVisible =>
+        this.ShowIndividualPhase_CHK.Checked && !this.ShowComponentPhase_CHK.Checked;
+
+    /// <summary>
+    /// Draws one trace per filter: every enabled filter for Component, or only the filter currently
+    /// selected in the list box for Individual. Each filter is measured on its own copy of the test
+    /// signal, so what is drawn is that filter's own contribution rather than the running total.
+    /// </summary>
+    protected void Plot_PerFilterResponses(FFT fft, double[] windowCoefficients, double[] testSignal, double[] freqSpan)
+    {
+        this.ClearPerFilterSeries();
+
+        bool ShowComponentMag = this.ShowComponentMag_CHK.Checked;
+        bool ShowComponentPhase = this.ShowComponentPhase_CHK.Checked;
+        bool ShowIndividualMag = this.IsIndividualMagVisible;
+        bool ShowIndividualPhase = this.IsIndividualPhaseVisible;
+
+        if (!ShowComponentMag && !ShowComponentPhase && !ShowIndividualMag && !ShowIndividualPhase)
+            return;
+
+        var SelectedIndex = this.Filters_LSB.SelectedIndex;
+
+        this.GPEQ_Chart.SuspendLayout();
+        try
+        {
+            int FilterCount = this.Filters.Count;
+            for (int i = 0; i < FilterCount; i++)
+            {
+                var Filter = this.Filters[i];
+
+                // A disabled filter contributes nothing to the total, so it contributes no
+                // component trace either.
+                if (Filter == null || !Filter.FilterEnabled)
+                    continue;
+
+                bool IsSelected = i == SelectedIndex;
+                bool NeedsMag = ShowComponentMag || (ShowIndividualMag && IsSelected);
+                bool NeedsPhase = ShowComponentPhase || (ShowIndividualPhase && IsSelected);
+                if (!NeedsMag && !NeedsPhase)
+                    continue;
+
+                var FilterOutput = GetSingleFilterResponse(Filter, testSignal);
+                ComputeResponse(fft, windowCoefficients, FilterOutput, out var MagLog, out var PhaseDeg);
+
+                var TraceColors = this.GetFilterColors(Filter);
+
+                if (NeedsMag)
+                    this.AddPerFilterSeries("Filter_Mag_" + i, AxisType.Primary, TraceColors.MagColor, freqSpan, MagLog);
+
+                if (NeedsPhase)
+                    this.AddPerFilterSeries("Filter_Phase_" + i, AxisType.Secondary, TraceColors.PhaseColor, freqSpan, PhaseDeg);
+            }
+        }
+        finally
+        {
+            this.GPEQ_Chart.ResumeLayout();
+        }
+    }
+
+    /// <summary>
+    /// Runs the test signal through a single filter, on a copy of both the signal and the filter, so
+    /// neither the buffer nor the filter state used by the total trace is disturbed.
+    /// </summary>
+    protected static double[] GetSingleFilterResponse(IFilter filter, double[] testSignal)
+    {
+        var DataBuffer = (double[])testSignal.Clone();
+
+        var TempFilter = CopyFilter(filter);
+        if (TempFilter == null)
+            return DataBuffer;
+
+        return TempFilter.Transform(DataBuffer, new DSP_Stream());
+    }
+
+    /// <summary>
+    /// Copies a filter's settings onto a brand new instance of the same type, or returns null for a
+    /// filter type this form does not handle. The copy starts with clean biquad history, so it can
+    /// be measured in isolation.
+    /// </summary>
+    protected static IFilter? CopyFilter(IFilter? input)
+    {
+        if (input is BiQuadFilter BiQuadFilter)
+        {
+            var TempFilter = new BiQuadFilter()
+            {
+                aa0 = BiQuadFilter.aa0,
+                aa1 = BiQuadFilter.aa1,
+                aa2 = BiQuadFilter.aa2,
+                a0 = BiQuadFilter.a0,
+                a1 = BiQuadFilter.a1,
+                a2 = BiQuadFilter.a2,
+                a3 = BiQuadFilter.a3,
+                a4 = BiQuadFilter.a4,
+                b0 = BiQuadFilter.b0,
+                b1 = BiQuadFilter.b1,
+                b2 = BiQuadFilter.b2,
+                FilterEnabled = BiQuadFilter.FilterEnabled,
+                BiQuadFilterType = BiQuadFilter.BiQuadFilterType,
+                FilterType = BiQuadFilter.FilterType,
+                Frequency = BiQuadFilter.Frequency,
+                Gain = BiQuadFilter.Gain,
+                Q = BiQuadFilter.Q,
+                Slope = BiQuadFilter.Slope,
+                SampleRate = BiQuadFilter.SampleRate,
+            };
+            TempFilter.ApplySettings();
+            return TempFilter;
+        }
+
+        if (input is Basic_HPF_LPF HPF_LPF)
+        {
+            var TempFilter = new Basic_HPF_LPF()
+            {
+                FilterEnabled = HPF_LPF.FilterEnabled,
+                HPFFreq = HPF_LPF.HPFFreq,
+                LPFFreq = HPF_LPF.LPFFreq,
+                HPFFilter = HPF_LPF.HPFFilter,
+                LPFFilter = HPF_LPF.LPFFilter,
+            };
+            TempFilter.ApplySettings();
+            return TempFilter;
+        }
+
+        return null;
+    }
+
+    protected void ClearPerFilterSeries()
+    {
+        foreach (var TempSeries in this._perFilterSeries)
+            this.GPEQ_Chart.Series.Remove(TempSeries);
+
+        this._perFilterSeries.Clear();
+    }
+
+    protected void AddPerFilterSeries(string name, AxisType axisType, System.Drawing.Color color,
+                                      double[] xData, double[] yData)
+    {
+        var TempSeries = new Series(name)
+        {
+            ChartArea = (this._chartArea0 ?? this.GPEQ_Chart.ChartAreas[0]).Name,
+            ChartType = SeriesChartType.Line,
+            YAxisType = axisType,
+            Color = color,
+            BorderWidth = 1,
+            IsVisibleInLegend = false,
+        };
+
+        // Phase traces are dashed, which is what says a trace reads against the right hand axis
+        // rather than the left. The colour says WHICH trace it is; the dashes say what it measures.
+        if (axisType == AxisType.Secondary)
+            TempSeries.BorderDashStyle = ChartDashStyle.Dash;
+
+        TempSeries.Points.DataBindXY(xData, yData);
+
+        this.GPEQ_Chart.Series.Add(TempSeries);
+        this._perFilterSeries.Add(TempSeries);
+    }
+
+    /// <summary>
+    /// Hands out a pair of random colours per filter, one for its magnitude trace and a different
+    /// one for its phase trace. They are remembered for as long as the form is open, so the traces
+    /// do not change colour on every redraw.
+    /// </summary>
+    protected (System.Drawing.Color MagColor, System.Drawing.Color PhaseColor) GetFilterColors(IFilter filter)
+    {
+        foreach (var Entry in this._filterColors)
+        {
+            if (ReferenceEquals(Entry.Filter, filter))
+                return (Entry.MagColor, Entry.PhaseColor);
+        }
+
+        var MagColor = ColorFromHue(this.NextTraceHue());
+        var PhaseColor = ColorFromHue(this.NextTraceHue());
+
+        this._filterColors.Add((filter, MagColor, PhaseColor));
+        return (MagColor, PhaseColor);
+    }
+
+    #region Hue Arcs
+    // The total magnitude is blue (hue 240) and the total phase is red (hue 0/360), so a 20 degree
+    // band around each of those is skipped: arc A is 20..220, arc B is 260..340. Positions run
+    // 0..280 across the two arcs end to end, and map back onto a hue below.
+    protected const double ArcAStart = 20.0;
+    protected const double ArcAWidth = 200.0;
+    protected const double ArcBStart = 260.0;
+    protected const double ArcBWidth = 80.0;
+    protected const double UsableHueWidth = ArcAWidth + ArcBWidth;
+
+    // Stepping by the golden ratio drops each new trace into the widest gap left by the previous
+    // ones, so colours stay well apart however many traces there are. Picking a hue at random each
+    // time cannot promise that: two traces can land on top of each other by chance.
+    protected const double GoldenHueStep = UsableHueWidth * 0.6180339887498949;
+    #endregion
+
+    /// <summary>
+    /// Hands out the next trace hue: a random starting point, then a golden-ratio step per trace.
+    /// The start is what makes the palette come out different each time the form is opened; the step
+    /// is what keeps the traces on one chart tellable apart.
+    /// </summary>
+    protected double NextTraceHue()
+    {
+        this._nextHuePosition = this._nextHuePosition < 0
+            ? this._colorRandom.NextDouble() * UsableHueWidth
+            : (this._nextHuePosition + GoldenHueStep) % UsableHueWidth;
+
+        return this._nextHuePosition < ArcAWidth
+            ? ArcAStart + this._nextHuePosition
+            : ArcBStart + (this._nextHuePosition - ArcAWidth);
+    }
+
+    /// <summary>
+    /// Random hue at a fixed saturation and brightness, which keeps every generated colour readable
+    /// against the white plot area (a plain random RGB triple can land on near-white or near-black).
+    /// </summary>
+    protected static System.Drawing.Color ColorFromHue(double hue)
+    {
+        const double Saturation = 0.85;
+        const double Brightness = 0.75;
+
+        double C = Brightness * Saturation;
+        double X = C * (1.0 - Math.Abs(hue / 60.0 % 2.0 - 1.0));
+        double M = Brightness - C;
+
+        double R, G, B;
+        if (hue < 60) { R = C; G = X; B = 0; }
+        else if (hue < 120) { R = X; G = C; B = 0; }
+        else if (hue < 180) { R = 0; G = C; B = X; }
+        else if (hue < 240) { R = 0; G = X; B = C; }
+        else if (hue < 300) { R = X; G = 0; B = C; }
+        else { R = C; G = 0; B = X; }
+
+        return System.Drawing.Color.FromArgb(
+            (int)Math.Round((R + M) * 255.0),
+            (int)Math.Round((G + M) * 255.0),
+            (int)Math.Round((B + M) * 255.0));
     }
 
     protected void Plot_FFT(Chart chartControl, double min, double max, double[] xData, double[] magData, double[] phaseData)

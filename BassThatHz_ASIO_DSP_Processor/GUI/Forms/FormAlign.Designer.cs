@@ -34,7 +34,6 @@
             ChartArea chartArea1 = new ChartArea();
             Series series1 = new Series();
             Series series2 = new Series();
-            Series series3 = new Series();
             Title title1 = new Title();
             Title title2 = new Title();
             Title title3 = new Title();
@@ -67,7 +66,12 @@
             cboSource2 = new System.Windows.Forms.ComboBox();
             label2 = new System.Windows.Forms.Label();
             cboRef = new System.Windows.Forms.ComboBox();
+            Source1_Color_LBL = new System.Windows.Forms.Label();
+            Source2_Color_LBL = new System.Windows.Forms.Label();
+            Ref_Color_LBL = new System.Windows.Forms.Label();
             groupBox2 = new System.Windows.Forms.GroupBox();
+            Smoothing_CHK = new System.Windows.Forms.CheckBox();
+            Smoothing_CBO = new System.Windows.Forms.ComboBox();
             Averaging_TXT = new System.Windows.Forms.TextBox();
             label6 = new System.Windows.Forms.Label();
             Coherence_Mask_TXT = new System.Windows.Forms.TextBox();
@@ -90,6 +94,11 @@
             label18 = new System.Windows.Forms.Label();
             Delay1_LBL = new System.Windows.Forms.Label();
             label20 = new System.Windows.Forms.Label();
+            DelayDelta_LBL = new System.Windows.Forms.Label();
+            label22 = new System.Windows.Forms.Label();
+            Frames_LBL = new System.Windows.Forms.Label();
+            label23 = new System.Windows.Forms.Label();
+            Reset_BTN = new System.Windows.Forms.Button();
             Coherence_LBL = new System.Windows.Forms.Label();
             label16 = new System.Windows.Forms.Label();
             Coherence2_LBL = new System.Windows.Forms.Label();
@@ -116,12 +125,8 @@
             series2.ChartArea = "ChartArea1";
             series2.ChartType = SeriesChartType.Line;
             series2.Name = "Series2";
-            series3.ChartArea = "ChartArea1";
-            series3.ChartType = SeriesChartType.Line;
-            series3.Name = "Sum";
             Chart_Mag.Series.Add(series1);
             Chart_Mag.Series.Add(series2);
-            Chart_Mag.Series.Add(series3);
             Chart_Mag.Size = new System.Drawing.Size(1315, 348);
             Chart_Mag.TabIndex = 298;
             Chart_Mag.Text = "chart3";
@@ -192,7 +197,7 @@
             cboSource1.Location = new System.Drawing.Point(11, 877);
             cboSource1.Margin = new System.Windows.Forms.Padding(2);
             cboSource1.Name = "cboSource1";
-            cboSource1.Size = new System.Drawing.Size(530, 23);
+            cboSource1.Size = new System.Drawing.Size(505, 23);
             cboSource1.TabIndex = 299;
             cboSource1.SelectedIndexChanged += cboSource1_SelectedIndexChanged;
             // 
@@ -214,7 +219,7 @@
             cboSource2.Location = new System.Drawing.Point(11, 931);
             cboSource2.Margin = new System.Windows.Forms.Padding(2);
             cboSource2.Name = "cboSource2";
-            cboSource2.Size = new System.Drawing.Size(530, 23);
+            cboSource2.Size = new System.Drawing.Size(505, 23);
             cboSource2.TabIndex = 301;
             cboSource2.SelectedIndexChanged += cboSource2_SelectedIndexChanged;
             // 
@@ -236,12 +241,50 @@
             cboRef.Location = new System.Drawing.Point(11, 986);
             cboRef.Margin = new System.Windows.Forms.Padding(2);
             cboRef.Name = "cboRef";
-            cboRef.Size = new System.Drawing.Size(530, 23);
+            cboRef.Size = new System.Drawing.Size(505, 23);
             cboRef.TabIndex = 303;
             cboRef.SelectedIndexChanged += cboRef_SelectedIndexChanged;
-            // 
+            //
+            // Source1_Color_LBL
+            //
+            Source1_Color_LBL.AutoSize = false;
+            Source1_Color_LBL.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            Source1_Color_LBL.Location = new System.Drawing.Point(523, 877);
+            Source1_Color_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            Source1_Color_LBL.Name = "Source1_Color_LBL";
+            Source1_Color_LBL.Size = new System.Drawing.Size(24, 23);
+            Source1_Color_LBL.TabIndex = 311;
+            Source1_Color_LBL.TabStop = false;
+            Source1_Color_LBL.Text = "";
+            //
+            // Source2_Color_LBL
+            //
+            Source2_Color_LBL.AutoSize = false;
+            Source2_Color_LBL.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            Source2_Color_LBL.Location = new System.Drawing.Point(523, 931);
+            Source2_Color_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            Source2_Color_LBL.Name = "Source2_Color_LBL";
+            Source2_Color_LBL.Size = new System.Drawing.Size(24, 23);
+            Source2_Color_LBL.TabIndex = 312;
+            Source2_Color_LBL.TabStop = false;
+            Source2_Color_LBL.Text = "";
+            //
+            // Ref_Color_LBL
+            //
+            Ref_Color_LBL.AutoSize = false;
+            Ref_Color_LBL.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            Ref_Color_LBL.Location = new System.Drawing.Point(523, 986);
+            Ref_Color_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            Ref_Color_LBL.Name = "Ref_Color_LBL";
+            Ref_Color_LBL.Size = new System.Drawing.Size(24, 23);
+            Ref_Color_LBL.TabIndex = 313;
+            Ref_Color_LBL.TabStop = false;
+            Ref_Color_LBL.Text = "";
+            //
             // groupBox2
-            // 
+            //
+            groupBox2.Controls.Add(Smoothing_CHK);
+            groupBox2.Controls.Add(Smoothing_CBO);
             groupBox2.Controls.Add(Averaging_TXT);
             groupBox2.Controls.Add(label6);
             groupBox2.Controls.Add(Coherence_Mask_TXT);
@@ -258,11 +301,38 @@
             groupBox2.Controls.Add(label8);
             groupBox2.Location = new System.Drawing.Point(559, 866);
             groupBox2.Name = "groupBox2";
-            groupBox2.Size = new System.Drawing.Size(225, 150);
+            // 150 tall clipped the bottom 3 px off the "Averaging (Exp)" box, which sits at
+            // y=127 and is 23 tall. The extra width carries a second column: the ms range and
+            // the smoothing controls.
+            groupBox2.Size = new System.Drawing.Size(300, 158);
             groupBox2.TabIndex = 307;
             groupBox2.TabStop = false;
             groupBox2.Text = "Chart Settings";
-            // 
+            //
+            // Smoothing_CHK
+            //
+            Smoothing_CHK.AutoSize = true;
+            Smoothing_CHK.Location = new System.Drawing.Point(185, 72);
+            Smoothing_CHK.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            Smoothing_CHK.Name = "Smoothing_CHK";
+            Smoothing_CHK.Size = new System.Drawing.Size(95, 19);
+            Smoothing_CHK.TabIndex = 312;
+            Smoothing_CHK.Text = "Smoothing:";
+            Smoothing_CHK.UseVisualStyleBackColor = true;
+            Smoothing_CHK.CheckedChanged += Smoothing_CHK_CheckedChanged;
+            //
+            // Smoothing_CBO
+            //
+            // Items are populated on load from FormAlign.SmoothingOptions, so a label and the
+            // octave fraction it stands for cannot drift apart.
+            Smoothing_CBO.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            Smoothing_CBO.Enabled = false;
+            Smoothing_CBO.FormattingEnabled = true;
+            Smoothing_CBO.Location = new System.Drawing.Point(185, 96);
+            Smoothing_CBO.Name = "Smoothing_CBO";
+            Smoothing_CBO.Size = new System.Drawing.Size(100, 23);
+            Smoothing_CBO.TabIndex = 313;
+            //
             // Averaging_TXT
             // 
             Averaging_TXT.Location = new System.Drawing.Point(109, 127);
@@ -289,7 +359,10 @@
             Coherence_Mask_TXT.Name = "Coherence_Mask_TXT";
             Coherence_Mask_TXT.Size = new System.Drawing.Size(61, 23);
             Coherence_Mask_TXT.TabIndex = 309;
-            Coherence_Mask_TXT.Text = "0.3";
+            // 0 disables masking. It used to default to 0.3, which - because the coherence
+            // estimate it gated on was itself unusable (see FormAlign.CoherenceWarmupFrames and
+            // ComputeFFTs) - punched large holes in the phase and magnitude traces.
+            Coherence_Mask_TXT.Text = "0";
             // 
             // label21
             // 
@@ -302,37 +375,42 @@
             label21.Text = "Coherence Mask:";
             // 
             // min_ms_TXT
-            // 
-            min_ms_TXT.Location = new System.Drawing.Point(172, 42);
+            //
+            // DEFECT FIX: min_ms_TXT used to sit at y=42, i.e. on the row captioned "Max ms:",
+            // and max_ms_TXT sat at y=15 on the row captioned "Min ms:". The two boxes were
+            // swapped relative to their own labels, so Plot_IR_Chart fed the user's maximum into
+            // AxisX.Minimum. That leaves Minimum above Maximum, which the chart rejects - and
+            // because these charts run with SuppressExceptions the failure was silent.
+            min_ms_TXT.Location = new System.Drawing.Point(237, 15);
             min_ms_TXT.Margin = new System.Windows.Forms.Padding(2);
             min_ms_TXT.Name = "min_ms_TXT";
             min_ms_TXT.Size = new System.Drawing.Size(43, 23);
             min_ms_TXT.TabIndex = 307;
-            min_ms_TXT.Text = "2";
-            // 
+            min_ms_TXT.Text = "-2";
+            //
             // label4
-            // 
+            //
             label4.AutoSize = true;
-            label4.Location = new System.Drawing.Point(120, 19);
+            label4.Location = new System.Drawing.Point(185, 19);
             label4.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             label4.Name = "label4";
             label4.Size = new System.Drawing.Size(50, 15);
             label4.TabIndex = 304;
             label4.Text = "Min ms:";
-            // 
+            //
             // max_ms_TXT
-            // 
-            max_ms_TXT.Location = new System.Drawing.Point(172, 15);
+            //
+            max_ms_TXT.Location = new System.Drawing.Point(237, 42);
             max_ms_TXT.Margin = new System.Windows.Forms.Padding(2);
             max_ms_TXT.Name = "max_ms_TXT";
             max_ms_TXT.Size = new System.Drawing.Size(43, 23);
             max_ms_TXT.TabIndex = 305;
-            max_ms_TXT.Text = "-2";
+            max_ms_TXT.Text = "2";
             // 
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new System.Drawing.Point(120, 46);
+            label5.Location = new System.Drawing.Point(185, 46);
             label5.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             label5.Name = "label5";
             label5.Size = new System.Drawing.Size(52, 15);
@@ -399,7 +477,17 @@
             // 
             // RefreshTimer
             // 
-            RefreshTimer.Enabled = true;
+            // DEFECT FIX: this used to be Enabled = true, i.e. the timer was armed from
+            // InitializeComponent - which runs on the thread that CONSTRUCTS the form. This form
+            // is constructed on the application's main UI thread but pumped by its own STA thread
+            // (ctl_MonitorPage.btn_Align_Click), so the timer's message window ended up owned by
+            // the main thread while every control handle belonged to the form's own thread, and
+            // RefreshTimer_Tick therefore ran cross-thread against all of them:
+            // "Cross-thread operation not valid: Control 'Smoothing_CBO' accessed from a thread
+            // other than the thread it was created on."
+            // FormAlign_Load starts it instead, so the tick arrives on the thread that owns the
+            // controls. This matches FormRTA, which arms its plot timers from RTA_Shown.
+            RefreshTimer.Enabled = false;
             RefreshTimer.Interval = 200;
             RefreshTimer.Tick += RefreshTimer_Tick;
             // 
@@ -539,6 +627,11 @@
             // 
             // groupBox1
             // 
+            groupBox1.Controls.Add(Reset_BTN);
+            groupBox1.Controls.Add(Frames_LBL);
+            groupBox1.Controls.Add(label23);
+            groupBox1.Controls.Add(DelayDelta_LBL);
+            groupBox1.Controls.Add(label22);
             groupBox1.Controls.Add(Delay2_LBL);
             groupBox1.Controls.Add(label18);
             groupBox1.Controls.Add(Delay1_LBL);
@@ -549,65 +642,117 @@
             groupBox1.Controls.Add(label14);
             groupBox1.Controls.Add(Coherence1_LBL);
             groupBox1.Controls.Add(label12);
-            groupBox1.Location = new System.Drawing.Point(790, 877);
+            // Shifted right and narrowed to make room for the wider Chart Settings box, while
+            // keeping its right edge flush with the charts above it (x = 1325).
+            groupBox1.Location = new System.Drawing.Point(865, 877);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new System.Drawing.Size(535, 150);
+            groupBox1.Size = new System.Drawing.Size(460, 150);
             groupBox1.TabIndex = 310;
             groupBox1.TabStop = false;
             groupBox1.Text = "Stats";
             // 
             // Delay2_LBL
-            // 
+            //
             Delay2_LBL.AutoSize = true;
-            Delay2_LBL.Location = new System.Drawing.Point(224, 41);
+            Delay2_LBL.Location = new System.Drawing.Point(288, 41);
             Delay2_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             Delay2_LBL.Name = "Delay2_LBL";
             Delay2_LBL.Size = new System.Drawing.Size(13, 15);
             Delay2_LBL.TabIndex = 310;
-            Delay2_LBL.Text = "0";
-            // 
+            Delay2_LBL.Text = "-";
+            //
             // label18
-            // 
+            //
             label18.AutoSize = true;
-            label18.Location = new System.Drawing.Point(151, 41);
+            label18.Location = new System.Drawing.Point(195, 41);
             label18.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             label18.Name = "label18";
             label18.Size = new System.Drawing.Size(75, 15);
             label18.TabIndex = 309;
             label18.Text = "Delay 2 (ms):";
-            // 
+            //
             // Delay1_LBL
-            // 
+            //
             Delay1_LBL.AutoSize = true;
-            Delay1_LBL.Location = new System.Drawing.Point(224, 19);
+            Delay1_LBL.Location = new System.Drawing.Point(288, 19);
             Delay1_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             Delay1_LBL.Name = "Delay1_LBL";
             Delay1_LBL.Size = new System.Drawing.Size(13, 15);
             Delay1_LBL.TabIndex = 308;
-            Delay1_LBL.Text = "0";
-            // 
+            Delay1_LBL.Text = "-";
+            //
             // label20
-            // 
+            //
             label20.AutoSize = true;
-            label20.Location = new System.Drawing.Point(151, 19);
+            label20.Location = new System.Drawing.Point(195, 19);
             label20.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             label20.Name = "label20";
             label20.Size = new System.Drawing.Size(75, 15);
             label20.TabIndex = 307;
             label20.Text = "Delay 1 (ms):";
-            // 
+            //
+            // DelayDelta_LBL
+            //
+            DelayDelta_LBL.AutoSize = true;
+            DelayDelta_LBL.Location = new System.Drawing.Point(288, 63);
+            DelayDelta_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            DelayDelta_LBL.Name = "DelayDelta_LBL";
+            DelayDelta_LBL.Size = new System.Drawing.Size(13, 15);
+            DelayDelta_LBL.TabIndex = 312;
+            DelayDelta_LBL.Text = "-";
+            //
+            // label22
+            //
+            label22.AutoSize = true;
+            label22.Location = new System.Drawing.Point(195, 63);
+            label22.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            label22.Name = "label22";
+            label22.Size = new System.Drawing.Size(88, 15);
+            label22.TabIndex = 311;
+            label22.Text = "Delay 1-2 (ms):";
+            //
+            // Frames_LBL
+            //
+            Frames_LBL.AutoSize = true;
+            Frames_LBL.Location = new System.Drawing.Point(122, 85);
+            Frames_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            Frames_LBL.Name = "Frames_LBL";
+            Frames_LBL.Size = new System.Drawing.Size(13, 15);
+            Frames_LBL.TabIndex = 314;
+            Frames_LBL.Text = "0";
+            //
+            // label23
+            //
+            label23.AutoSize = true;
+            label23.Location = new System.Drawing.Point(5, 85);
+            label23.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            label23.Name = "label23";
+            label23.Size = new System.Drawing.Size(75, 15);
+            label23.TabIndex = 313;
+            label23.Text = "Avg Frames:";
+            //
+            // Reset_BTN
+            //
+            Reset_BTN.Location = new System.Drawing.Point(340, 105);
+            Reset_BTN.Name = "Reset_BTN";
+            Reset_BTN.Size = new System.Drawing.Size(110, 30);
+            Reset_BTN.TabIndex = 315;
+            Reset_BTN.Text = "Reset";
+            Reset_BTN.UseVisualStyleBackColor = true;
+            Reset_BTN.Click += Reset_BTN_Click;
+            //
             // Coherence_LBL
-            // 
+            //
             Coherence_LBL.AutoSize = true;
-            Coherence_LBL.Location = new System.Drawing.Point(102, 19);
+            Coherence_LBL.Location = new System.Drawing.Point(122, 19);
             Coherence_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             Coherence_LBL.Name = "Coherence_LBL";
             Coherence_LBL.Size = new System.Drawing.Size(13, 15);
             Coherence_LBL.TabIndex = 306;
-            Coherence_LBL.Text = "0";
-            // 
+            Coherence_LBL.Text = "-";
+            //
             // label16
-            // 
+            //
             label16.AutoSize = true;
             label16.Location = new System.Drawing.Point(5, 19);
             label16.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
@@ -615,47 +760,47 @@
             label16.Size = new System.Drawing.Size(98, 15);
             label16.TabIndex = 305;
             label16.Text = "Coherence Mask:";
-            // 
+            //
             // Coherence2_LBL
-            // 
+            //
             Coherence2_LBL.AutoSize = true;
-            Coherence2_LBL.Location = new System.Drawing.Point(102, 63);
+            Coherence2_LBL.Location = new System.Drawing.Point(122, 63);
             Coherence2_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             Coherence2_LBL.Name = "Coherence2_LBL";
             Coherence2_LBL.Size = new System.Drawing.Size(13, 15);
             Coherence2_LBL.TabIndex = 304;
-            Coherence2_LBL.Text = "0";
-            // 
+            Coherence2_LBL.Text = "-";
+            //
             // label14
-            // 
+            //
             label14.AutoSize = true;
             label14.Location = new System.Drawing.Point(5, 63);
             label14.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             label14.Name = "label14";
-            label14.Size = new System.Drawing.Size(76, 15);
+            label14.Size = new System.Drawing.Size(115, 15);
             label14.TabIndex = 303;
-            label14.Text = "Coherence 2:";
-            // 
+            label14.Text = "Coherence 2 (avg):";
+            //
             // Coherence1_LBL
-            // 
+            //
             Coherence1_LBL.AutoSize = true;
-            Coherence1_LBL.Location = new System.Drawing.Point(102, 41);
+            Coherence1_LBL.Location = new System.Drawing.Point(122, 41);
             Coherence1_LBL.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             Coherence1_LBL.Name = "Coherence1_LBL";
             Coherence1_LBL.Size = new System.Drawing.Size(13, 15);
             Coherence1_LBL.TabIndex = 302;
-            Coherence1_LBL.Text = "0";
-            // 
+            Coherence1_LBL.Text = "-";
+            //
             // label12
-            // 
+            //
             label12.AutoSize = true;
             label12.Location = new System.Drawing.Point(5, 41);
             label12.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             label12.Name = "label12";
-            label12.Size = new System.Drawing.Size(76, 15);
+            label12.Size = new System.Drawing.Size(115, 15);
             label12.TabIndex = 301;
-            label12.Text = "Coherence 1:";
-            // 
+            label12.Text = "Coherence 1 (avg):";
+            //
             // FormAlign
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
@@ -665,10 +810,13 @@
             Controls.Add(Chart_IR);
             Controls.Add(Chart_Phase);
             Controls.Add(groupBox2);
+            Controls.Add(Ref_Color_LBL);
             Controls.Add(label2);
             Controls.Add(cboRef);
+            Controls.Add(Source2_Color_LBL);
             Controls.Add(label1);
             Controls.Add(cboSource2);
+            Controls.Add(Source1_Color_LBL);
             Controls.Add(label3);
             Controls.Add(cboSource1);
             Controls.Add(Chart_Mag);
@@ -678,6 +826,7 @@
             Text = "Align Signals";
             WindowState = System.Windows.Forms.FormWindowState.Maximized;
             Load += FormAlign_Load;
+            FormClosing += FormAlign_FormClosing;
             ((System.ComponentModel.ISupportInitialize)Chart_Mag).EndInit();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
@@ -727,5 +876,15 @@
         protected System.Windows.Forms.Label label20;
         protected System.Windows.Forms.TextBox Averaging_TXT;
         protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.Label DelayDelta_LBL;
+        protected System.Windows.Forms.Label label22;
+        protected System.Windows.Forms.Label Frames_LBL;
+        protected System.Windows.Forms.Label label23;
+        protected System.Windows.Forms.Button Reset_BTN;
+        protected System.Windows.Forms.Label Source1_Color_LBL;
+        protected System.Windows.Forms.Label Source2_Color_LBL;
+        protected System.Windows.Forms.Label Ref_Color_LBL;
+        protected System.Windows.Forms.CheckBox Smoothing_CHK;
+        protected System.Windows.Forms.ComboBox Smoothing_CBO;
     }
 }
