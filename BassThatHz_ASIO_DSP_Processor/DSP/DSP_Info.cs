@@ -50,6 +50,9 @@ public sealed class DSP_Info
     public bool NetworkConfigAPI_Enabled { get; set; } = false;
     public string NetworkConfigAPI_Host { get; set; } = "localhost";
     public int NetworkConfigAPI_Port { get; set; } = 8080;
+
+    public string REW_API_Host { get; set; } = "localhost";
+    public int REW_API_Port { get; set; } = 4735;
     #endregion
 
     #region Input Settings

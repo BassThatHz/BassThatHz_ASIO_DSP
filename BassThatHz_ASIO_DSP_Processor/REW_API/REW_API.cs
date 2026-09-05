@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using static System.Net.WebRequestMethods;
 #endregion
 
 /// <summary>
@@ -36,8 +37,6 @@ using System.Threading.Tasks;
 
 public class REW_API
 {
-    public string REW_baseUrl = "http://localhost:4735";
-
     // Reuse HttpClient and JsonSerializerOptions to reduce allocations and improve perf
     private static readonly HttpClient s_httpClient = new HttpClient();
     private static readonly JsonSerializerOptions s_jsonOptions = new JsonSerializerOptions
@@ -46,14 +45,14 @@ public class REW_API
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public async Task PostToREW_API(string REW_ID, REW_TargetSettings REW_TargetSettings, List<REW_Filter> REW_Filters)
+    public async Task PostToREW_API(string REW_ID, string REW_host, string REW_port, REW_TargetSettings REW_TargetSettings, List<REW_Filter> REW_Filters)
     {
         // Serialize using shared options and reuse static HttpClient
         var targetSettingsJson = JsonSerializer.Serialize(REW_TargetSettings, s_jsonOptions);
         using var targetSettingsContent = new StringContent(targetSettingsJson, Encoding.UTF8, "application/json");
         //DEFECT FIX: HttpResponseMessage (and its HttpContent/stream) is IDisposable and was never
         //disposed on either the success or the throw path, leaking a connection per call/retry.
-        using (var targetSettingsResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings"), targetSettingsContent).ConfigureAwait(false))
+        using (var targetSettingsResponse = await s_httpClient.PostAsync(new Uri($"http://{REW_host}:{REW_port}/measurements/{REW_ID}/target-settings"), targetSettingsContent).ConfigureAwait(false))
         {
             //DEFECT FIX: the status code used to be read and discarded, so a failed POST was
             //reported to the user as a successful export.
@@ -66,7 +65,7 @@ public class REW_API
         var filtersWrapper = new { filters = REW_Filters };
         var filtersJson = JsonSerializer.Serialize(filtersWrapper, s_jsonOptions);
         using var filtersContent = new StringContent(filtersJson, Encoding.UTF8, "application/json");
-        using (var filtersResponse = await s_httpClient.PostAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters"), filtersContent).ConfigureAwait(false))
+        using (var filtersResponse = await s_httpClient.PostAsync(new Uri($"http://{REW_host}:{REW_port}/measurements/{REW_ID}/filters"), filtersContent).ConfigureAwait(false))
         {
             if (!filtersResponse.IsSuccessStatusCode)
                 throw new HttpRequestException("REW filters POST failed with response code: "
@@ -74,10 +73,10 @@ public class REW_API
         }
     }
 
-    public async Task<REW_TargetSettings?> GetTargetSettingsFromREW_API(string REW_ID)
+    public async Task<REW_TargetSettings?> GetTargetSettingsFromREW_API(string REW_ID, string REW_host, string REW_port)
     {
         //DEFECT FIX: response was never disposed - the throw path below leaked a connection.
-        using var targetSettingsResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/target-settings")).ConfigureAwait(false);
+        using var targetSettingsResponse = await s_httpClient.GetAsync(new Uri($"http://{REW_host}:{REW_port}/measurements/{REW_ID}/target-settings")).ConfigureAwait(false);
         if (targetSettingsResponse.IsSuccessStatusCode)
         {
             string jsonContent = await targetSettingsResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -89,10 +88,10 @@ public class REW_API
         }
     }
 
-    public async Task<List<REW_Filter>?> GetFiltersFromREW_API(string REW_ID)
+    public async Task<List<REW_Filter>?> GetFiltersFromREW_API(string REW_ID, string REW_host, string REW_port)
     {
         //DEFECT FIX: response was never disposed - the throw path below leaked a connection.
-        using var filtersResponse = await s_httpClient.GetAsync(new Uri($"{REW_baseUrl}/measurements/{REW_ID}/filters")).ConfigureAwait(false);
+        using var filtersResponse = await s_httpClient.GetAsync(new Uri($"http://{REW_host}:{REW_port}/measurements/{REW_ID}/filters")).ConfigureAwait(false);
         if (filtersResponse.IsSuccessStatusCode)
         {
             string jsonContent = await filtersResponse.Content.ReadAsStringAsync().ConfigureAwait(false);

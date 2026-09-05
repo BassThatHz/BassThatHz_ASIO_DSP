@@ -48,8 +48,10 @@ public partial class ctl_GeneralConfigPage : UserControl
     {
         InitializeComponent();
         this.maskStartUpDelay.TextChanged += this.MaskStartUpDelay_TextChanged;
-        this.txt_NetworkConfigAPI_Host.TextChanged += txt_NetworkConfigAPI_Host_TextChanged;
-        this.maskNetworkConfig_Port.TextChanged += maskNetworkConfig_Port_TextChanged;
+        this.txt_NetworkConfigAPI_Host.TextChanged += this.txt_NetworkConfigAPI_Host_TextChanged;
+        this.maskNetworkConfig_Port.TextChanged += this.maskNetworkConfig_Port_TextChanged;
+        this.txt_REW_Host.TextChanged += this.txt_REW_Host_TextChanged;
+        this.mask_REW_Port.TextChanged += this.maskREW_API_Port_TextChanged;
     }
     #endregion
 
@@ -233,6 +235,19 @@ public partial class ctl_GeneralConfigPage : UserControl
         Program.DSP_Info.NetworkConfigAPI_Host = this.txt_NetworkConfigAPI_Host.Text;
     }
 
+    protected void maskREW_API_Port_TextChanged(object? sender, EventArgs e)
+    {
+        if (int.TryParse(this.mask_REW_Port.Text, out var port))
+        {
+            Program.DSP_Info.REW_API_Port = port;
+        }
+    }
+
+    protected void txt_REW_Host_TextChanged(object? sender, EventArgs e)
+    {
+        Program.DSP_Info.REW_API_Host = this.txt_REW_Host.Text;
+    }
+
     #endregion
 
     #region Public LoadConfigRefresh Function
@@ -242,6 +257,8 @@ public partial class ctl_GeneralConfigPage : UserControl
         this.chkNetworkConfigAPI.Checked = Program.DSP_Info.NetworkConfigAPI_Enabled;
         this.txt_NetworkConfigAPI_Host.Text = Program.DSP_Info.NetworkConfigAPI_Host;
         this.maskNetworkConfig_Port.Text = Program.DSP_Info.NetworkConfigAPI_Port.ToString();
+        this.txt_REW_Host.Text = Program.DSP_Info.REW_API_Host;
+        this.mask_REW_Port.Text = Program.DSP_Info.REW_API_Port.ToString();
         this.chkThreading.Checked = Program.DSP_Info.IsMultiThreadingEnabled;
         this.chkBackgroundThread.Checked = Program.DSP_Info.IsBackgroundThreadEnabled;
         this.chkAutoStartDSP.Checked = Program.DSP_Info.AutoStartDSP;

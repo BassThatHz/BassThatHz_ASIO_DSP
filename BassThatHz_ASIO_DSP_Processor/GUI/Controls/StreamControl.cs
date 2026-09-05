@@ -383,8 +383,14 @@ public partial class StreamControl : UserControl
                 }
             }
             #endregion
+        
+            string hostname = Program.DSP_Info.REW_API_Host;
+            string port = Program.DSP_Info.REW_API_Port.ToString();
 
-            await this.REW_API.PostToREW_API(this.txt_REW_ID.Text, REW_TargetSettings, REW_Filters);
+            if (string.IsNullOrEmpty(hostname) || string.IsNullOrEmpty(port))
+                return;
+
+            await this.REW_API.PostToREW_API(this.txt_REW_ID.Text, hostname, port, REW_TargetSettings, REW_Filters);
         }
         catch (Exception ex)
         {
@@ -402,8 +408,14 @@ public partial class StreamControl : UserControl
         try
         {
             string REW_ID = this.txt_REW_ID.Text;
-            REW_TargetSettings = await this.REW_API.GetTargetSettingsFromREW_API(REW_ID);
-            REW_Filters = await this.REW_API.GetFiltersFromREW_API(REW_ID);
+            string hostname = Program.DSP_Info.REW_API_Host;
+            string port = Program.DSP_Info.REW_API_Port.ToString();
+
+            if (string.IsNullOrEmpty(hostname) || string.IsNullOrEmpty(port))
+                return;
+
+            REW_TargetSettings = await this.REW_API.GetTargetSettingsFromREW_API(REW_ID, hostname, port);
+            REW_Filters = await this.REW_API.GetFiltersFromREW_API(REW_ID, hostname, port);
         }
         catch (Exception ex)
         {

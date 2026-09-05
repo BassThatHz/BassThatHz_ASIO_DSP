@@ -68,6 +68,8 @@ public class Test_ASIO_Engine_HappyPaths
         public void GetClockSources(out long clocks, int numSources) { clocks = 0; }
         public void GetSamplePosition(out long samplePos, ref Asio64Bit timeStamp) { samplePos = 0; }
         public void Dispose() { }
+
+        (int InputLatency, int OutputLatency) IASIO_Unified.PlaybackLatency { get; }
     }
 
     [TestMethod]

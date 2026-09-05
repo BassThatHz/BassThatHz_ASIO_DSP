@@ -46,15 +46,23 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             label1 = new System.Windows.Forms.Label();
             maskStartUpDelay = new System.Windows.Forms.MaskedTextBox();
             groupBox1 = new System.Windows.Forms.GroupBox();
+            maskNetworkConfig_Port = new System.Windows.Forms.MaskedTextBox();
             label5 = new System.Windows.Forms.Label();
             label4 = new System.Windows.Forms.Label();
             label3 = new System.Windows.Forms.Label();
             label2 = new System.Windows.Forms.Label();
             txt_NetworkConfigAPI_Host = new System.Windows.Forms.TextBox();
             chkNetworkConfigAPI = new System.Windows.Forms.CheckBox();
-            maskNetworkConfig_Port = new System.Windows.Forms.MaskedTextBox();
+            groupBox3 = new System.Windows.Forms.GroupBox();
+            mask_REW_Port = new System.Windows.Forms.MaskedTextBox();
+            label6 = new System.Windows.Forms.Label();
+            label7 = new System.Windows.Forms.Label();
+            label8 = new System.Windows.Forms.Label();
+            label9 = new System.Windows.Forms.Label();
+            txt_REW_Host = new System.Windows.Forms.TextBox();
             groupBox2.SuspendLayout();
             groupBox1.SuspendLayout();
+            groupBox3.SuspendLayout();
             SuspendLayout();
             // 
             // groupBox2
@@ -117,7 +125,6 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             // 
             lstProcesAffinty.Enabled = false;
             lstProcesAffinty.FormattingEnabled = true;
-            lstProcesAffinty.ItemHeight = 15;
             lstProcesAffinty.Items.AddRange(new object[] { "All Cores (Best performance)", "1 Core (Worst performance)" });
             lstProcesAffinty.Location = new System.Drawing.Point(106, 47);
             lstProcesAffinty.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
@@ -248,6 +255,16 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             groupBox1.TabStop = false;
             groupBox1.Text = "Config API";
             // 
+            // maskNetworkConfig_Port
+            // 
+            maskNetworkConfig_Port.Location = new System.Drawing.Point(134, 44);
+            maskNetworkConfig_Port.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
+            maskNetworkConfig_Port.Mask = "#####";
+            maskNetworkConfig_Port.Name = "maskNetworkConfig_Port";
+            maskNetworkConfig_Port.Size = new System.Drawing.Size(58, 23);
+            maskNetworkConfig_Port.TabIndex = 86;
+            maskNetworkConfig_Port.Text = "0";
+            // 
             // label5
             // 
             label5.AutoSize = true;
@@ -309,20 +326,87 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             chkNetworkConfigAPI.UseVisualStyleBackColor = true;
             chkNetworkConfigAPI.CheckedChanged += chkNetworkConfigAPI_CheckedChanged;
             // 
-            // maskNetworkConfig_Port
+            // groupBox3
             // 
-            maskNetworkConfig_Port.Location = new System.Drawing.Point(134, 44);
-            maskNetworkConfig_Port.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
-            maskNetworkConfig_Port.Mask = "#####";
-            maskNetworkConfig_Port.Name = "maskNetworkConfig_Port";
-            maskNetworkConfig_Port.Size = new System.Drawing.Size(58, 23);
-            maskNetworkConfig_Port.TabIndex = 86;
-            maskNetworkConfig_Port.Text = "0";
+            groupBox3.Controls.Add(this.mask_REW_Port);
+            groupBox3.Controls.Add(label6);
+            groupBox3.Controls.Add(label7);
+            groupBox3.Controls.Add(label8);
+            groupBox3.Controls.Add(label9);
+            groupBox3.Controls.Add(txt_REW_Host);
+            groupBox3.Location = new System.Drawing.Point(3, 304);
+            groupBox3.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
+            groupBox3.Name = "groupBox3";
+            groupBox3.Padding = new System.Windows.Forms.Padding(2, 1, 2, 1);
+            groupBox3.Size = new System.Drawing.Size(564, 72);
+            groupBox3.TabIndex = 86;
+            groupBox3.TabStop = false;
+            groupBox3.Text = "REW API";
+            // 
+            // mask_REW_Port
+            // 
+            this.mask_REW_Port.Location = new System.Drawing.Point(134, 44);
+            this.mask_REW_Port.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
+            this.mask_REW_Port.Mask = "#####";
+            this.mask_REW_Port.Name = "mask_REW_Port";
+            this.mask_REW_Port.Size = new System.Drawing.Size(58, 23);
+            this.mask_REW_Port.TabIndex = 86;
+            this.mask_REW_Port.Text = "4735";
+            // 
+            // label6
+            // 
+            label6.AutoSize = true;
+            label6.Location = new System.Drawing.Point(251, 43);
+            label6.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            label6.Name = "label6";
+            label6.Size = new System.Drawing.Size(83, 15);
+            label6.TabIndex = 6;
+            label6.Text = "Default is 4735";
+            // 
+            // label7
+            // 
+            label7.AutoSize = true;
+            label7.Location = new System.Drawing.Point(252, 17);
+            label7.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            label7.Name = "label7";
+            label7.Size = new System.Drawing.Size(276, 15);
+            label7.TabIndex = 5;
+            label7.Text = "Can be IP Address or DNS Alias, Default is localhost";
+            // 
+            // label8
+            // 
+            label8.AutoSize = true;
+            label8.Location = new System.Drawing.Point(93, 42);
+            label8.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            label8.Name = "label8";
+            label8.Size = new System.Drawing.Size(32, 15);
+            label8.TabIndex = 4;
+            label8.Text = "Port:";
+            // 
+            // label9
+            // 
+            label9.AutoSize = true;
+            label9.Location = new System.Drawing.Point(93, 19);
+            label9.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            label9.Name = "label9";
+            label9.Size = new System.Drawing.Size(35, 15);
+            label9.TabIndex = 3;
+            label9.Text = "Host:";
+            // 
+            // txt_REW_Host
+            // 
+            txt_REW_Host.Location = new System.Drawing.Point(134, 18);
+            txt_REW_Host.Margin = new System.Windows.Forms.Padding(2, 1, 2, 1);
+            txt_REW_Host.Name = "txt_REW_Host";
+            txt_REW_Host.Size = new System.Drawing.Size(110, 23);
+            txt_REW_Host.TabIndex = 1;
+            txt_REW_Host.Text = "localhost";
             // 
             // ctl_GeneralConfigPage
             // 
             AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            Controls.Add(groupBox3);
             Controls.Add(groupBox1);
             Controls.Add(maskStartUpDelay);
             Controls.Add(label1);
@@ -332,12 +416,14 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
             Controls.Add(groupBox2);
             Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             Name = "ctl_GeneralConfigPage";
-            Size = new System.Drawing.Size(582, 313);
+            Size = new System.Drawing.Size(582, 381);
             Load += ctl_GeneralConfigPage_Load;
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
+            groupBox3.ResumeLayout(false);
+            groupBox3.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -367,5 +453,13 @@ namespace BassThatHz_ASIO_DSP_Processor.GUI.Tabs
         protected System.Windows.Forms.Label label5;
         protected System.Windows.Forms.Label label4;
         protected System.Windows.Forms.MaskedTextBox maskNetworkConfig_Port;
+        protected System.Windows.Forms.GroupBox groupBox3;
+        protected System.Windows.Forms.MaskedTextBox mask_REW_Port;
+        protected System.Windows.Forms.Label label6;
+        protected System.Windows.Forms.Label label7;
+        protected System.Windows.Forms.Label label8;
+        protected System.Windows.Forms.Label label9;
+        protected System.Windows.Forms.TextBox txt_REW_Host;
+        protected System.Windows.Forms.CheckBox checkBox1;
     }
 }
