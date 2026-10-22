@@ -1,4 +1,5 @@
-﻿#nullable enable
+
+#nullable enable
 
 namespace BassThatHz_ASIO_DSP_Processor;
 
@@ -11,217 +12,354 @@ using System.Xml.Serialization;
 #endregion
 
 /// <summary>
-///  BassThatHz ASIO DSP Processor Engine
-///  Copyright (c) 2026 BassThatHz
-/// 
-/// Permission is hereby granted to use this software 
-/// and associated documentation files (the "Software"), 
-/// for educational purposess, scientific purposess or private purposess
-/// or as part of an open-source community project, 
-/// (and NOT for commerical use or resale in substaintial part or whole without prior authorization)
-/// and all copies of the Software subject to the following conditions:
-/// 
-/// The copyright notice and this permission notice shall be included in all
-/// copies or substantial portions of the Software.
-// 
-/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-/// IMPLIED, INCLUDING BUT NOT LIMITED TO FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-/// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-/// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-/// SOFTWARE. ENFORCEABLE PORTIONS SHALL REMAIN IF NOT FOUND CONTRARY UNDER LAW.
+/// BassThatHz ASIO DSP Processor Engine
+/// Copyright (c) 2026 BassThatHz
+///
+/// Permission is hereby granted to use this software and associated
+/// documentation files (the "Software"), for educational, scientific,
+/// or private purposes, or as part of an open-source community project,
+/// and NOT for commercial use or resale in substantial part or whole
+/// without prior authorization.
+///
+/// The copyright notice and this permission notice shall be included
+/// in all copies or substantial portions of the Software.
+///
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+/// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO FITNESS FOR A
+/// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+/// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+/// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+/// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+/// OR OTHER DEALINGS IN THE SOFTWARE. ENFORCEABLE PORTIONS SHALL
+/// REMAIN IF NOT FOUND CONTRARY UNDER LAW.
 /// </summary>
 [Serializable]
 public class ClassicLimiter : IFilter
 {
     #region Variables
+
     protected double Gain_Linear = 1.0;
+
     protected double AttackCoeff;
     protected double ReleaseCoeff;
-    [XmlIgnoreAttribute]
+
+    [XmlIgnore]
     [IgnoreDataMember]
-    public double CompressionApplied = 1;
+    public double CompressionApplied = 1.0;
 
     /// <summary>
-    /// The largest double strictly below 1.0 (that is, 1 - 2^-53): the "just below full scale"
-    /// output ceiling the original clamp was written to express.
+    /// Largest representable double below 1.0.
+    /// This is a numerical full-scale safety bound, not a configurable
+    /// dBFS limiter ceiling.
     /// </summary>
-    /// <remarks>
-    /// The original constant read <c>1 - double.Epsilon</c>, which does NOT express that.
-    /// <c>double.Epsilon</c> is the smallest positive SUBNORMAL (about 4.9e-324), which is far
-    /// below the ULP of 1.0 (about 2.2e-16), so <c>1 - double.Epsilon</c> rounds straight back to
-    /// exactly 1.0 and the intended ceiling never existed. <see cref="Math.BitDecrement(double)"/>
-    /// of 1.0 is the value that was meant, and it keeps the output strictly inside full scale so a
-    /// downstream converter cannot wrap at 0 dBFS.
-    /// </remarks>
-    private static readonly double OutputCeiling = Math.BitDecrement(1.0);
+    private static readonly double OutputCeiling =
+        Math.BitDecrement(1.0);
+
     #endregion
 
-    #region Public Properties 
-    //Threshold is the level above which compression starts, in decibels (dB).
-    //Ratio determines the amount of gain reduction. For instance,
-    //a 4:1 ratio means that if the input level is 4 dB over the threshold, the output level will be 1 dB over the threshold.
-    //AttackTime and ReleaseTime control how quickly the compressor responds to changes in the input level.
-    public double Threshold_dB { get; set; } = -20; //-20db
-    public double AttackTime_ms { get; set; } = 99;
-    public double ReleaseTime_ms { get; set; } = 1;
+    #region Public Properties
 
     /// <summary>
-    /// The width of the knee area around the threshold in decibels (dB).
+    /// Compression threshold in dBFS.
     /// </summary>
-    /// <remarks>
-    /// KneeWidth_dB specifies the range over which the compressor transitions from no compression to the full compression ratio.
-    /// A wider knee width results in a more gradual increase in compression, leading to a smoother transition as the signal level crosses the threshold.
-    /// A knee width of 0 dB implies a 'hard knee', where compression is applied abruptly as soon as the signal exceeds the threshold.
-    /// A larger knee width implies a 'soft knee', where the onset of compression is more gradual, providing a more natural and less aggressive compression effect.
-    /// This property is important for tailoring the compressor's response to different types of audio material and desired compression characteristics.
-    /// </remarks>
-    public double KneeWidth_dB { get; set; } = 24;
+    public double Threshold_dB { get; set; } = -20.0;
+
+    /// <summary>
+    /// Compression ratio. A value of 4 means 4:1.
+    /// Values must be greater than or equal to 1.
+    /// </summary>
+    public double Ratio { get; set; } = 4.0;
+
+    /// <summary>
+    /// Attack time in milliseconds.
+    /// Zero means instantaneous attack.
+    /// </summary>
+    public double AttackTime_ms { get; set; } = 5.0;
+
+    /// <summary>
+    /// Release time in milliseconds.
+    /// Zero means instantaneous release.
+    /// </summary>
+    public double ReleaseTime_ms { get; set; } = 50.0;
+
+    /// <summary>
+    /// Soft-knee width in dB.
+    /// Zero means a hard knee.
+    /// </summary>
+    public double KneeWidth_dB { get; set; } = 0.0;
+
+    /// <summary>
+    /// Enables the quadratic soft-knee compression curve.
+    /// </summary>
     public bool UseSoftKnee { get; set; } = true;
+
     #endregion
 
     #region Public Functions
+
+    /// <summary>
+    /// Calculates the exponential attack and release coefficients.
+    /// Call this after setting the sample rate or changing timing settings.
+    /// </summary>
     public void CalculateCoeffs(double sampleRate)
     {
-        // Calculate the attack coefficient for the compressor.
-        // The attack coefficient determines how quickly the compressor responds to the signal exceeding the threshold.
-        // 'AttackTime_ms' is the attack time in milliseconds, and 'SampleRate' is the sample rate of the audio signal.
-        // The formula converts the attack time from milliseconds to seconds (by multiplying by 0.001)
-        // and then calculates the number of samples over which the attack time extends.
-        // The exponential function (Math.Exp) is used to create a smooth, logarithmic response curve.
-        // A negative exponent is used so that the coefficient approaches 0 as the attack time increases,
-        // resulting in a slower response to increasing signal levels.
-        AttackCoeff = Math.Exp(-1.0 / (0.001 * AttackTime_ms * sampleRate));
+        if (!double.IsFinite(sampleRate) || sampleRate <= 0.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sampleRate),
+                "Sample rate must be finite and greater than zero.");
+        }
 
-        // Calculate the release coefficient for the compressor.
-        // The release coefficient determines how quickly the compressor stops reducing the gain after the signal falls below the threshold.
-        // 'ReleaseTime_ms' is the release time in milliseconds.
-        // Similar to the attack coefficient, this formula converts the release time to seconds, 
-        // then calculates the number of samples over this time period, and applies the exponential function.
-        // The negative exponent means that a longer release time will result in a slower return to the uncompressed state.
-        ReleaseCoeff = Math.Exp(-1.0 / (0.001 * ReleaseTime_ms * sampleRate));
+        if (!double.IsFinite(AttackTime_ms) || AttackTime_ms < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(AttackTime_ms),
+                "Attack time must be finite and non-negative.");
+        }
+
+        if (!double.IsFinite(ReleaseTime_ms) || ReleaseTime_ms < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ReleaseTime_ms),
+                "Release time must be finite and non-negative.");
+        }
+
+        // a = exp(-1 / (sampleRate * timeInSeconds))
+        //
+        // Larger coefficients produce slower envelope movement.
+        // A zero time constant produces immediate response.
+
+        AttackCoeff = AttackTime_ms == 0.0
+            ? 0.0
+            : Math.Exp(
+                -1000.0 / (sampleRate * AttackTime_ms));
+
+        ReleaseCoeff = ReleaseTime_ms == 0.0
+            ? 0.0
+            : Math.Exp(
+                -1000.0 / (sampleRate * ReleaseTime_ms));
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
-    public double[] Transform(double[] input, DSP_Stream currentStream)
+    /// <summary>
+    /// Processes audio in place using a classic compressor envelope.
+    ///
+    /// This implementation uses sample-by-sample envelope smoothing.
+    /// It does not implement a delayed look-ahead audio path.
+    /// </summary>
+    [MethodImpl(
+        MethodImplOptions.AggressiveOptimization |
+        MethodImplOptions.AggressiveInlining)]
+    public double[] Transform(
+        double[] input,
+        DSP_Stream currentStream)
     {
+        ArgumentNullException.ThrowIfNull(input);
+
         int len = input.Length;
 
         if (len == 0)
             return input;
 
-        // Cache settings to locals to reduce repeated field access
-        double thresholdDb = this.Threshold_dB;
-        double kneeDb = this.KneeWidth_dB;
-        bool useSoft = this.UseSoftKnee;
-        double attackCoeff = this.AttackCoeff;
-        double releaseCoeff = this.ReleaseCoeff;
+        // Cache settings locally for the processing loop.
 
-        // Precompute threshold linear for lookahead comparison
-        double thresholdLinear = Decibels.DecibelsToLinear(thresholdDb);
+        double thresholdDb = Threshold_dB;
+        double ratio = Ratio;
 
-        // Rent a temporary buffer for absolute values and suffix max (look-ahead peak) to avoid O(n^2)
-        var pool = System.Buffers.ArrayPool<double>.Shared;
-        double[]? temp = null;
-        try
+        double kneeDb = UseSoftKnee
+            ? KneeWidth_dB
+            : 0.0;
+
+        double attackCoeff = AttackCoeff;
+        double releaseCoeff = ReleaseCoeff;
+
+        // Validate parameters.
+
+        if (!double.IsFinite(thresholdDb))
         {
-            temp = pool.Rent(len);
+            throw new ArgumentOutOfRangeException(
+                nameof(Threshold_dB));
+        }
 
-            // fill absolute values
-            for (int i = 0; i < len; i++)
-                temp[i] = Math.Abs(input[i]);
+        if (!double.IsFinite(ratio) || ratio < 1.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(Ratio),
+                "Ratio must be finite and greater than or equal to 1.");
+        }
 
-            // build suffix max in-place (temp becomes suffixMax)
-            double runningMax = temp[len - 1];
-            for (int i = len - 1; i >= 0; i--)
+        if (!double.IsFinite(kneeDb) || kneeDb < 0.0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(KneeWidth_dB),
+                "Knee width must be finite and non-negative.");
+        }
+
+        if (!double.IsFinite(attackCoeff) ||
+            attackCoeff < 0.0 || attackCoeff > 1.0)
+        {
+            throw new InvalidOperationException(
+                "Attack coefficient is invalid. Call CalculateCoeffs().");
+        }
+
+        if (!double.IsFinite(releaseCoeff) ||
+            releaseCoeff < 0.0 || releaseCoeff > 1.0)
+        {
+            throw new InvalidOperationException(
+                "Release coefficient is invalid. Call CalculateCoeffs().");
+        }
+
+        double inverseRatio = 1.0 / ratio;
+
+        double halfKnee = kneeDb * 0.5;
+
+        double lowerKneeDb = thresholdDb - halfKnee;
+        double upperKneeDb = thresholdDb + halfKnee;
+
+        double gain = Math.Clamp(Gain_Linear, 0.0, 1.0);
+
+        // Process every sample, including samples below threshold.
+        // This is essential for correct release behavior.
+
+        for (int i = 0; i < len; i++)
+        {
+            double sample = input[i];
+
+            // Do not propagate NaN or infinity into the DSP output.
+
+            if (!double.IsFinite(sample))
             {
-                if (temp[i] > runningMax)
-                    runningMax = temp[i];
-                temp[i] = runningMax;
+                input[i] = 0.0;
+                continue;
             }
 
-            // main processing loop
-            for (int i = 0; i < len; i++)
+            double absSample = Math.Abs(sample);
+
+            // Convert the absolute input amplitude to dBFS.
+            // Zero amplitude corresponds to negative infinity.
+
+            double inputDb = absSample > 0.0
+                ? 20.0 * Math.Log10(absSample)
+                : double.NegativeInfinity;
+
+            double gainReductionDb = 0.0;
+
+            if (absSample > 0.0)
             {
-                double absVal = Math.Abs(input[i]);
-                double inputDb = Decibels.LinearToDecibels(absVal + 1e-99);
-
-                double gainReductionLinear = 1.0;
-                bool thresholdExceeded = false;
-
-                if (useSoft && inputDb > thresholdDb - kneeDb * 0.5 && inputDb < thresholdDb + kneeDb * 0.5)
+                if (kneeDb > 0.0)
                 {
-                    thresholdExceeded = true;
-                    double kneeStart = thresholdDb - kneeDb * 0.5;
-                    double ratio = (inputDb - kneeStart) / kneeDb;
-                    double adjustedThreshold = kneeStart + ratio * kneeDb;
-                    gainReductionLinear = Decibels.DecibelsToLinear(adjustedThreshold - inputDb);
-                }
-                else if (inputDb > thresholdDb)
-                {
-                    thresholdExceeded = true;
-                    gainReductionLinear = Decibels.DecibelsToLinear(thresholdDb - inputDb);
+                    // Standard quadratic soft-knee curve.
+                    //
+                    // Below the lower knee: no compression.
+                    // Inside the knee: gradual compression.
+                    // Above the upper knee: full compression ratio.
 
-                    // look-ahead peak using suffix max
-                    double peakValue = temp[i];
-                    if (peakValue > thresholdLinear)
+                    if (inputDb > lowerKneeDb)
                     {
-                        // UNIT FIX: gainReductionLinear is a GAIN MULTIPLIER (<= 1 attenuates), but
-                        // (peakValue - thresholdLinear) is an amplitude DIFFERENCE. Mixing the two was a
-                        // unit error: a peak of 8.0 against a 0.1 threshold produced 7.9, and Math.Max
-                        // then selected a 7.9x BOOST, so hot material was amplified by the "limiter".
-                        // The multiplier that brings peakValue down to thresholdLinear is
-                        // thresholdLinear / peakValue, and "more reduction" is the SMALLER multiplier,
-                        // hence Math.Min. peakValue > thresholdLinear >= 0 here, so the divide is safe.
-                        double Local_LookAheadGain = thresholdLinear / peakValue;
-                        gainReductionLinear = Math.Min(gainReductionLinear, Local_LookAheadGain);
+                        if (inputDb < upperKneeDb)
+                        {
+                            double kneeOffset =
+                                inputDb - lowerKneeDb;
+
+                            gainReductionDb =
+                                (inverseRatio - 1.0) *
+                                kneeOffset *
+                                kneeOffset /
+                                (2.0 * kneeDb);
+                        }
+                        else
+                        {
+                            double overThresholdDb =
+                                inputDb - thresholdDb;
+
+                            gainReductionDb =
+                                (inverseRatio - 1.0) *
+                                overThresholdDb;
+                        }
                     }
                 }
-
-                if (thresholdExceeded)
+                else
                 {
-                    // smoothing
-                    if (gainReductionLinear < this.Gain_Linear)
-                        this.Gain_Linear = attackCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
-                    else
-                        this.Gain_Linear = releaseCoeff * (this.Gain_Linear - gainReductionLinear) + gainReductionLinear;
+                    // Hard-knee compression.
 
-                    this.CompressionApplied = this.Gain_Linear;
+                    if (inputDb > thresholdDb)
+                    {
+                        double overThresholdDb =
+                            inputDb - thresholdDb;
 
-                    // CLAMP FIX - the previous line was Math.Min(1 - double.Epsilon, ...), which
-                    // carried TWO defects:
-                    //  (a) the ceiling did not exist. 1 - double.Epsilon is exactly 1.0, because
-                    //      double.Epsilon is the smallest positive SUBNORMAL (~4.9e-324) and is far
-                    //      below the ULP of 1.0 (~2.2e-16). See OutputCeiling.
-                    //  (b) the clamp was ONE-SIDED. Math.Min bounds only from above, so negative
-                    //      peaks were completely unbounded: a -8.0 block still left the limiter at
-                    //      roughly -7.9, because the attack ramp has not converged at the start of
-                    //      the block and nothing else bounded it.
-                    // Math.Clamp against +/-OutputCeiling fixes both: a genuinely sub-unity ceiling,
-                    // applied symmetrically. Anything already inside the ceiling is returned
-                    // untouched, bit for bit, so normal audio is not perturbed.
-                    input[i] = Math.Clamp(input[i] * this.Gain_Linear, -OutputCeiling, OutputCeiling);
+                        gainReductionDb =
+                            (inverseRatio - 1.0) *
+                            overThresholdDb;
+                    }
                 }
             }
+
+            // Convert the desired gain reduction from dB to a
+            // linear amplitude multiplier.
+            //
+            // Negative gainReductionDb means attenuation.
+
+            double targetGain = gainReductionDb < 0.0
+                ? Math.Pow(10.0, gainReductionDb / 20.0)
+                : 1.0;
+
+            targetGain = Math.Clamp(targetGain, 0.0, 1.0);
+
+            // Attack when more attenuation is required.
+            // Release when attenuation can be reduced.
+            //
+            // The envelope must update on EVERY sample, including
+            // samples below threshold.
+
+            double coeff = targetGain < gain
+                ? attackCoeff
+                : releaseCoeff;
+
+            gain =
+                coeff * gain +
+                (1.0 - coeff) * targetGain;
+
+            gain = Math.Clamp(gain, 0.0, 1.0);
+
+            // Apply the envelope continuously. Do not bypass the
+            // gain merely because the current sample is below
+            // threshold; doing so would defeat release smoothing.
+
+            double output = sample * gain;
+
+            // Numerical full-scale safety clamp.
+            //
+            // This is NOT a true brick-wall limiter with look-ahead.
+
+            input[i] = Math.Clamp(
+                output,
+                -OutputCeiling,
+                OutputCeiling);
         }
-        finally
-        {
-            if (temp != null)
-                pool.Return(temp, clearArray: false);
-        }
+
+        // Persist the envelope across processing blocks.
+
+        Gain_Linear = gain;
+        CompressionApplied = gain;
 
         return input;
     }
 
+    /// <summary>
+    /// Updates coefficients when the sample rate changes.
+    /// </summary>
     public void ResetSampleRate(int sampleRate)
     {
-        this.CalculateCoeffs(sampleRate);
+        CalculateCoeffs(sampleRate);
     }
 
+    /// <summary>
+    /// No additional settings application is required.
+    /// </summary>
     public void ApplySettings()
     {
-        //Non-Applicable
+        // Non-applicable.
     }
+
     #endregion
 
     #region IFilter Interface
@@ -230,14 +368,16 @@ public class ClassicLimiter : IFilter
 
     public IFilter GetFilter => this;
 
-    public FilterTypes FilterType { get; } = FilterTypes.ClassicLimiter
-;
-    public FilterProcessingTypes FilterProcessingType { get; } = FilterProcessingTypes.WholeBlock;
+    public FilterTypes FilterType { get; } =
+        FilterTypes.ClassicLimiter;
+
+    public FilterProcessingTypes FilterProcessingType { get; } =
+        FilterProcessingTypes.WholeBlock;
 
     public IFilter DeepClone()
     {
         return CommonFunctions.DeepClone(this);
     }
-    #endregion
 
+    #endregion
 }

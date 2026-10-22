@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 
 namespace BassThatHz_ASIO_DSP_Processor;
 
@@ -34,17 +34,14 @@ public class Floor : IFilter
 {
     #region Variables
     public double MinValue = 0;
-    public TimeSpan HoldInMS = TimeSpan.FromMilliseconds(1000);
-    public double Ratio = 1.1d;
+    public TimeSpan HoldInMS = TimeSpan.FromMilliseconds(100);
+    public double Ratio = 2.0d;
 
-    // DC offset to prevent log(0)
+    // DC offset to prevent log(0) and avoid division by zero
     protected const double DC_OFFSET = 1.0E-25d;
 
-    protected TimeSpan CurrentTotalDuration;
-    protected DateTime StartTime;
-    protected DateTime LastDetection;
-    protected bool IsActive = false;
-    protected bool IsDetected = false;
+    protected DateTime LastDetectionTime;
+    protected bool IsGateClosed = false;
     #endregion
 
     #region Public Functions
@@ -62,71 +59,70 @@ public class Floor : IFilter
         TimeSpan hold = this.HoldInMS;
 
         // Use local state variables and write back at the end
-        DateTime lastDetection = this.LastDetection;
-        DateTime startTime = this.StartTime;
-        bool isActive = this.IsActive;
+        DateTime lastDetectionTime = this.LastDetectionTime;
+        bool isGateClosed = this.IsGateClosed;
 
         for (int i = 0; i < len; i++)
         {
             double currentSample = input[i];
             double outSample = currentSample;
 
-            // compute now once per sample
+            // Compute now once per sample
             DateTime now = DateTime.UtcNow;
 
             // Detection: sample inside floor range (exclude exact zero)
             bool detected = (currentSample != 0.0) && (Math.Abs(currentSample) < minValue);
+
+            // If signal is below threshold, close the gate
             if (detected)
             {
-                lastDetection = now;
-            }
-
-            // Activate on first detection
-            if (detected && !isActive)
-            {
-                startTime = now;
-                isActive = true;
-            }
-
-            // Only process when active and within hold window
-            if (isActive && (now - lastDetection) < hold)
-            {
-                if (detected)
+                lastDetectionTime = now;
+                if (!isGateClosed)
                 {
-                    // Compute compression based on distance from floor
-                    double absSample = Math.Abs(currentSample);
-                    // avoid division by zero; DC_OFFSET guards
-                    double excessDB = Math.Abs(Decibels.LinearToDecibels(DC_OFFSET + minValue / absSample));
-                    double compressionRatioDB = -excessDB * (ratio - 1.0) / ratio;
-                    double inputCompressionAmount = Decibels.DecibelsToLinear(compressionRatioDB) - DC_OFFSET;
-                    outSample = currentSample * inputCompressionAmount;
+                    isGateClosed = true;
                 }
             }
             else
             {
-                isActive = false;
+                // Signal above threshold — check release time to re-open gate
+                if (isGateClosed && (now - lastDetectionTime) >= hold)
+                {
+                    isGateClosed = false;
+                }
+            }
+
+            // Apply floor attenuation when gate is closed
+            if (isGateClosed)
+            {
+                double absSample = Math.Abs(currentSample);
+                // Compute how far below the floor in dB
+                double excessDB = Math.Abs(Decibels.LinearToDecibels(DC_OFFSET + minValue / absSample));
+
+                // Attenuation factor: higher ratio = more aggressive attenuation
+                // gain = 10^(-excessDB * (ratio - 1) / (20 * ratio))
+                double attenuationFactor = Math.Pow(10.0, -(excessDB * (ratio - 1.0) / (20.0 * ratio)));
+
+                outSample *= attenuationFactor;
             }
 
             input[i] = outSample;
         }
 
         // Write back state
-        this.LastDetection = lastDetection;
-        this.StartTime = startTime;
-        this.IsActive = isActive;
-        this.CurrentTotalDuration = isActive ? (DateTime.UtcNow - startTime) : TimeSpan.Zero;
+        this.LastDetectionTime = lastDetectionTime;
+        this.IsGateClosed = isGateClosed;
 
         return input;
     }
 
     public void ResetSampleRate(int sampleRate)
     {
-        //Non Applicable
+        // Non-Applicable
     }
 
     public void ApplySettings()
     {
-        //Non-Applicable
+        // Non-Applicable
     }
     #endregion
 

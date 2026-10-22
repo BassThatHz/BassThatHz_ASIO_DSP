@@ -82,9 +82,13 @@ public partial class DEQControl : UserControl, IFilterControl
     {
         try
         {
-            // Read into a local to avoid repeated property access and potential side-effects.
-            var gain = this.Filter.GainApplied;
-            this.DynamicsApplied.VolumedB = gain;
+            if (this.Filter == null)
+                return;
+
+            double gain = this.Filter.GainApplied;
+
+            if (this.DynamicsApplied.VolumedB != gain)
+                this.DynamicsApplied.VolumedB = gain;
         }
         catch (Exception ex)
         {
