@@ -312,14 +312,28 @@ public partial class StreamControl : UserControl
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     protected void RedrawPanelItems()
     {
-        var hScroll = -this.panel1.HorizontalScroll.Value;
-        var vBase = -this.panel1.VerticalScroll.Value + 3;
-        for (int i = 0; i < this.FilterControls.Count; i++)
+        this.panel1.SuspendLayout();
+
+        try
         {
-            var item = this.FilterControls[i];
-            item.Location = new Point(hScroll, vBase + i * item.Height);
+            for (int i = 0; i < this.FilterControls.Count; i++)
+            {
+                var item = this.FilterControls[i];
+
+                // Use virtual coordinates.
+                // WinForms AutoScroll handles the scroll offset automatically.
+                item.Location = new Point(0, 3 + i * item.Height);
+            }
+
+            this.RefreshFilterCountLabel();
         }
-        this.RefreshFilterCountLabel();
+        finally
+        {
+            this.panel1.ResumeLayout(true);
+        }
+
+        this.panel1.PerformLayout();
+        this.panel1.Invalidate();
     }
 
     protected void RefreshFilterCountLabel()
