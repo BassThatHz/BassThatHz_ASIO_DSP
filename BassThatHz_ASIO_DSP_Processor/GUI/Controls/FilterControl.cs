@@ -198,7 +198,7 @@ public partial class FilterControl : UserControl
         IFilterControl tempControl;
         switch (selectedType)
         {
-                case FilterTypes.PEQ:
+            case FilterTypes.PEQ:
             case FilterTypes.Adv_High_Pass:
             case FilterTypes.Adv_Low_Pass:
             case FilterTypes.Low_Shelf:
@@ -206,7 +206,7 @@ public partial class FilterControl : UserControl
             case FilterTypes.Notch:
             case FilterTypes.Band_Pass:
             case FilterTypes.All_Pass:
-                tempControl = new BiQuadFilterControl();
+                tempControl = new BiQuadFilterControl((FilterTypes)this.cboFilterType.SelectedItem);
                 break;
             case FilterTypes.Polarity:
                 tempControl = new PolarityControl();

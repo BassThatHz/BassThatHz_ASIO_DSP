@@ -59,6 +59,13 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
         this.MapEventHandlers();
     }
 
+    public BiQuadFilterControl(FilterTypes filterType)
+    {
+        InitializeComponent();
+        this.BiQuad.FilterType = filterType;
+        this.MapEventHandlers();
+    }
+
     public void MapEventHandlers()
     {
         this.txtF.KeyPress += TxtF_KeyPress;
@@ -370,6 +377,7 @@ public partial class BiQuadFilterControl : UserControl, IFilterControl
                 this.txtS.Text = biQuad.Slope.ToString(CultureInfo.InvariantCulture);
                 this.txtQ.Text = biQuad.Q.ToString(CultureInfo.InvariantCulture);
                 this.txtG.Text = biQuad.Gain.ToString(CultureInfo.InvariantCulture);
+                this.BiQuad.FilterType = biQuad.FilterType;
             }
             finally
             {
